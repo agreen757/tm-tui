@@ -5,6 +5,7 @@ import (
 	"strings"
 	
 	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/charmbracelet/lipgloss"
 )
 
 const (
@@ -164,9 +165,20 @@ func (m Model) renderHeader() string {
 	// Add search input if in search mode
 	if m.searchMode {
 		searchLabel := m.styles.Info.Render("Search: ")
-		searchBox := m.searchInput.View()
+		
+		// Apply styling to the search input for better visibility
+		searchBoxStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#00FFFF")).  // ColorHighlight
+			Padding(0, 1).
+			Width(40)
+		
+		searchBoxView := m.searchInput.View()
+		styledSearchBox := searchBoxStyle.Render(searchBoxView)
+		
 		searchHelp := m.styles.Subtle.Render(" (Enter to search, Esc to cancel)")
-		searchLine := searchLabel + searchBox + searchHelp
+		searchLine := searchLabel + styledSearchBox + searchHelp
+		
 		return titleLine + "\n" + countsLine + "\n" + searchLine + "\n"
 	}
 	
@@ -185,7 +197,23 @@ func (m Model) renderHeader() string {
 		if m.searchResults != nil {
 			resultsCount = len(m.searchResults)
 		}
-		searchInfo := m.styles.Info.Render(fmt.Sprintf("🔍 Search: '%s' (%d results)", m.searchQuery, resultsCount))
+		
+		// Apply more visible styling to the search info
+		searchStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#00FFFF")).  // ColorHighlight
+			Bold(true)
+		
+		resultStyle := lipgloss.NewStyle()
+		if resultsCount == 0 {
+			resultStyle = resultStyle.Foreground(lipgloss.Color("#DC143C"))  // ColorBlocked
+		} else {
+			resultStyle = resultStyle.Foreground(lipgloss.Color("#32CD32"))  // ColorDone
+		}
+		
+		searchText := fmt.Sprintf("🔍 Search: '%s'", m.searchQuery)
+		resultsText := fmt.Sprintf(" (%d results)", resultsCount)
+		
+		searchInfo := searchStyle.Render(searchText) + resultStyle.Render(resultsText)
 		filterParts = append(filterParts, searchInfo)
 	}
 	
@@ -210,6 +238,15 @@ func (m Model) renderStatusBar() string {
 	if m.commandMode {
 		prompt := fmt.Sprintf("Jump to task ID: %s", m.commandInput)
 		return m.styles.StatusBar.Width(m.width).Render(prompt)
+	}
+	
+	// Show search mode status if in search mode
+	if m.searchMode {
+		searchStatus := fmt.Sprintf("🔍 SEARCH MODE: Type search query and press Enter, or Esc to cancel")
+		return m.styles.StatusBar.
+			Foreground(lipgloss.Color("#00FFFF")).  // ColorHighlight
+			Width(m.width).
+			Render(searchStatus)
 	}
 	
 	// Normal help text

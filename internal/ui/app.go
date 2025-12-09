@@ -16,6 +16,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// formatHelpLine formats a help line with consistent alignment between keys and descriptions
+func formatHelpLine(key string, description string) string {
+	// Use fixed width for keys to align descriptions
+	const keyWidth = 12
+	paddedKey := "  " + key
+	if len(paddedKey) < keyWidth {
+		paddedKey += strings.Repeat(" ", keyWidth-len(paddedKey))
+	}
+	return paddedKey + "- " + description
+}
+
 // ViewMode represents the current view mode of the task list
 type ViewMode int
 
@@ -113,6 +124,11 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	searchInput.Focus()
 	searchInput.CharLimit = 100
 	searchInput.Width = 40
+	searchInput.Prompt = ""
+	
+	// Style the text input for better visibility
+	searchInput.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))
+	searchInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
 	
 	m := Model{
 		config:        cfg,
@@ -138,6 +154,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		showHelp:        false,
 		commandMode:     false,
 		commandInput:    "",
+		searchInput:     searchInput,
 		styles:         NewStyles(),
 		logLines:       []string{},
 	}
@@ -1306,11 +1323,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				// Confirm search
 				m.searchQuery = m.searchInput.Value()
-				m.updateSearchResults()
-				if len(m.searchResults) == 0 {
-					m.addLogLine("No tasks found matching search query")
-				} else {
-					m.addLogLine(fmt.Sprintf("Found %d tasks matching '%s'", len(m.searchResults), m.searchQuery))
+				
+				// Only exit search mode if there's actual input
+				if m.searchQuery != "" {
+					m.searchMode = false
+					m.updateSearchResults()
+					if len(m.searchResults) == 0 {
+						m.addLogLine("No tasks found matching search query")
+					} else {
+						m.addLogLine(fmt.Sprintf("Found %d tasks matching '%s'", len(m.searchResults), m.searchQuery))
+					}
 				}
 			default:
 				// Update search results as user types
@@ -1395,7 +1417,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Enter search mode
 			m.searchMode = true
 			m.searchInput.Focus()
-			m.searchInput.SetValue(m.searchQuery) // Preserve previous query
+			
+			// Update input with previous query if it exists
+			if m.searchQuery != "" {
+				m.searchInput.SetValue(m.searchQuery)
+				// Select all text so typing immediately replaces it
+				m.searchInput.CursorEnd()
+				// This would ideally select all text, but the API doesn't directly support it
+				// We position cursor at end for better UX
+			} else {
+				m.searchInput.SetValue("")
+			}
+			
 			m.addLogLine("Search: (type query and press Enter, Esc to cancel)")
 			return m, textinput.Blink
 			
@@ -1570,7 +1603,7 @@ func (m Model) View() string {
 
 	// Help overlay takes priority over everything
 	if m.showHelp {
-		return m.renderHelpOverlay()
+		return m.renderCompactHelp()
 	}
 
 	// Check if taskmaster is not available
@@ -1690,12 +1723,12 @@ func (m Model) renderHelpOverlay() string {
 	// Navigation section
 	navSection := m.styles.Subtitle.Render("Navigation")
 	navHelp := []string{
-		"  " + m.renderBinding(m.keyMap.Up) + " - Move up",
-		"  " + m.renderBinding(m.keyMap.Down) + " - Move down", 
-		"  " + m.renderBinding(m.keyMap.Left) + " - Collapse/Move left",
-		"  " + m.renderBinding(m.keyMap.Right) + " - Expand/Move right",
-		"  " + m.renderBinding(m.keyMap.PageUp) + " - Page up",
-		"  " + m.renderBinding(m.keyMap.PageDown) + " - Page down",
+		formatHelpLine(m.renderBinding(m.keyMap.Up), "Move up"),
+		formatHelpLine(m.renderBinding(m.keyMap.Down), "Move down"),
+		formatHelpLine(m.renderBinding(m.keyMap.Left), "Collapse/Move left"),
+		formatHelpLine(m.renderBinding(m.keyMap.Right), "Expand/Move right"),
+		formatHelpLine(m.renderBinding(m.keyMap.PageUp), "Page up"),
+		formatHelpLine(m.renderBinding(m.keyMap.PageDown), "Page down"),
 	}
 	sections = append(sections, navSection)
 	sections = append(sections, strings.Join(navHelp, "\n"))
@@ -1704,11 +1737,11 @@ func (m Model) renderHelpOverlay() string {
 	// Task Operations section
 	taskSection := m.styles.Subtitle.Render("Task Operations")
 	taskHelp := []string{
-		"  " + m.renderBinding(m.keyMap.ToggleExpand) + " - Toggle expand/collapse",
-		"  " + m.renderBinding(m.keyMap.Select) + " - Select/deselect for bulk operations",
-		"  " + m.renderBinding(m.keyMap.NextTask) + " - Get next available task",
-		"  " + m.renderBinding(m.keyMap.Refresh) + " - Refresh tasks from disk",
-		"  " + m.renderBinding(m.keyMap.JumpToID) + " - Jump to task by ID",
+		formatHelpLine(m.renderBinding(m.keyMap.ToggleExpand), "Toggle expand/collapse"),
+		formatHelpLine(m.renderBinding(m.keyMap.Select), "Select/deselect for bulk operations"),
+		formatHelpLine(m.renderBinding(m.keyMap.NextTask), "Get next available task"),
+		formatHelpLine(m.renderBinding(m.keyMap.Refresh), "Refresh tasks from disk"),
+		formatHelpLine(m.renderBinding(m.keyMap.JumpToID), "Jump to task by ID"),
 	}
 	sections = append(sections, taskSection)
 	sections = append(sections, strings.Join(taskHelp, "\n"))
@@ -1717,12 +1750,12 @@ func (m Model) renderHelpOverlay() string {
 	// Status Changes section
 	statusSection := m.styles.Subtitle.Render("Status Changes")
 	statusHelp := []string{
-		"  " + m.renderBinding(m.keyMap.SetInProgress) + " - " + m.styles.InProgress.Render("► Set in-progress"),
-		"  " + m.renderBinding(m.keyMap.SetDone) + " - " + m.styles.Done.Render("✓ Set done"),
-		"  " + m.renderBinding(m.keyMap.SetBlocked) + " - " + m.styles.Blocked.Render("! Set blocked"),
-		"  " + m.renderBinding(m.keyMap.SetCancelled) + " - " + m.styles.Cancelled.Render("✗ Set cancelled"),
-		"  " + m.renderBinding(m.keyMap.SetDeferred) + " - " + m.styles.Deferred.Render("⏱ Set deferred"),
-		"  " + m.renderBinding(m.keyMap.SetPending) + " - " + m.styles.Pending.Render("○ Set pending"),
+		formatHelpLine(m.renderBinding(m.keyMap.SetInProgress), m.styles.InProgress.Render("► Set in-progress")),
+		formatHelpLine(m.renderBinding(m.keyMap.SetDone), m.styles.Done.Render("✓ Set done")),
+		formatHelpLine(m.renderBinding(m.keyMap.SetBlocked), m.styles.Blocked.Render("! Set blocked")),
+		formatHelpLine(m.renderBinding(m.keyMap.SetCancelled), m.styles.Cancelled.Render("✗ Set cancelled")),
+		formatHelpLine(m.renderBinding(m.keyMap.SetDeferred), m.styles.Deferred.Render("⏱ Set deferred")),
+		formatHelpLine(m.renderBinding(m.keyMap.SetPending), m.styles.Pending.Render("○ Set pending")),
 	}
 	sections = append(sections, statusSection)
 	sections = append(sections, strings.Join(statusHelp, "\n"))
@@ -1731,15 +1764,15 @@ func (m Model) renderHelpOverlay() string {
 	// Panel & View section
 	panelSection := m.styles.Subtitle.Render("Panels & Views")
 	panelHelp := []string{
-		"  " + m.renderBinding(m.keyMap.FocusTaskList) + " - Focus task list panel",
-		"  " + m.renderBinding(m.keyMap.FocusDetails) + " - Focus details panel",
-		"  " + m.renderBinding(m.keyMap.FocusLog) + " - Focus log panel",
-		"  " + m.renderBinding(m.keyMap.CyclePanel) + " - Cycle through panels",
-		"  " + m.renderBinding(m.keyMap.ToggleDetails) + " - Toggle details panel",
-		"  " + m.renderBinding(m.keyMap.ToggleLog) + " - Toggle log panel",
-		"  " + m.renderBinding(m.keyMap.ViewTree) + " - Switch to tree view",
-		"  " + m.renderBinding(m.keyMap.ViewList) + " - Switch to list view",
-		"  " + m.renderBinding(m.keyMap.CycleView) + " - Cycle view modes",
+		formatHelpLine(m.renderBinding(m.keyMap.FocusTaskList), "Focus task list panel"),
+		formatHelpLine(m.renderBinding(m.keyMap.FocusDetails), "Focus details panel"),
+		formatHelpLine(m.renderBinding(m.keyMap.FocusLog), "Focus log panel"),
+		formatHelpLine(m.renderBinding(m.keyMap.CyclePanel), "Cycle through panels"),
+		formatHelpLine(m.renderBinding(m.keyMap.ToggleDetails), "Toggle details panel"),
+		formatHelpLine(m.renderBinding(m.keyMap.ToggleLog), "Toggle log panel"),
+		formatHelpLine(m.renderBinding(m.keyMap.ViewTree), "Switch to tree view"),
+		formatHelpLine(m.renderBinding(m.keyMap.ViewList), "Switch to list view"),
+		formatHelpLine(m.renderBinding(m.keyMap.CycleView), "Cycle view modes"),
 	}
 	sections = append(sections, panelSection)
 	sections = append(sections, strings.Join(panelHelp, "\n"))
@@ -1748,11 +1781,11 @@ func (m Model) renderHelpOverlay() string {
 	// General section
 	generalSection := m.styles.Subtitle.Render("General")
 	generalHelp := []string{
-		"  " + m.renderBinding(m.keyMap.Help) + " - Toggle this help",
-		"  " + m.renderBinding(m.keyMap.ClearState) + " - Clear TUI state (reset UI)",
-		"  " + m.renderBinding(m.keyMap.Back) + " - Back/Cancel/Close",
-		"  " + m.renderBinding(m.keyMap.Quit) + " - Quit application",
-		"  " + m.renderBinding(m.keyMap.Cancel) + " - Cancel command or quit",
+		formatHelpLine(m.renderBinding(m.keyMap.Help), "Toggle this help"),
+		formatHelpLine(m.renderBinding(m.keyMap.ClearState), "Clear TUI state (reset UI)"),
+		formatHelpLine(m.renderBinding(m.keyMap.Back), "Back/Cancel/Close"),
+		formatHelpLine(m.renderBinding(m.keyMap.Quit), "Quit application"),
+		formatHelpLine(m.renderBinding(m.keyMap.Cancel), "Cancel command or quit"),
 	}
 	sections = append(sections, generalSection)
 	sections = append(sections, strings.Join(generalHelp, "\n"))
