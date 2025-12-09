@@ -1,0 +1,28 @@
+{
+  "keyBindings": {
+    "quit": "q",
+    "help": "?",
+    "next": "n",
+    "refresh": "r",
+    "expand": "e",
+    "details": "d",
+    "inProgress": "i",
+    "done": "x",
+    "blocked": "b",
+    "cancelled": "c"
+  },
+  "theme": {
+    "primaryColor": "#7d56f4",
+    "secondaryColor": "#EE6FF8",
+    "accentColor": "#F780E2",
+    "successColor": "#04B575",
+    "errorColor": "#EF4146",
+    "warningColor": "#FF9800"
+  },
+  "ui": {
+    "showLineNumbers": true,
+    "defaultView": "tree",
+    "autoRefresh": true,
+    "refreshInterval": 5
+  }
+}
