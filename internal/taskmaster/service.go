@@ -683,18 +683,24 @@ func (s *Service) ExecuteExpandWithProgress(
 
 // parseExpandProgress parses progress information from CLI output
 func parseExpandProgress(line string) ExpandProgressState {
-	state := ExpandProgressState{
-		Message: line,
-	}
-
-	// Parse different CLI output patterns
-	// Example patterns to look for:
-	// "Expanding task 1.2..."
-	// "Generated 5 subtasks for task 1.2"
-	// "Progress: 3/10"
-	// "Analyzing task complexity..."
+	state := ExpandProgressState{}
 
 	line = strings.TrimSpace(line)
+	
+	// Filter out raw file paths and CLI noise
+	if strings.Contains(line, "/.taskmaster/") ||
+	   strings.HasPrefix(line, "/Users/") ||
+	   strings.HasPrefix(line, "/home/") ||
+	   strings.HasPrefix(line, "/opt/") ||
+	   strings.HasPrefix(line, "C:\\") ||
+	   strings.HasPrefix(line, "D:\\") ||
+	   len(line) > 200 ||
+	   line == "" {
+		return state // Empty state will be ignored
+	}
+
+	// Set message only for recognized patterns
+	state.Message = line
 
 	// Parse "Expanding task X..."
 	if strings.Contains(line, "Expanding task") {
@@ -750,7 +756,17 @@ func parseExpandProgress(line string) ExpandProgressState {
 		return state
 	}
 
-	// Default: just pass through the message
+	// Filter out generic/unrecognized output - return empty state to ignore
+	// Only pass through messages that seem intentional/informative
+	if len(line) < 10 || 
+	   strings.Contains(line, "npm") ||
+	   strings.Contains(line, "node") ||
+	   strings.Contains(line, "installed") {
+		state.Message = "" // Will be filtered out
+		return state
+	}
+
+	// Default: pass through recognized informational messages
 	state.Stage = "Processing"
 	state.Progress = 0.5
 	return state
