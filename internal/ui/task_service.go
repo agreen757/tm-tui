@@ -16,6 +16,7 @@ type TaskService interface {
 	AnalyzeComplexityWithProgress(ctx context.Context, scope string, taskID string, tags []string, onProgress func(taskmaster.ComplexityProgressState)) (*taskmaster.ComplexityReport, error)
 	ParsePRDWithProgress(ctx context.Context, inputPath string, mode taskmaster.ParsePrdMode, onProgress func(taskmaster.ParsePrdProgressState)) error
 	ExpandTaskWithProgress(ctx context.Context, taskID string, opts taskmaster.ExpandTaskOptions, prompt string, onProgress func(taskmaster.ExpandProgressState)) error
+	ExecuteExpandWithProgress(ctx context.Context, scope string, taskID string, fromID string, toID string, tags []string, opts taskmaster.ExpandTaskOptions, onProgress func(taskmaster.ExpandProgressState)) error
 	GetLatestComplexityReport() *taskmaster.ComplexityReport
 	ExportComplexityReport(ctx context.Context, format string, outputPath string) (string, error)
 	IsAvailable() bool

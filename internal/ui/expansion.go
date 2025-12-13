@@ -110,12 +110,13 @@ func (m *Model) handleExpansionScopeSelected(msg ExpansionScopeSelectedMsg) tea.
 		scopeDesc = fmt.Sprintf("task %s", msg.TaskID)
 	}
 
-	progressDialog := dialog.NewProgressDialog(
-		"Expanding Tasks",
-		fmt.Sprintf("Running task-master expand for %s...", scopeDesc),
-		dm.Style,
-	)
-	progressDialog.SetCancelable(true)
+	progressDialog := dialog.NewProgressDialog("Expanding Tasks", 80, 10)
+	if dm.Style != nil {
+		dialog.ApplyStyleToDialog(progressDialog, dm.Style)
+	}
+	progressDialog.SetCancellable(true)
+	progressDialog.SetProgress(0)
+	progressDialog.SetLabel(fmt.Sprintf("Running task-master expand for %s...", scopeDesc))
 
 	m.appState.AddDialog(progressDialog, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
@@ -209,11 +210,17 @@ func (m *Model) handleExpansionProgress(msg ExpansionProgressMsg) tea.Cmd {
 			if pd, ok := progressDialog.(*dialog.ProgressDialog); ok {
 				// Update progress
 				pd.SetProgress(msg.Progress)
-				pd.SetMessage(fmt.Sprintf("%s: %s", msg.Stage, msg.Message))
-
+				
+				// Build label with stage and message
+				label := fmt.Sprintf("%s: %s", msg.Stage, msg.Message)
 				if msg.CurrentTask != "" {
-					pd.SetSubtext(fmt.Sprintf("Current task: %s", msg.CurrentTask))
+					label = fmt.Sprintf("%s\n\nCurrent task: %s", label, msg.CurrentTask)
 				}
+				if msg.TasksExpanded > 0 || msg.TotalTasks > 0 {
+					label = fmt.Sprintf("%s\n\nProgress: %d/%d tasks", label, msg.TasksExpanded, msg.TotalTasks)
+				}
+				
+				pd.SetLabel(label)
 			}
 		}
 	}
