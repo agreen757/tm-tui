@@ -171,6 +171,7 @@ type UndoExpiredMsg struct {
 	ActionID string
 }
 
+// DEPRECATED: Legacy expansion messages - being replaced by new CLI-based flow
 // ExpandTaskProgressMsg is sent during task expansion to update progress
 type ExpandTaskProgressMsg struct {
 	Stage    string
@@ -178,6 +179,7 @@ type ExpandTaskProgressMsg struct {
 	Error    error
 }
 
+// DEPRECATED: Legacy expansion messages - being replaced by new CLI-based flow
 // ExpandTaskCompletedMsg is sent when task expansion is complete
 type ExpandTaskCompletedMsg struct {
 	Error error
@@ -185,17 +187,52 @@ type ExpandTaskCompletedMsg struct {
 
 type expandTaskStreamClosedMsg struct{}
 
+// DEPRECATED: Legacy expansion messages - being replaced by new CLI-based flow
 // ExpandTaskDraftsGeneratedMsg is sent when subtask drafts are ready for preview
 type ExpandTaskDraftsGeneratedMsg struct {
 	Drafts   []taskmaster.SubtaskDraft
 	ParentID string
 }
 
+// DEPRECATED: Legacy expansion messages - being replaced by new CLI-based flow
 // ExpandTaskDraftsConfirmedMsg is sent when the user confirms the final drafts
 type ExpandTaskDraftsConfirmedMsg struct {
 	Drafts   []taskmaster.SubtaskDraft
 	ParentID string
 }
+
+// ExpansionScopeSelectedMsg is sent when expansion scope is selected
+type ExpansionScopeSelectedMsg struct {
+	Scope       string   // "single", "all", "range", "tag"
+	TaskID      string   // for single task expansion
+	FromID      string   // for range expansion
+	ToID        string   // for range expansion
+	Tags        []string // for tag-based expansion
+	Depth       int      // 1-3 levels
+	NumSubtasks int      // optional, 0 = auto
+	UseAI       bool     // --research flag
+}
+
+// ExpansionProgressMsg is sent during CLI expansion to update progress
+type ExpansionProgressMsg struct {
+	Progress        float64
+	Stage           string
+	CurrentTask     string
+	TasksExpanded   int
+	TotalTasks      int
+	SubtasksCreated int
+	Message         string
+	Error           error
+}
+
+// ExpansionCompletedMsg is sent when CLI expansion is complete
+type ExpansionCompletedMsg struct {
+	TasksExpanded   int
+	SubtasksCreated int
+	Error           error
+}
+
+type expansionStreamClosedMsg struct{}
 
 // AnalyzeTaskComplexityCmd starts the complexity analysis process and returns an AnalyzeTaskComplexityMsg
 func AnalyzeTaskComplexityCmd() tea.Cmd {
