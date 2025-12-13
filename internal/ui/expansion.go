@@ -104,19 +104,8 @@ func (m *Model) handleExpansionScopeSelected(msg ExpansionScopeSelectedMsg) tea.
 	m.currentExpansionScope = msg.Scope
 	m.currentExpansionTags = append([]string(nil), msg.Tags...)
 
-	// Create and show progress dialog
-	scopeDesc := msg.Scope
-	if msg.Scope == "single" && msg.TaskID != "" {
-		scopeDesc = fmt.Sprintf("task %s", msg.TaskID)
-	}
-
-	progressDialog := dialog.NewProgressDialog("Expanding Tasks", 80, 10)
-	if dm.Style != nil {
-		dialog.ApplyStyleToDialog(progressDialog, dm.Style)
-	}
-	progressDialog.SetCancellable(true)
-	progressDialog.SetProgress(0)
-	progressDialog.SetLabel(fmt.Sprintf("Running task-master expand for %s...", scopeDesc))
+	// Create and show progress dialog using the expansion progress helper
+	progressDialog := dialog.NewExpansionProgressDialog(msg.Scope, totalTasks, dm.Style)
 
 	m.appState.AddDialog(progressDialog, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
@@ -208,19 +197,18 @@ func (m *Model) handleExpansionProgress(msg ExpansionProgressMsg) tea.Cmd {
 	if dm := m.dialogManager(); dm != nil {
 		if progressDialog, ok := dm.GetDialogByType(dialog.DialogTypeProgress); ok {
 			if pd, ok := progressDialog.(*dialog.ProgressDialog); ok {
-				// Update progress
-				pd.SetProgress(msg.Progress)
-				
-				// Build label with stage and message
-				label := fmt.Sprintf("%s: %s", msg.Stage, msg.Message)
-				if msg.CurrentTask != "" {
-					label = fmt.Sprintf("%s\n\nCurrent task: %s", label, msg.CurrentTask)
+				// Create update struct and use the formatting helper
+				update := dialog.ExpansionProgressUpdate{
+					Progress:        msg.Progress,
+					Stage:           msg.Stage,
+					CurrentTask:     msg.CurrentTask,
+					TasksExpanded:   msg.TasksExpanded,
+					TotalTasks:      msg.TotalTasks,
+					SubtasksCreated: msg.SubtasksCreated,
+					Scope:           m.currentExpansionScope,
+					Message:         msg.Message,
 				}
-				if msg.TasksExpanded > 0 || msg.TotalTasks > 0 {
-					label = fmt.Sprintf("%s\n\nProgress: %d/%d tasks", label, msg.TasksExpanded, msg.TotalTasks)
-				}
-				
-				pd.SetLabel(label)
+				dialog.UpdateExpansionProgress(pd, update)
 			}
 		}
 	}
