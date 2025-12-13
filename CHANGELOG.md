@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy expansion functions in command_handlers.go (kept for backward compatibility)
 
 ### Fixed
+- **TUI**: Fixed task expansion progress dialog showing duplicate labels and stacked text
+- **TUI**: Cleaned up CLI output filtering to prevent raw file paths from displaying
+- **TUI**: Improved expansion progress formatting to match complexity analysis pattern
 - Task expansion now properly persists changes via CLI
 - Expansion with `--research` flag now works correctly
 - Tasks are reliably reloaded after expansion
