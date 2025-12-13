@@ -187,6 +187,16 @@ func (s *mockService) ExpandTaskWithProgress(ctx context.Context, taskID string,
 	return nil
 }
 
+func (s *mockService) ExecuteExpandWithProgress(ctx context.Context, scope string, taskID string, fromID string, toID string, tags []string, opts taskmaster.ExpandTaskOptions, onProgress func(taskmaster.ExpandProgressState)) error {
+	if onProgress != nil {
+		onProgress(taskmaster.ExpandProgressState{Stage: "Analyzing", Progress: 0.2, Message: "Analyzing tasks..."})
+		onProgress(taskmaster.ExpandProgressState{Stage: "Generating", Progress: 0.5, Message: "Generating subtasks..."})
+		onProgress(taskmaster.ExpandProgressState{Stage: "Applying", Progress: 0.8, Message: "Applying changes..."})
+		onProgress(taskmaster.ExpandProgressState{Stage: "Complete", Progress: 1.0, Message: "Expansion complete"})
+	}
+	return nil
+}
+
 func (s *mockService) ExportComplexityReport(ctx context.Context, format string, outputPath string) (string, error) {
 	// Mock export, return a dummy file path
 	return "/tmp/mock-export." + format, nil

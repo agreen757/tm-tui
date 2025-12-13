@@ -23,14 +23,21 @@ type SubtaskDraft struct {
 	Children    []SubtaskDraft `json:"children,omitempty"`
 }
 
-// ExpandProgressState reports coarse CLI progress updates back to the UI.
+// ExpandProgressState reports progress updates during task expansion via CLI
 type ExpandProgressState struct {
-	Stage    string
-	Progress float64
+	Stage           string  // "Analyzing", "Generating", "Applying", "Complete"
+	Progress        float64 // 0.0 to 1.0
+	CurrentTask     string  // Task ID being expanded
+	TasksExpanded   int     // Number of tasks expanded so far
+	TotalTasks      int     // Total tasks to expand
+	Message         string  // Status message from CLI
+	SubtasksCreated int     // Total subtasks created
 }
 
 var bulletPattern = regexp.MustCompile(`^([\-*+]\s+|\d+[\.)]\s+)`)
 
+// Deprecated: Use ExecuteExpandWithProgress instead.
+// This function is kept for testing purposes only.
 // ExpandTaskDrafts builds an initial draft hierarchy using a deterministic rule-based strategy.
 func ExpandTaskDrafts(task *Task, opts ExpandTaskOptions) []SubtaskDraft {
 	if task == nil {
@@ -280,6 +287,8 @@ func titleCase(input string) string {
 	return strings.Join(words, " ")
 }
 
+// Deprecated: CLI handles task application automatically.
+// This function is kept for testing purposes only.
 // ApplySubtaskDrafts converts drafts into actual Task objects and applies them to a parent task.
 // It returns the new subtask IDs in order, or an error if the operation fails.
 func ApplySubtaskDrafts(parentTask *Task, drafts []SubtaskDraft) ([]string, error) {

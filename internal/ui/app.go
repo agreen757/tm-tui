@@ -107,10 +107,20 @@ type Model struct {
 	waitingForComplexityHold bool
 	parsePrdChan             chan tea.Msg
 	parsePrdCancel           context.CancelFunc
-	expandTaskMsgCh          chan tea.Msg
-	expandTaskCancel         context.CancelFunc
-	expandTaskDrafts         []taskmaster.SubtaskDraft // Generated drafts waiting for preview/edit
-	expandTaskParentID       string                     // ID of task being expanded
+
+	// DEPRECATED: Legacy expansion state - being replaced by new CLI-based flow
+	expandTaskMsgCh    chan tea.Msg
+	expandTaskCancel   context.CancelFunc
+	expandTaskDrafts   []taskmaster.SubtaskDraft // Generated drafts waiting for preview/edit
+	expandTaskParentID string                     // ID of task being expanded
+
+	// New expansion workflow state
+	expansionMsgCh          chan tea.Msg
+	expansionCancel         context.CancelFunc
+	currentExpansionScope   string
+	currentExpansionTags    []string
+	expansionStartedAt      time.Time
+	waitingForExpansionHold bool
 
 	// Panel visibility
 	showDetailsPanel bool
@@ -1719,6 +1729,30 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle export completion
 		cmd := m.handleComplexityExportCompleted(msg)
 		return m, cmd
+
+	// New expansion workflow messages
+	case ExpansionScopeSelectedMsg:
+		// Handle selected expansion scope
+		cmd := m.handleExpansionScopeSelected(msg)
+		return m, cmd
+
+	case ExpansionProgressMsg:
+		// Update progress dialog during expansion
+		if cmd := m.handleExpansionProgress(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
+	case ExpansionCompletedMsg:
+		// Handle expansion completion
+		if cmd := m.handleExpansionCompleted(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
+	case expansionStreamClosedMsg:
+		m.expansionMsgCh = nil
+		return m, nil
 
 	case dialog.DialogResultMsg:
 		if cmd := m.handleDialogResultMsg(msg); cmd != nil {

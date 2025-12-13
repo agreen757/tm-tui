@@ -69,13 +69,13 @@ func (m *Model) handleExpandTaskCommand() tea.Cmd {
 		return nil
 	}
 
-	ids := m.selectedOrCurrentTaskIDs()
-	if len(ids) == 0 {
-		return m.openTaskSelectionDialog()
-	}
-	return m.startExpandWorkflow(ids[0])
+	// Show scope dialog (new approach)
+	m.showExpansionScopeDialog()
+	return nil
 }
 
+// DEPRECATED: Replaced by ExpansionScopeDialog
+// This function is kept for backward compatibility only.
 func (m *Model) openTaskSelectionDialog() tea.Cmd {
 	dm := m.dialogManager()
 	if dm == nil {
@@ -169,6 +169,8 @@ func (i *taskListItem) Title() string       { return i.title }
 func (i *taskListItem) Description() string { return i.description }
 func (i *taskListItem) FilterValue() string { return i.title }
 
+// DEPRECATED: Replaced by handleExpansionScopeSelected
+// This function is kept for backward compatibility only.
 func (m *Model) startExpandWorkflow(taskID string) tea.Cmd {
 	dm := m.dialogManager()
 	if dm == nil {
@@ -612,6 +614,8 @@ func (m *Model) runTagOperation(operation string, tagName string, fn func(ctx co
 	}
 }
 
+// DEPRECATED: Replaced by startExpansion using CLI
+// This function is kept for backward compatibility only.
 func (m *Model) runExpandTask(opts expandOptions) tea.Cmd {
 	if m.taskService == nil {
 		m.showErrorDialog("Expand Task", "Task service is not available.")
@@ -646,6 +650,8 @@ func (m *Model) runExpandTask(opts expandOptions) tea.Cmd {
 	return m.showExpandPreviewDialog(drafts)
 }
 
+// DEPRECATED: CLI handles expansion directly
+// This function is kept for backward compatibility only.
 func (m *Model) showExpandPreviewDialog(drafts []taskmaster.SubtaskDraft) tea.Cmd {
 	dm := m.dialogManager()
 	if dm == nil {
@@ -666,6 +672,8 @@ func (m *Model) showExpandPreviewDialog(drafts []taskmaster.SubtaskDraft) tea.Cm
 	return previewDialog.Init()
 }
 
+// DEPRECATED: CLI handles expansion directly
+// This function is kept for backward compatibility only.
 func (m *Model) showExpandEditDialog(drafts []taskmaster.SubtaskDraft) tea.Cmd {
 	dm := m.dialogManager()
 	if dm == nil {
@@ -693,6 +701,8 @@ func (m *Model) showExpandEditDialog(drafts []taskmaster.SubtaskDraft) tea.Cmd {
 	return editDialog.Init()
 }
 
+// DEPRECATED: CLI handles task application automatically
+// This function is kept for backward compatibility only.
 func (m *Model) applyExpandTaskDrafts(parentID string, drafts []taskmaster.SubtaskDraft) tea.Cmd {
 	if m.taskService == nil {
 		m.showErrorDialog("Expand Task", "Task service is not available.")
@@ -720,6 +730,8 @@ func (m *Model) applyExpandTaskDrafts(parentID string, drafts []taskmaster.Subta
 	return LoadTasksCmd(m.taskService)
 }
 
+// DEPRECATED: Replaced by waitForExpansionMessages
+// This function is kept for backward compatibility only.
 func (m *Model) waitForExpandTaskMessages() tea.Cmd {
 	ch := m.expandTaskMsgCh
 	if ch == nil {
@@ -734,6 +746,8 @@ func (m *Model) waitForExpandTaskMessages() tea.Cmd {
 	}
 }
 
+// DEPRECATED: Replaced by cancelExpansion
+// This function is kept for backward compatibility only.
 func (m *Model) cancelExpandTask() {
 	if m.expandTaskCancel != nil {
 		m.expandTaskCancel()
@@ -741,6 +755,8 @@ func (m *Model) cancelExpandTask() {
 	}
 }
 
+// DEPRECATED: Replaced by clearExpansionRuntimeState
+// This function is kept for backward compatibility only.
 func (m *Model) clearExpandTaskRuntimeState() {
 	m.cancelExpandTask()
 	m.expandTaskMsgCh = nil

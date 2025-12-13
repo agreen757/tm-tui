@@ -78,7 +78,10 @@ go run ./cmd/tm-tui/main.go
 - `s` - Change task status
 - `Enter` - Select item / toggle expand
 - `Space` - Multi-select task for bulk operations
-- `Alt+X` - Expand selected task (generate subtasks with AI)
+- `Alt+X` - Expand tasks (opens scope selection dialog)
+  - Supports single task, all tasks, task range, or by tag
+  - AI-powered expansion with --research flag
+  - Configurable depth (1-3 levels) and subtask count
 - `Alt+D` - Delete selected task (with confirmation)
 - `d` - Mark task as done (quick status change)
 - `p` - Change task priority
@@ -129,12 +132,22 @@ go run ./cmd/tm-tui/main.go
 5. Filter and sort results for focused planning
 
 ### Expanding Tasks into Subtasks
-1. Select a complex task
-2. Press `Alt+X` to open "Expand Task" dialog
-3. Configure expansion depth (1-3 levels of subtasks)
-4. Optionally choose AI assistant settings
-5. Review generated subtasks
-6. Confirm to add subtasks to your project
+1. Select a task or prepare to expand all tasks
+2. Press `Alt+X` to open the "Expand Tasks" dialog
+3. Choose expansion scope:
+   - **Selected task only** - Expand just the current task
+   - **All tasks** - Expand all tasks in the project
+   - **Task range** - Expand tasks from ID X to ID Y
+   - **By tag** - Expand all tasks with specific tags
+4. Configure options:
+   - Expansion depth: 1-3 levels of nested subtasks
+   - Number of subtasks: Leave blank for auto-detection
+   - AI assistance: Enable `--research` for intelligent expansion
+5. Monitor progress in real-time as CLI executes
+6. Review newly created subtasks in the task tree
+7. Tasks are automatically reloaded after expansion completes
+
+**Note:** This feature executes `task-master expand` CLI commands. Ensure the Task Master CLI is properly installed and accessible.
 
 ### Managing Task Tags
 1. Press `Alt+A` to add tags to the selected task
