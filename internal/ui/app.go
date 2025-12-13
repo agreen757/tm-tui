@@ -1,13 +1,17 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/adriangreen/tm-tui/internal/config"
 	"github.com/adriangreen/tm-tui/internal/executor"
+	"github.com/adriangreen/tm-tui/internal/projects"
 	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/adriangreen/tm-tui/internal/ui/dialog"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -36,6 +40,11 @@ const (
 	ViewModeKanban // Placeholder for future implementation
 )
 
+const (
+	complexityProgressMinDisplay   = 1 * time.Second
+	complexityProgressCompleteHold = 500 * time.Millisecond
+)
+
 // Panel represents which panel is currently focused
 type Panel int
 
@@ -50,74 +59,106 @@ type Model struct {
 	// Services
 	config        *config.Config
 	configManager *config.ConfigManager
-	taskService   *taskmaster.Service
+	taskService   TaskService
 	execService   *executor.Service
-	
+	appState      *AppState
+	lastPrdPath   string
+
 	// Task data
-	tasks         []taskmaster.Task
-	taskIndex     map[string]*taskmaster.Task // Quick lookup by ID
-	visibleTasks  []*taskmaster.Task          // Flattened list of visible tasks (respects expand/collapse)
-	
+	tasks        []taskmaster.Task
+	taskIndex    map[string]*taskmaster.Task // Quick lookup by ID
+	visibleTasks []*taskmaster.Task          // Flattened list of visible tasks (respects expand/collapse)
+
 	// View state
-	viewMode      ViewMode
-	focusedPanel  Panel
-	selectedIndex int                         // Index in visibleTasks array
-	selectedTask  *taskmaster.Task
-	expandedNodes map[string]bool
-	selectedIDs   map[string]bool              // Track multi-select for bulk operations
-	
+	viewMode             ViewMode
+	focusedPanel         Panel
+	selectedIndex        int // Index in visibleTasks array
+	selectedTask         *taskmaster.Task
+	expandedNodes        map[string]bool
+	selectedIDs          map[string]bool // Track multi-select for bulk operations
+	deleteWorkflow       *DeleteWorkflowState
+	undoSession          *UndoSession
+	tagActionContext     *taskmaster.TagContext
+	projectRegistry      *projects.Registry
+	activeProject        *projects.Metadata
+	pendingProjectSwitch *projects.Metadata
+	pendingProjectTag    string
+
 	// Layout
-	width         int
-	height        int
-	ready         bool
-	
+	width  int
+	height int
+	ready  bool
+
 	// Panels
 	taskListViewport viewport.Model
-	detailsViewport viewport.Model
-	logViewport     viewport.Model
-	helpModel       help.Model
-	keyMap          KeyMap
-	
+	detailsViewport  viewport.Model
+	logViewport      viewport.Model
+	helpModel        help.Model
+	keyMap           KeyMap
+	commandShortcuts []commandShortcut
+	commands         []CommandSpec
+
+	// Dialog stack for modal dialogs
+	complexityMsgCh          chan tea.Msg
+	complexityCancel         context.CancelFunc
+	currentComplexityScope   string
+	currentComplexityTags    []string
+	complexityStartedAt      time.Time
+	waitingForComplexityHold bool
+	parsePrdChan             chan tea.Msg
+	parsePrdCancel           context.CancelFunc
+	expandTaskMsgCh          chan tea.Msg
+	expandTaskCancel         context.CancelFunc
+	expandTaskDrafts         []taskmaster.SubtaskDraft // Generated drafts waiting for preview/edit
+	expandTaskParentID       string                     // ID of task being expanded
+
 	// Panel visibility
 	showDetailsPanel bool
 	showLogPanel     bool
 	showHelp         bool
-	
+
 	// Command mode state
-	commandMode      bool
-	commandInput     string
-	
+	commandMode  bool
+	commandInput string
+
 	// Search state
-	searchMode       bool
-	searchInput      textinput.Model
-	searchQuery      string
-	searchResults    []*taskmaster.Task
-	
+	searchMode    bool
+	searchInput   textinput.Model
+	searchQuery   string
+	searchResults []*taskmaster.Task
+
 	// Filter state
-	statusFilter     string // empty = all, or specific status like "pending", "in-progress", etc.
-	
+	statusFilter string // empty = all, or specific status like "pending", "in-progress", etc.
+
 	// Confirmation mode state
 	confirmingClearState bool
-	
+
 	// Styles
-	styles        *Styles
-	
+	styles *Styles
+
 	// Log data
-	logLines      []string
-	
+	logLines []string
+
 	// Error state
-	err           error
+	err error
+}
+
+func (m *Model) dialogManager() *dialog.DialogManager {
+	if m.appState == nil {
+		return nil
+	}
+	return m.appState.DialogManager()
 }
 
 // NewModel creates a new TUI model
-func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskService *taskmaster.Service, execService *executor.Service) Model {
+func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskService TaskService, execService *executor.Service) Model {
 	tasks, _ := taskService.GetTasks()
-	
+
 	// Initialize viewports (sizes will be set on first WindowSizeMsg)
 	taskListVP := viewport.New(0, 0)
 	detailsVP := viewport.New(0, 0)
 	logVP := viewport.New(0, 0)
-	
+
 	// Initialize search input
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Search tasks (ID, title, description)..."
@@ -125,46 +166,70 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	searchInput.CharLimit = 100
 	searchInput.Width = 40
 	searchInput.Prompt = ""
-	
+
 	// Style the text input for better visibility
 	searchInput.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))
 	searchInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
-	
+
+	// Set up dialog theme colors matching the app style
+	dialogStyle := dialog.CreateDialogStyleFromAppStyles(
+		ColorBorder,    // border
+		ColorHighlight, // focused border
+		ColorText,      // title
+		"#333333",      // background
+		ColorText,      // text
+		ColorHighlight, // button
+		ColorBlocked,   // error
+		ColorDone,      // success
+		ColorPending,   // warning
+	)
+
+	// Initialize dialog manager (size will be set on first WindowSizeMsg)
+	dialogManager := dialog.InitializeDialogManager(0, 0, dialogStyle)
+	keyMap := NewKeyMap(cfg)
+	appState := NewAppState(dialogManager, &keyMap)
+
 	m := Model{
-		config:        cfg,
-		configManager: configManager,
-		taskService:   taskService,
-		execService:   execService,
-		tasks:         tasks,
-		taskIndex:     make(map[string]*taskmaster.Task),
-		visibleTasks:  []*taskmaster.Task{},
-		selectedIndex: 0,
-		ready:         false,
-		viewMode:      ViewModeTree,
-		focusedPanel:  PanelTaskList,
-		expandedNodes: make(map[string]bool),
-		selectedIDs:   make(map[string]bool),
+		config:           cfg,
+		configManager:    configManager,
+		taskService:      taskService,
+		execService:      execService,
+		tasks:            tasks,
+		taskIndex:        make(map[string]*taskmaster.Task),
+		visibleTasks:     []*taskmaster.Task{},
+		selectedIndex:    0,
+		ready:            false,
+		viewMode:         ViewModeTree,
+		focusedPanel:     PanelTaskList,
+		expandedNodes:    make(map[string]bool),
+		selectedIDs:      make(map[string]bool),
 		taskListViewport: taskListVP,
-		detailsViewport: detailsVP,
-		logViewport:    logVP,
-		helpModel:      help.New(),
-		keyMap:         NewKeyMap(cfg),
+		detailsViewport:  detailsVP,
+		logViewport:      logVP,
+		helpModel:        help.New(),
+		keyMap:           keyMap,
+		appState:         appState,
 		showDetailsPanel: true,
-		showLogPanel:    false,
-		showHelp:        false,
-		commandMode:     false,
-		commandInput:    "",
-		searchInput:     searchInput,
-		styles:         NewStyles(),
-		logLines:       []string{},
+		showLogPanel:     false,
+		showHelp:         false,
+		commandMode:      false,
+		commandInput:     "",
+		searchInput:      searchInput,
+		styles:           NewStyles(),
+		logLines:         []string{},
+		projectRegistry:  taskService.ProjectRegistry(),
+		activeProject:    taskService.ActiveProjectMetadata(),
 	}
-	
+
+	m.commands = defaultCommandSpecs()
+	m.registerDefaultCommandShortcuts()
+
 	// Build task index
 	m.buildTaskIndex()
-	
+
 	// Rebuild visible tasks list
 	m.rebuildVisibleTasks()
-	
+
 	// Try to load and restore previous UI state
 	if cfg != nil && cfg.StatePath != "" {
 		if state, err := config.LoadState(cfg.StatePath); err == nil {
@@ -172,14 +237,153 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		}
 		// If state loading fails, we just use the default initial state (first task selected)
 	}
-	
+
 	// If state restoration didn't set a selection, select first task
 	if m.selectedTask == nil && len(m.visibleTasks) > 0 {
 		m.selectedTask = m.visibleTasks[0]
 		m.selectedIndex = 0
 	}
-	
+
 	return m
+}
+
+// registerDefaultCommandShortcuts wires built-in shortcuts to commands.
+func (m *Model) registerDefaultCommandShortcuts() {
+	m.commandShortcuts = []commandShortcut{
+		{binding: m.keyMap.ParsePRD, command: CommandParsePRD, help: "Parse PRD"},
+		{binding: m.keyMap.AnalyzeComplexity, command: CommandAnalyzeComplexity, help: "Analyze Complexity"},
+		{binding: m.keyMap.ExpandTask, command: CommandExpandTask, help: "Expand Task"},
+		{binding: m.keyMap.DeleteTask, command: CommandDeleteTask, help: "Delete Task"},
+		{binding: m.keyMap.ManageTags, command: CommandManageTags, help: "Add Tag Context"},
+		{binding: m.keyMap.TagManagement, command: CommandTagManagement, help: "Manage Tags"},
+		{binding: m.keyMap.UseTag, command: CommandUseTag, help: "Use Tag"},
+		{binding: m.keyMap.ProjectTags, command: CommandProjectTags, help: "Project Tags"},
+		{binding: m.keyMap.ProjectQuickSwitch, command: CommandProjectQuickSwitch, help: "Quick Project Switch"},
+		{binding: m.keyMap.ProjectSearch, command: CommandProjectSearch, help: "Project Search"},
+	}
+}
+
+// tryHandleCommandShortcut executes a command if the key matches a registered shortcut.
+func (m *Model) tryHandleCommandShortcut(msg tea.KeyMsg) (tea.Cmd, bool) {
+	for _, shortcut := range m.commandShortcuts {
+		if key.Matches(msg, shortcut.binding) {
+			cmd := m.dispatchCommand(shortcut.command)
+			return cmd, true
+		}
+	}
+	return nil, false
+}
+
+// openCommandPalette displays the palette dialog listing all commands.
+func (m *Model) openCommandPalette() {
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	items := make([]dialog.ListItem, 0, len(m.commands))
+	for _, spec := range m.commands {
+		items = append(items, newCommandPaletteItem(spec))
+	}
+	palette := dialog.NewListDialog("Command Palette", 72, 18, items)
+	palette.SetShowDescription(true)
+	m.appState.AddDialog(palette, nil)
+}
+
+func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
+	if item, ok := msg.SelectedItem.(*commandPaletteItem); ok {
+		return m.dispatchCommand(item.spec.ID)
+	}
+	if item, ok := msg.SelectedItem.(*prdResultListItem); ok {
+		if item.taskID != "" {
+			return func() tea.Msg {
+				return SelectTaskMsg{TaskID: item.taskID}
+			}
+		}
+		return nil
+	}
+	if item, ok := msg.SelectedItem.(*tagListItem); ok && item.ctx != nil {
+		m.tagActionContext = item.ctx
+		m.openTagActionDialog()
+		return nil
+	}
+	if actionItem, ok := msg.SelectedItem.(*tagActionItem); ok {
+		return m.handleTagActionSelection(actionItem.kind)
+	}
+	if tagItem, ok := msg.SelectedItem.(*projectTagItem); ok && tagItem != nil {
+		return m.openProjectSelectionDialog(tagItem.summary.Name)
+	}
+	if projectItem, ok := msg.SelectedItem.(*projectListItem); ok {
+		return m.handleProjectListItemSelection(projectItem)
+	}
+	if msg.SelectedItem != nil {
+		m.addLogLine(fmt.Sprintf("Selected item: %s", msg.SelectedItem.Title()))
+	}
+	return nil
+}
+
+func (m *Model) handleTagOperationMsg(msg TagOperationMsg) tea.Cmd {
+	if msg.Err != nil {
+		appErr := NewOperationError("Tag Command", "Tag operation failed", msg.Err).
+			WithRecoveryHints(
+				"Check if you have permission to perform this action",
+				"Verify the tag exists",
+				"Try again",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+	if msg.Result == nil {
+		return nil
+	}
+	label := strings.ReplaceAll(msg.Operation, "-", " ")
+	if label != "" {
+		label = strings.ToUpper(label[:1]) + label[1:]
+	}
+	if msg.TagName != "" {
+		label = fmt.Sprintf("%s (%s)", label, msg.TagName)
+	}
+	m.addLogLine(label)
+	if output := strings.TrimSpace(msg.Result.Output); output != "" {
+		m.addLogLine(output)
+	}
+	if msg.Operation == "use-tag" && m.config != nil && msg.TagName != "" {
+		m.config.ActiveTag = msg.TagName
+	}
+	return LoadTasksCmd(m.taskService)
+}
+
+func (m *Model) handleProjectListItemSelection(item *projectListItem) tea.Cmd {
+	if item == nil || item.meta == nil {
+		return nil
+	}
+	tag := strings.TrimSpace(item.Tag())
+	if tag == "" {
+		tag = item.meta.PrimaryTag()
+	}
+	if tag == "" {
+		appErr := NewValidationError("Switch Project", fmt.Sprintf("Project '%s' has no associated tags.", item.meta.Name), nil).
+			WithRecoveryHints(
+				"Add tags to this project first",
+				"Try selecting a different project",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+	return m.requestProjectSwitch(item.meta, tag)
+}
+
+func (m *Model) useProjectTag(tag string) tea.Cmd {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return nil
+	}
+	if m.config != nil && strings.EqualFold(strings.TrimSpace(m.config.ActiveTag), tag) {
+		m.addLogLine(fmt.Sprintf("Already using tag %s", tag))
+		return nil
+	}
+	return m.runTagOperation("use-tag", tag, func(ctx context.Context) (*taskmaster.TagOperationResult, error) {
+		return m.taskService.UseTagContext(ctx, tag)
+	})
 }
 
 // buildTaskIndex creates a flat index of all tasks by ID for quick lookup
@@ -210,7 +414,7 @@ func (m *Model) rebuildVisibleTasks() {
 		// In tree view, respect expanded state
 		m.visibleTasks = m.flattenTasks()
 	}
-	
+
 	// Ensure selectedIndex is valid after rebuild
 	if m.selectedIndex >= len(m.visibleTasks) {
 		m.selectedIndex = len(m.visibleTasks) - 1
@@ -218,7 +422,7 @@ func (m *Model) rebuildVisibleTasks() {
 	if m.selectedIndex < 0 && len(m.visibleTasks) > 0 {
 		m.selectedIndex = 0
 	}
-	
+
 	// Update selectedTask based on selectedIndex
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.visibleTasks) {
 		m.selectedTask = m.visibleTasks[m.selectedIndex]
@@ -234,13 +438,13 @@ func (m *Model) extractUIState() *config.UIState {
 			expandedIDs = append(expandedIDs, id)
 		}
 	}
-	
+
 	// Get selected task ID
 	selectedID := ""
 	if m.selectedTask != nil {
 		selectedID = m.selectedTask.ID
 	}
-	
+
 	// Convert ViewMode to string
 	viewModeStr := "tree"
 	switch m.viewMode {
@@ -249,7 +453,7 @@ func (m *Model) extractUIState() *config.UIState {
 	case ViewModeKanban:
 		viewModeStr = "kanban"
 	}
-	
+
 	// Convert Panel to string
 	focusedPanelStr := "taskList"
 	switch m.focusedPanel {
@@ -258,7 +462,7 @@ func (m *Model) extractUIState() *config.UIState {
 	case PanelLog:
 		focusedPanelStr = "log"
 	}
-	
+
 	return &config.UIState{
 		ExpandedIDs:      expandedIDs,
 		SelectedID:       selectedID,
@@ -267,6 +471,7 @@ func (m *Model) extractUIState() *config.UIState {
 		ShowDetailsPanel: m.showDetailsPanel,
 		ShowLogPanel:     m.showLogPanel,
 		PanelHeights:     make(map[string]int), // Can be extended later
+		LastPrdPath:      m.lastPrdPath,
 	}
 }
 
@@ -275,7 +480,7 @@ func (m *Model) SaveUIState() error {
 	if m.config == nil || m.config.StatePath == "" {
 		return nil // No state path configured, skip saving
 	}
-	
+
 	state := m.extractUIState()
 	return config.SaveState(m.config.StatePath, state)
 }
@@ -285,13 +490,13 @@ func (m *Model) restoreUIState(state *config.UIState) {
 	if state == nil {
 		return
 	}
-	
+
 	// Restore expanded nodes
 	m.expandedNodes = make(map[string]bool)
 	for _, id := range state.ExpandedIDs {
 		m.expandedNodes[id] = true
 	}
-	
+
 	// Restore view mode
 	switch state.ViewMode {
 	case "list":
@@ -301,7 +506,7 @@ func (m *Model) restoreUIState(state *config.UIState) {
 	default:
 		m.viewMode = ViewModeTree
 	}
-	
+
 	// Restore focused panel
 	switch state.FocusedPanel {
 	case "details":
@@ -311,14 +516,15 @@ func (m *Model) restoreUIState(state *config.UIState) {
 	default:
 		m.focusedPanel = PanelTaskList
 	}
-	
+
 	// Restore panel visibility
 	m.showDetailsPanel = state.ShowDetailsPanel
 	m.showLogPanel = state.ShowLogPanel
-	
+	m.lastPrdPath = state.LastPrdPath
+
 	// Rebuild visible tasks with restored expanded state
 	m.rebuildVisibleTasks()
-	
+
 	// Restore selected task
 	if state.SelectedID != "" {
 		if task, ok := m.taskIndex[state.SelectedID]; ok {
@@ -342,7 +548,7 @@ func (m *Model) ClearUIState() error {
 			return fmt.Errorf("failed to remove state file: %w", err)
 		}
 	}
-	
+
 	// Reset all in-memory state to defaults
 	m.expandedNodes = make(map[string]bool)
 	m.selectedIndex = 0
@@ -353,10 +559,10 @@ func (m *Model) ClearUIState() error {
 	m.commandMode = false
 	m.commandInput = ""
 	m.confirmingClearState = false
-	
+
 	// Rebuild visible tasks with cleared expanded state
 	m.rebuildVisibleTasks()
-	
+
 	// Select first task if available
 	if len(m.visibleTasks) > 0 {
 		m.selectedTask = m.visibleTasks[0]
@@ -364,37 +570,119 @@ func (m *Model) ClearUIState() error {
 	} else {
 		m.selectedTask = nil
 	}
-	
+
 	// Update viewports
 	m.updateTaskListViewport()
 	m.updateDetailsViewport()
-	
+
 	return nil
+}
+
+// Dialog helper methods
+
+// ShowConfirmationDialog shows a confirmation dialog with Yes/No options
+func (m *Model) ShowConfirmationDialog(title, message string, dangerMode bool) {
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	confirmDialog := dialog.YesNo(title, message, dangerMode)
+	m.appState.PushDialog(confirmDialog)
+}
+
+// ShowInformationDialog shows a simple information dialog with an OK button
+func (m *Model) ShowInformationDialog(title, message string) {
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	okDialog := dialog.OkDialog(title, message)
+	m.appState.PushDialog(okDialog)
+}
+
+// ShowNotificationDialog displays an informational OK dialog and records the message in the log.
+func (m *Model) ShowNotificationDialog(title, message, level string, duration time.Duration) {
+	if level == "" {
+		level = "info"
+	}
+	levelLabel := strings.ToUpper(level)
+	logEntry := fmt.Sprintf("[%s] %s: %s", levelLabel, title, message)
+	if duration > 0 {
+		logEntry = fmt.Sprintf("%s (hint: %s)", logEntry, duration.Round(time.Second))
+	}
+	m.addLogLine(logEntry)
+
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	notification := dialog.OkDialog(title, message)
+	m.appState.AddDialog(notification, nil)
+}
+
+// ShowFormDialog shows a form dialog with the specified fields
+
+func (m *Model) ShowFormDialog(title string, width, height int, fields []dialog.FormField) {
+	if m.dialogManager() == nil {
+		return
+	}
+	formDialog := dialog.NewLegacyFormDialog(title, width, height, fields)
+	m.appState.PushDialog(formDialog)
+}
+
+// ShowListDialog shows a list dialog with the specified items
+func (m *Model) ShowListDialog(title string, width, height int, items []dialog.ListItem, multiSelect bool) {
+	if m.dialogManager() == nil {
+		return
+	}
+	listDialog := dialog.NewListDialog(title, width, height, items)
+	listDialog.SetMultiSelect(multiSelect)
+	m.appState.PushDialog(listDialog)
+}
+
+// ShowProgressDialog shows a progress dialog
+func (m *Model) ShowProgressDialog(title string, width, height int) *dialog.ProgressDialog {
+	if m.dialogManager() == nil {
+		return nil
+	}
+	progressDialog := dialog.NewProgressDialog(title, width, height)
+	m.appState.PushDialog(progressDialog)
+	return progressDialog
+}
+
+// UpdateProgress updates the progress of the active progress dialog
+func (m *Model) UpdateProgress(progress float64, label string) tea.Cmd {
+	return dialog.UpdateProgress(progress, label)
+}
+
+// CloseAllDialogs closes all open dialogs
+func (m *Model) CloseAllDialogs() {
+	m.appState.ClearDialogs()
 }
 
 // renderTaskTree renders the task tree with proper indentation and expand/collapse
 func (m Model) renderTaskTree(tasks []taskmaster.Task, depth int) string {
 	var b strings.Builder
-	
+
 	for i := range tasks {
 		task := &tasks[i]
 		indent := strings.Repeat("  ", depth)
 		statusIcon := GetStatusIcon(task.Status)
 		statusStyle := m.styles.GetStatusStyle(task.Status)
-		
+
 		// Determine if this is the selected task - check by ID only
 		isSelected := m.selectedTask != nil && m.selectedTask.ID == task.ID
-		
+
 		// Build the line
 		line := ""
-		
+
 		// Selection checkbox
 		if m.isTaskSelected(task.ID) {
 			line += "[✓] "
 		} else {
 			line += "[ ] "
 		}
-		
+
 		// Expand/collapse indicator
 		hasSubtasks := len(task.Subtasks) > 0
 		if hasSubtasks {
@@ -406,11 +694,19 @@ func (m Model) renderTaskTree(tasks []taskmaster.Task, depth int) string {
 		} else {
 			line += "  "
 		}
-		
+
 		// Status icon and task info
 		line += statusStyle.Render(statusIcon) + " "
 		line += fmt.Sprintf("%s: %s", task.ID, task.Title)
-		
+
+		// Add complexity indicator with text for accessibility
+		if task.Complexity > 0 {
+			complexityIndicator := GetComplexityIndicator(task.Complexity)
+			if complexityIndicator != "" {
+				line += " " + complexityIndicator
+			}
+		}
+
 		// Build full line with cursor and indentation
 		var fullLine string
 		if isSelected {
@@ -422,16 +718,16 @@ func (m Model) renderTaskTree(tasks []taskmaster.Task, depth int) string {
 			fullLine = "  " + indent + line
 			fullLine = m.styles.TaskUnselected.Render(fullLine)
 		}
-		
+
 		b.WriteString(fullLine)
 		b.WriteString("\n")
-		
+
 		// Recursively render subtasks if expanded
 		if hasSubtasks && m.expandedNodes[task.ID] {
 			b.WriteString(m.renderTaskTree(task.Subtasks, depth+1))
 		}
 	}
-	
+
 	return b.String()
 }
 
@@ -457,12 +753,12 @@ func (m *Model) selectNext() {
 	if len(m.visibleTasks) == 0 {
 		return
 	}
-	
+
 	m.selectedIndex++
 	if m.selectedIndex >= len(m.visibleTasks) {
 		m.selectedIndex = len(m.visibleTasks) - 1
 	}
-	
+
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.visibleTasks) {
 		m.selectedTask = m.visibleTasks[m.selectedIndex]
 	}
@@ -473,12 +769,12 @@ func (m *Model) selectPrevious() {
 	if len(m.visibleTasks) == 0 {
 		return
 	}
-	
+
 	m.selectedIndex--
 	if m.selectedIndex < 0 {
 		m.selectedIndex = 0
 	}
-	
+
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.visibleTasks) {
 		m.selectedTask = m.visibleTasks[m.selectedIndex]
 	}
@@ -489,14 +785,14 @@ func (m *Model) selectParentTask() {
 	if m.selectedTask == nil {
 		return
 	}
-	
+
 	// Get parent ID (e.g., "1.2.3" -> "1.2", "1.2" -> "1")
 	parentID := m.getParentID(m.selectedTask.ID)
 	if parentID == "" {
 		// Already at root level, can't go higher
 		return
 	}
-	
+
 	// Select the parent task
 	m.selectTaskByID(parentID)
 }
@@ -509,11 +805,10 @@ func (m *Model) getParentID(taskID string) string {
 		// Root level task, no parent
 		return ""
 	}
-	
+
 	// Return all parts except the last one
 	return strings.Join(parts[:len(parts)-1], ".")
 }
-
 
 // selectTaskByID selects a task by ID and ensures its ancestors are expanded
 func (m *Model) selectTaskByID(taskID string) bool {
@@ -521,13 +816,13 @@ func (m *Model) selectTaskByID(taskID string) bool {
 	if !ok {
 		return false
 	}
-	
+
 	// Expand all ancestors
 	m.expandAncestors(taskID)
-	
+
 	// Rebuild visible tasks
 	m.rebuildVisibleTasks()
-	
+
 	// Find the task in visibleTasks and select it
 	for i, t := range m.visibleTasks {
 		if t.ID == taskID {
@@ -536,7 +831,7 @@ func (m *Model) selectTaskByID(taskID string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -553,12 +848,12 @@ func (m *Model) expandAncestors(taskID string) {
 func (m *Model) getAncestorIDs(taskID string) []string {
 	var ancestors []string
 	parts := strings.Split(taskID, ".")
-	
+
 	for i := 1; i < len(parts); i++ {
 		ancestorID := strings.Join(parts[:i], ".")
 		ancestors = append(ancestors, ancestorID)
 	}
-	
+
 	return ancestors
 }
 
@@ -567,13 +862,13 @@ func (m *Model) toggleExpanded() {
 	if m.selectedTask == nil || len(m.selectedTask.Subtasks) == 0 {
 		return
 	}
-	
+
 	// Store the selected task ID to restore after rebuild
 	selectedTaskID := m.selectedTask.ID
-	
+
 	m.expandedNodes[m.selectedTask.ID] = !m.expandedNodes[m.selectedTask.ID]
 	m.rebuildVisibleTasks()
-	
+
 	// Ensure the same task is still selected after rebuild
 	m.ensureTaskSelected(selectedTaskID)
 }
@@ -583,13 +878,13 @@ func (m *Model) expandSelected() {
 	if m.selectedTask == nil || len(m.selectedTask.Subtasks) == 0 {
 		return
 	}
-	
+
 	// Store the selected task ID to restore after rebuild
 	selectedTaskID := m.selectedTask.ID
-	
+
 	m.expandedNodes[m.selectedTask.ID] = true
 	m.rebuildVisibleTasks()
-	
+
 	// Ensure the same task is still selected after rebuild
 	m.ensureTaskSelected(selectedTaskID)
 }
@@ -611,20 +906,20 @@ func (m *Model) collapseSelected() {
 	if m.selectedTask == nil {
 		return
 	}
-	
+
 	// If task has subtasks and is expanded, collapse it
 	if len(m.selectedTask.Subtasks) > 0 && m.expandedNodes[m.selectedTask.ID] {
 		// Store the selected task ID to restore after rebuild
 		selectedTaskID := m.selectedTask.ID
-		
+
 		m.expandedNodes[m.selectedTask.ID] = false
 		m.rebuildVisibleTasks()
-		
+
 		// Ensure the same task is still selected after rebuild
 		m.ensureTaskSelected(selectedTaskID)
 		return
 	}
-	
+
 	// Otherwise, navigate to parent task
 	m.selectParentTask()
 }
@@ -656,7 +951,7 @@ func (m *Model) toggleSelection() {
 	if m.selectedTask == nil {
 		return
 	}
-	
+
 	if m.selectedIDs[m.selectedTask.ID] {
 		delete(m.selectedIDs, m.selectedTask.ID)
 	} else {
@@ -692,23 +987,23 @@ func (m Model) filterTaskTree(tasks []taskmaster.Task) []taskmaster.Task {
 	} else {
 		statusFiltered = m.filterTaskTreeByStatus(tasks, m.statusFilter)
 	}
-	
+
 	// Then apply search filter
 	if m.searchQuery == "" {
 		return statusFiltered
 	}
-	
+
 	return m.filterTaskTreeBySearch(statusFiltered, m.searchQuery)
 }
 
 // filterTaskTreeByStatus filters tasks in tree structure by status
 func (m Model) filterTaskTreeByStatus(tasks []taskmaster.Task, status string) []taskmaster.Task {
 	var filtered []taskmaster.Task
-	
+
 	for i := range tasks {
 		task := tasks[i]
 		matches := task.Status == status
-		
+
 		// Check if any subtask matches
 		if len(task.Subtasks) > 0 {
 			filteredSubtasks := m.filterTaskTreeByStatus(task.Subtasks, status)
@@ -726,7 +1021,7 @@ func (m Model) filterTaskTreeByStatus(tasks []taskmaster.Task, status string) []
 			filtered = append(filtered, task)
 		}
 	}
-	
+
 	return filtered
 }
 
@@ -735,17 +1030,17 @@ func (m Model) filterTaskTreeBySearch(tasks []taskmaster.Task, query string) []t
 	if query == "" {
 		return tasks
 	}
-	
+
 	lowerQuery := strings.ToLower(query)
 	var filtered []taskmaster.Task
-	
+
 	for i := range tasks {
 		task := tasks[i]
 		// Check if this task matches
 		matches := strings.Contains(strings.ToLower(task.ID), lowerQuery) ||
 			strings.Contains(strings.ToLower(task.Title), lowerQuery) ||
 			strings.Contains(strings.ToLower(task.Description), lowerQuery)
-		
+
 		// Check if any subtask matches
 		if len(task.Subtasks) > 0 {
 			filteredSubtasks := m.filterTaskTreeBySearch(task.Subtasks, query)
@@ -763,8 +1058,38 @@ func (m Model) filterTaskTreeBySearch(tasks []taskmaster.Task, query string) []t
 			filtered = append(filtered, task)
 		}
 	}
-	
+
 	return filtered
+}
+
+// wrapText wraps text to a specified width
+func wrapText(text string, width int) string {
+	if width <= 0 || text == "" {
+		return text
+	}
+
+	var lines []string
+	words := strings.Fields(strings.TrimSpace(text))
+	if len(words) == 0 {
+		return text
+	}
+
+	currentLine := words[0]
+	for _, word := range words[1:] {
+		// Check if adding the next word exceeds the width
+		if len(currentLine)+1+len(word) <= width {
+			currentLine += " " + word
+		} else {
+			// Line is full, start a new one
+			lines = append(lines, currentLine)
+			currentLine = word
+		}
+	}
+
+	// Don't forget the last line
+	lines = append(lines, currentLine)
+
+	return strings.Join(lines, "\n")
 }
 
 // renderTaskDetails renders the details of the selected task
@@ -772,70 +1097,103 @@ func (m Model) renderTaskDetails() string {
 	if m.selectedTask == nil {
 		return m.styles.Info.Render("No task selected")
 	}
-	
+
+	// Calculate available width for wrapping text
+	// Subtract some padding to ensure text doesn't hit the edge of the viewport
+	wrapWidth := m.detailsViewport.Width - 4
+	if wrapWidth < 20 {
+		wrapWidth = 20 // Minimum reasonable width
+	}
+
 	task := m.selectedTask
 	var b strings.Builder
-	
+
 	// Title
 	b.WriteString(m.styles.PanelTitle.Render(fmt.Sprintf("Task %s", task.ID)))
 	b.WriteString("\n\n")
-	
+
 	// Title field
 	b.WriteString(m.styles.Subtitle.Render("Title: "))
-	b.WriteString(task.Title)
+	title := wrapText(task.Title, wrapWidth-7) // "Title: " is 7 chars
+	// Replace newlines with indented newlines to maintain alignment
+	if strings.Contains(title, "\n") {
+		lines := strings.Split(title, "\n")
+		b.WriteString(lines[0]) // First line follows the "Title: " label
+		for _, line := range lines[1:] {
+			b.WriteString("\n       " + line) // Indent subsequent lines
+		}
+	} else {
+		b.WriteString(title)
+	}
 	b.WriteString("\n\n")
-	
+
 	// Status
 	statusStyle := m.styles.GetStatusStyle(task.Status)
 	b.WriteString(m.styles.Subtitle.Render("Status: "))
-	b.WriteString(statusStyle.Render(task.Status))
+	statusIndicator := GetStatusIndicator(task.Status)
+	b.WriteString(statusStyle.Render(statusIndicator))
 	b.WriteString("\n\n")
-	
+
 	// Priority
 	if task.Priority != "" {
 		b.WriteString(m.styles.Subtitle.Render("Priority: "))
 		b.WriteString(task.Priority)
 		b.WriteString("\n\n")
 	}
-	
+
 	// Complexity
 	if task.Complexity > 0 {
 		b.WriteString(m.styles.Subtitle.Render("Complexity: "))
-		b.WriteString(fmt.Sprintf("%d", task.Complexity))
+		complexityIndicator := GetComplexityIndicator(task.Complexity)
+		b.WriteString(complexityIndicator)
 		b.WriteString("\n\n")
 	}
-	
+
 	// Dependencies
 	if len(task.Dependencies) > 0 {
 		b.WriteString(m.styles.Subtitle.Render("Dependencies: "))
-		b.WriteString(strings.Join(task.Dependencies, ", "))
+		deps := strings.Join(task.Dependencies, ", ")
+		wrappedDeps := wrapText(deps, wrapWidth-14) // "Dependencies: " is 14 chars
+		// Replace newlines with indented newlines to maintain alignment
+		if strings.Contains(wrappedDeps, "\n") {
+			lines := strings.Split(wrappedDeps, "\n")
+			b.WriteString(lines[0]) // First line follows the "Dependencies: " label
+			for _, line := range lines[1:] {
+				b.WriteString("\n              " + line) // Indent subsequent lines
+			}
+		} else {
+			b.WriteString(wrappedDeps)
+		}
 		b.WriteString("\n\n")
 	}
-	
+
 	// Description
 	if task.Description != "" {
 		b.WriteString(m.styles.Subtitle.Render("Description:"))
 		b.WriteString("\n")
-		b.WriteString(task.Description)
+		wrappedDesc := wrapText(task.Description, wrapWidth)
+		b.WriteString(wrappedDesc)
 		b.WriteString("\n\n")
 	}
-	
+
 	// Details
 	if task.Details != "" {
 		b.WriteString(m.styles.Subtitle.Render("Details:"))
 		b.WriteString("\n")
-		b.WriteString(task.Details)
+		wrappedDetails := wrapText(task.Details, wrapWidth)
+		b.WriteString(wrappedDetails)
 		b.WriteString("\n\n")
 	}
-	
+
 	// Test Strategy
 	if task.TestStrategy != "" {
 		b.WriteString(m.styles.Subtitle.Render("Test Strategy:"))
 		b.WriteString("\n")
-		b.WriteString(task.TestStrategy)
+		wrappedStrategy := wrapText(task.TestStrategy, wrapWidth)
+		b.WriteString(wrappedStrategy)
 		b.WriteString("\n\n")
 	}
-	
+
 	// Subtasks count
 	if len(task.Subtasks) > 0 {
 		completed := 0
@@ -848,7 +1206,7 @@ func (m Model) renderTaskDetails() string {
 		b.WriteString(fmt.Sprintf("%d/%d completed", completed, len(task.Subtasks)))
 		b.WriteString("\n")
 	}
-	
+
 	return b.String()
 }
 
@@ -864,7 +1222,7 @@ func (m *Model) updateTaskListViewport() {
 		m.taskListViewport.SetContent(m.styles.Info.Render("No tasks available\n\nPress 'r' to reload"))
 		return
 	}
-	
+
 	// Render title with view mode indicator
 	viewModeStr := ""
 	switch m.viewMode {
@@ -876,7 +1234,7 @@ func (m *Model) updateTaskListViewport() {
 		viewModeStr = " [Kanban]"
 	}
 	title := m.styles.PanelTitle.Render("📋 Tasks" + viewModeStr)
-	
+
 	// Render content based on view mode
 	var content string
 	switch m.viewMode {
@@ -899,14 +1257,14 @@ func (m *Model) updateTaskListViewport() {
 			content = title + "\n\n" + m.renderTaskTree(tasksToRender, 0)
 		}
 	}
-	
+
 	m.taskListViewport.SetContent(content)
 }
 
 // renderTaskList renders tasks in flat list view
 func (m Model) renderTaskList() string {
 	var b strings.Builder
-	
+
 	// Use visibleTasks if any filter is active, otherwise flatten all tasks
 	var tasksToRender []*taskmaster.Task
 	if (m.searchQuery != "" || m.statusFilter != "") && m.visibleTasks != nil {
@@ -914,37 +1272,37 @@ func (m Model) renderTaskList() string {
 	} else {
 		tasksToRender = m.flattenAllTasks()
 	}
-	
+
 	for i, task := range tasksToRender {
 		statusIcon := GetStatusIcon(task.Status)
 		statusStyle := m.styles.GetStatusStyle(task.Status)
-		
+
 		// Determine if this is the selected task
 		isSelected := m.selectedTask != nil && m.selectedTask.ID == task.ID
-		
+
 		// Build the line
 		line := ""
-		
+
 		// Selection checkbox
 		if m.isTaskSelected(task.ID) {
 			line += "[✓] "
 		} else {
 			line += "[ ] "
 		}
-		
+
 		// Status icon and task info with indentation to show hierarchy
-		depth := strings.Count(task.ID, ".") 
+		depth := strings.Count(task.ID, ".")
 		indent := strings.Repeat("  ", depth)
 		line += indent + statusStyle.Render(statusIcon) + " "
 		line += fmt.Sprintf("%s: %s", task.ID, task.Title)
-		
+
 		// Add priority if high
 		if task.Priority == "high" {
 			line += " " + m.styles.Warning.Render("[HIGH]")
 		} else if task.Priority == "critical" {
 			line += " " + m.styles.Error.Render("[CRITICAL]")
 		}
-		
+
 		// Build full line with cursor
 		var fullLine string
 		if isSelected {
@@ -954,13 +1312,13 @@ func (m Model) renderTaskList() string {
 			fullLine = "  " + line
 			fullLine = m.styles.TaskUnselected.Render(fullLine)
 		}
-		
+
 		b.WriteString(fullLine)
 		if i < len(tasksToRender)-1 {
 			b.WriteString("\n")
 		}
 	}
-	
+
 	return b.String()
 }
 
@@ -992,7 +1350,7 @@ func (m Model) renderLog() string {
 	if len(m.logLines) == 0 {
 		return m.styles.Info.Render("No log output yet")
 	}
-	
+
 	return strings.Join(m.logLines, "\n")
 }
 
@@ -1010,7 +1368,7 @@ func (m *Model) setTaskStatus(status string) {
 		m.addLogLine("Command already running, please wait...")
 		return
 	}
-	
+
 	// Get tasks to update (selected or current)
 	var taskIDs []string
 	if len(m.selectedIDs) > 0 {
@@ -1021,7 +1379,7 @@ func (m *Model) setTaskStatus(status string) {
 		m.addLogLine("No task selected")
 		return
 	}
-	
+
 	// Execute set-status command for each task
 	for _, taskID := range taskIDs {
 		m.addLogLine(fmt.Sprintf("Setting task %s to %s", taskID, status))
@@ -1030,7 +1388,7 @@ func (m *Model) setTaskStatus(status string) {
 			return
 		}
 	}
-	
+
 	// Clear selection after status change
 	m.clearSelection()
 }
@@ -1064,7 +1422,7 @@ func (m *Model) updateSearchResults() {
 // cycleStatusFilter cycles through status filters
 func (m *Model) cycleStatusFilter() {
 	statuses := []string{
-		"",                            // All tasks
+		"", // All tasks
 		taskmaster.StatusPending,
 		taskmaster.StatusInProgress,
 		taskmaster.StatusDone,
@@ -1072,7 +1430,7 @@ func (m *Model) cycleStatusFilter() {
 		taskmaster.StatusDeferred,
 		taskmaster.StatusCancelled,
 	}
-	
+
 	// Find current status in the list
 	currentIndex := 0
 	for i, status := range statuses {
@@ -1081,18 +1439,18 @@ func (m *Model) cycleStatusFilter() {
 			break
 		}
 	}
-	
+
 	// Move to next status
 	nextIndex := (currentIndex + 1) % len(statuses)
 	m.statusFilter = statuses[nextIndex]
-	
+
 	// Log the change
 	if m.statusFilter == "" {
 		m.addLogLine("Filter cleared - showing all tasks")
 	} else {
 		m.addLogLine(fmt.Sprintf("Filtering by status: %s", m.statusFilter))
 	}
-	
+
 	// Update the display
 	m.updateFilteredTasks()
 }
@@ -1101,7 +1459,7 @@ func (m *Model) cycleStatusFilter() {
 func (m *Model) updateFilteredTasks() {
 	// Start with all tasks
 	allTasks := m.flattenAllTasks()
-	
+
 	// Apply status filter
 	var statusFiltered []*taskmaster.Task
 	if m.statusFilter == "" {
@@ -1113,7 +1471,7 @@ func (m *Model) updateFilteredTasks() {
 			}
 		}
 	}
-	
+
 	// Apply search filter on top of status filter
 	if m.searchQuery == "" {
 		m.visibleTasks = statusFiltered
@@ -1121,7 +1479,7 @@ func (m *Model) updateFilteredTasks() {
 	} else {
 		lowerQuery := strings.ToLower(m.searchQuery)
 		var searchFiltered []*taskmaster.Task
-		
+
 		for _, task := range statusFiltered {
 			if strings.Contains(strings.ToLower(task.ID), lowerQuery) ||
 				strings.Contains(strings.ToLower(task.Title), lowerQuery) ||
@@ -1129,13 +1487,13 @@ func (m *Model) updateFilteredTasks() {
 				searchFiltered = append(searchFiltered, task)
 			}
 		}
-		
+
 		m.visibleTasks = searchFiltered
 		m.searchResults = searchFiltered
 	}
-	
+
 	m.updateTaskListViewport()
-	
+
 	// Update selection if current selection is not visible
 	if m.selectedTask != nil {
 		found := false
@@ -1155,29 +1513,35 @@ func (m *Model) updateFilteredTasks() {
 }
 
 // Update handles messages and updates the model
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	
-	switch msg := msg.(type) {
+
+	switch msg := incomingMsg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-		
+
 		// Update viewport sizes based on layout
 		m.updateViewportSizes()
+
+		// Update dialog manager dimensions
+		if dm := m.dialogManager(); dm != nil {
+			dm.SetTerminalSize(msg.Width, msg.Height)
+		}
+
 		return m, nil
 
 	case TasksLoadedMsg:
 		// Initial tasks loaded successfully
 		m.tasks = msg.Tasks
 		m.buildTaskIndex()
-		
+
 		// Select first task if available
 		if len(m.tasks) > 0 {
 			m.selectedTask = &m.tasks[0]
 		}
-		
+
 		m.updateTaskListViewport()
 		m.updateDetailsViewport()
 		return m, nil
@@ -1186,18 +1550,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Tasks were reloaded from disk, refresh the view
 		m.tasks, _ = m.taskService.GetTasks()
 		m.buildTaskIndex()
-		
+
 		// Try to maintain selection after reload
 		if m.selectedTask != nil {
 			if task, ok := m.taskIndex[m.selectedTask.ID]; ok {
 				m.selectedTask = task
 			}
 		}
-		
+
 		m.updateTaskListViewport()
 		m.updateDetailsViewport()
 		m.addLogLine("Tasks reloaded from disk")
-		
+
 		// Continue listening for next reload
 		return m, WaitForTasksReload(m.taskService)
 
@@ -1205,14 +1569,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Config was reloaded from disk, update local reference
 		m.config = m.configManager.GetConfig()
 		m.addLogLine("Configuration reloaded")
-		
+
 		// Continue listening for next reload
 		return m, WaitForConfigReload(m.configManager)
 
 	case ExecutorOutputMsg:
 		// Executor produced output, add to log
 		m.addLogLine(msg.Line)
-		
+
 		// Continue listening for next output
 		return m, WaitForExecutorOutput(m.execService)
 
@@ -1223,7 +1587,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.addLogLine(fmt.Sprintf("✗ Command '%s' failed", msg.Command))
 		}
-		
+
 		// Reload tasks after command completion
 		cmds = append(cmds, LoadTasksCmd(m.taskService))
 		return m, tea.Batch(cmds...)
@@ -1240,6 +1604,203 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addLogLine(fmt.Sprintf("Watcher error: %v", msg.Err))
 		return m, nil
 
+	// Complexity Analysis Messages
+	case AnalyzeTaskComplexityMsg:
+		// Start complexity analysis by opening scope selection dialog
+		m.showComplexityScopeDialog()
+		return m, nil
+
+	// Tag Dialog Messages
+	case ComplexityScopeSelectedMsg:
+		// Handle selected complexity scope
+		cmd := m.handleComplexityScopeSelected(msg)
+		return m, cmd
+
+	case ComplexityAnalysisProgressMsg:
+		// Update progress dialog
+		if cmd := m.handleComplexityAnalysisProgress(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if waitCmd := m.waitForComplexityMessages(); waitCmd != nil {
+			cmds = append(cmds, waitCmd)
+		}
+		return m, tea.Batch(cmds...)
+
+	case ComplexityAnalysisCompletedMsg:
+		// Show complexity report
+		if delay := m.complexityCompletionDelay(msg); delay > 0 {
+			m.waitingForComplexityHold = true
+			m.showComplexityCompletionMessage(msg)
+			msgCopy := msg
+			return m, tea.Tick(delay, func(time.Time) tea.Msg {
+				return msgCopy
+			})
+		}
+		m.waitingForComplexityHold = false
+		if cmd := m.handleComplexityAnalysisCompleted(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
+	case parsePrdResultMsg:
+		if cmd := m.handleParsePrdResult(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if wait := m.waitForParsePrdMessages(); wait != nil {
+			cmds = append(cmds, wait)
+		}
+		return m, tea.Batch(cmds...)
+
+	case parsePrdStreamClosedMsg:
+		m.clearParsePrdRuntimeState()
+		return m, nil
+
+	case complexityStreamClosedMsg:
+		m.complexityMsgCh = nil
+		return m, nil
+
+	case ExpandTaskProgressMsg:
+		// Update progress dialog
+		if dm := m.dialogManager(); dm != nil {
+			if dlg, ok := dm.GetDialogByType(dialog.DialogTypeProgress); ok {
+				if pd, ok := dlg.(*dialog.ProgressDialog); ok {
+					pd.SetLabel(msg.Stage)
+					pd.SetProgress(msg.Progress)
+				}
+			}
+		}
+		// Wait for next message
+		if wait := m.waitForExpandTaskMessages(); wait != nil {
+			cmds = append(cmds, wait)
+		}
+		return m, tea.Batch(cmds...)
+
+	case ExpandTaskCompletedMsg:
+		m.clearExpandTaskRuntimeState()
+		if msg.Error != nil {
+			appErr := NewOperationError("Expand Task", "Task expansion failed", msg.Error).
+				WithRecoveryHints(
+					"Check the task description format",
+					"Verify all required fields are present",
+					"Try again",
+				)
+			m.showAppError(appErr)
+		} else {
+			m.addLogLine("Task expanded successfully")
+			// Dismiss progress dialog
+			if dm := m.dialogManager(); dm != nil {
+				dm.PopDialog()
+			}
+			// Reload tasks
+			cmds = append(cmds, LoadTasksCmd(m.taskService))
+		}
+		return m, tea.Batch(cmds...)
+
+	case expandTaskStreamClosedMsg:
+		m.expandTaskMsgCh = nil
+		return m, nil
+
+	case ComplexityReportActionMsg:
+		// Handle actions from the complexity report dialog
+		cmd := m.handleComplexityReportAction(msg)
+		return m, cmd
+
+	case ComplexityFilterAppliedMsg:
+		// Apply filter settings to report
+		cmd := m.handleComplexityFilterApplied(msg)
+		return m, cmd
+
+	case ComplexityExportRequestMsg:
+		// Handle export request
+		cmd := m.handleComplexityExportRequest(msg)
+		return m, cmd
+
+	case ComplexityExportCompletedMsg:
+		// Handle export completion
+		cmd := m.handleComplexityExportCompleted(msg)
+		return m, cmd
+
+	case dialog.DialogResultMsg:
+		if cmd := m.handleDialogResultMsg(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+
+	case UndoTickMsg:
+		if cmd := m.handleUndoTick(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+
+	case UndoExpiredMsg:
+		m.handleUndoExpired(msg)
+		return m, nil
+
+	case dialog.ProgressCancelMsg:
+		cmd := m.handleProgressDialogCancel()
+		return m, cmd
+
+	case SelectTaskMsg:
+		if msg.TaskID != "" {
+			if !m.selectTaskByID(msg.TaskID) {
+				m.addLogLine(fmt.Sprintf("Task %s not found", msg.TaskID))
+			}
+		}
+		return m, nil
+
+	case dialog.ListSelectionMsg:
+		if cmd := m.handleListSelection(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case tagListLoadedMsg:
+		if msg.Err != nil {
+			appErr := NewOperationError("Tag Contexts", "Failed to load tag contexts", msg.Err).
+				WithRecoveryHints(
+					"Check if Task Master is properly configured",
+					"Verify you're in a Task Master workspace",
+					"Try again",
+				)
+			m.showAppError(appErr)
+			return m, nil
+		}
+		m.showTagListDialog(msg.List)
+		return m, nil
+	case TagOperationMsg:
+		if cmd := m.handleTagOperationMsg(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	case projectSwitchedMsg:
+		m.pendingProjectSwitch = nil
+		m.pendingProjectTag = ""
+		if msg.Err != nil {
+			appErr := NewOperationError("Switch Project", "Failed to switch project", msg.Err).
+				WithRecoveryHints(
+					"Check if the project directory is valid",
+					"Verify project configuration",
+					"Try again",
+				)
+			m.showAppError(appErr)
+			return m, nil
+		}
+		if msg.Meta != nil {
+			m.activeProject = msg.Meta
+			m.projectRegistry = m.taskService.ProjectRegistry()
+			m.addLogLine(fmt.Sprintf("Switched to project %s", msg.Meta.Name))
+		}
+		cmds = append(cmds, LoadTasksCmd(m.taskService))
+		tag := strings.TrimSpace(msg.Tag)
+		if tag == "" && msg.Meta != nil {
+			tag = msg.Meta.PrimaryTag()
+		}
+		if tag != "" {
+			if cmd := m.useProjectTag(tag); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
 	case tea.KeyMsg:
 		// Handle help overlay mode first - takes priority
 		if m.showHelp {
@@ -1252,29 +1813,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		
-		// Handle clear state confirmation mode
-		if m.confirmingClearState {
-			switch msg.String() {
-			case "y", "Y":
+
+		// Handle dialog-specific confirmation results
+		switch msgTyped := incomingMsg.(type) {
+		case dialog.ConfirmationMsg:
+			if msgTyped.Result == dialog.ConfirmationResultYes {
 				// Clear state
 				if err := m.ClearUIState(); err != nil {
 					m.addLogLine(fmt.Sprintf("Failed to clear state: %v", err))
 				} else {
 					m.addLogLine("TUI state cleared successfully")
 				}
-				m.confirmingClearState = false
-			case "n", "N", "esc":
-				// Cancel clear
-				m.confirmingClearState = false
+			} else {
 				m.addLogLine("State clear cancelled")
-			default:
-				// Ignore other keys in confirmation mode
-				// Don't fall through to normal key handlers
 			}
 			return m, nil
 		}
-		
+
 		// Handle command mode separately
 		if m.commandMode {
 			switch msg.String() {
@@ -1304,12 +1859,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		
+
 		// Handle search mode separately
 		if m.searchMode {
 			var cmd tea.Cmd
 			m.searchInput, cmd = m.searchInput.Update(msg)
-			
+
 			switch msg.String() {
 			case "esc":
 				// Exit search mode
@@ -1323,7 +1878,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				// Confirm search
 				m.searchQuery = m.searchInput.Value()
-				
+
 				// Only exit search mode if there's actual input
 				if m.searchQuery != "" {
 					m.searchMode = false
@@ -1341,254 +1896,311 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
-		
-		// Normal mode keyboard handling
-		switch {
-		case key.Matches(msg, m.keyMap.Quit):
-			// Save UI state before quitting
-			if err := m.SaveUIState(); err != nil {
-				m.addLogLine(fmt.Sprintf("Warning: failed to save UI state: %v", err))
+
+		// Check if we have any active dialogs - let dialogue manager handle messages first
+		if m.appState != nil && m.appState.HasActiveDialog() {
+			// Let dialog manager handle the message
+			cmd := m.appState.HandleDialogMsg(incomingMsg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
 			}
-			return m, tea.Quit
-			
-		case key.Matches(msg, m.keyMap.Cancel):
-			// Cancel running command or quit
-			if m.execService.IsRunning() {
-				if err := m.execService.Cancel(); err == nil {
-					m.addLogLine("Command cancelled")
+
+			// Check for dialog-specific messages
+			switch msgTyped := incomingMsg.(type) {
+			case dialog.ListSelectionMsg:
+				if cmd := m.handleListSelection(msgTyped); cmd != nil {
+					cmds = append(cmds, cmd)
 				}
-			} else {
+			case dialog.ConfirmationMsg:
+				// Handle confirmation result
+				if msgTyped.Result == dialog.ConfirmationResultYes {
+					m.addLogLine("Confirmed: Yes")
+				} else {
+					m.addLogLine("Confirmed: No")
+				}
+			case dialog.ProgressUpdateMsg:
+				// Update progress bar
+				m.addLogLine(fmt.Sprintf("Progress: %.0f%%", msgTyped.Progress*100))
+				if m.parsePrdChan != nil {
+					if wait := m.waitForParsePrdMessages(); wait != nil {
+						cmds = append(cmds, wait)
+					}
+				}
+			}
+
+			// If message is a key event and we have active dialogs,
+			// return immediately - dialogs get priority for key events
+			switch msgTyped := incomingMsg.(type) {
+			case tea.KeyMsg:
+				_ = msgTyped // Use the variable to avoid compiler error
+				return m, tea.Batch(cmds...)
+			}
+		}
+
+		if cmd, handled := m.tryHandleCommandShortcut(msg); handled {
+			if cmd != nil {
+				return m, cmd
+			}
+			return m, nil
+		}
+
+		// Normal mode keyboard handling
+		if keyMsg, ok := incomingMsg.(tea.KeyMsg); ok {
+			switch {
+			case key.Matches(keyMsg, m.keyMap.Quit):
 				// Save UI state before quitting
 				if err := m.SaveUIState(); err != nil {
 					m.addLogLine(fmt.Sprintf("Warning: failed to save UI state: %v", err))
 				}
 				return m, tea.Quit
-			}
 
-		case key.Matches(msg, m.keyMap.Up):
-			m.selectPrevious()
-			m.updateTaskListViewport()
-			m.updateDetailsViewport()
-
-		case key.Matches(msg, m.keyMap.Down):
-			m.selectNext()
-			m.updateTaskListViewport()
-			m.updateDetailsViewport()
-
-		case key.Matches(msg, m.keyMap.Left):
-			m.collapseSelected()
-			m.updateTaskListViewport()
-
-		case key.Matches(msg, m.keyMap.Right):
-			m.expandSelected()
-			m.updateTaskListViewport()
-
-		case key.Matches(msg, m.keyMap.ToggleExpand):
-			m.toggleExpanded()
-			m.updateTaskListViewport()
-
-		case key.Matches(msg, m.keyMap.Select):
-			m.toggleSelection()
-			m.updateTaskListViewport()
-
-		case key.Matches(msg, m.keyMap.Refresh):
-			// Reload tasks manually
-			m.addLogLine("Manually reloading tasks...")
-			cmds = append(cmds, LoadTasksCmd(m.taskService))
-
-		case key.Matches(msg, m.keyMap.NextTask):
-			// Execute task-master next command via executor
-			if !m.execService.IsRunning() {
-				m.addLogLine("Executing: task-master next")
-				if err := m.execService.Execute("next"); err != nil {
-					m.addLogLine(fmt.Sprintf("Error: %v", err))
-				}
-			} else {
-				m.addLogLine("Command already running")
-			}
-		
-		case key.Matches(msg, m.keyMap.JumpToID):
-			// Enter command mode for quick jump
-			m.commandMode = true
-			m.commandInput = ""
-			m.addLogLine("Jump to task ID: (type ID and press Enter)")
-			
-		case key.Matches(msg, m.keyMap.Search):
-			// Enter search mode
-			m.searchMode = true
-			m.searchInput.Focus()
-			
-			// Update input with previous query if it exists
-			if m.searchQuery != "" {
-				m.searchInput.SetValue(m.searchQuery)
-				// Select all text so typing immediately replaces it
-				m.searchInput.CursorEnd()
-				// This would ideally select all text, but the API doesn't directly support it
-				// We position cursor at end for better UX
-			} else {
-				m.searchInput.SetValue("")
-			}
-			
-			m.addLogLine("Search: (type query and press Enter, Esc to cancel)")
-			return m, textinput.Blink
-			
-		case key.Matches(msg, m.keyMap.Filter):
-			// Cycle through status filters
-			m.cycleStatusFilter()
-			
-		case key.Matches(msg, m.keyMap.SetInProgress):
-			// Set task(s) to in-progress
-			m.setTaskStatus("in-progress")
-			
-		case key.Matches(msg, m.keyMap.SetDone):
-			// Set task(s) to done
-			m.setTaskStatus("done")
-			
-		case key.Matches(msg, m.keyMap.SetBlocked):
-			// Set task(s) to blocked
-			m.setTaskStatus("blocked")
-			
-		case key.Matches(msg, m.keyMap.SetCancelled):
-			// Set task(s) to cancelled
-			m.setTaskStatus("cancelled")
-			
-		case key.Matches(msg, m.keyMap.SetDeferred):
-			// Set task(s) to deferred
-			m.setTaskStatus("deferred")
-			
-		case key.Matches(msg, m.keyMap.SetPending):
-			// Set task(s) to pending
-			m.setTaskStatus("pending")
-			
-		case key.Matches(msg, m.keyMap.CyclePanel):
-			// Cycle focus between panels
-			switch m.focusedPanel {
-			case PanelTaskList:
-				if m.showDetailsPanel {
-					m.focusedPanel = PanelDetails
-				} else if m.showLogPanel {
-					m.focusedPanel = PanelLog
-				}
-			case PanelDetails:
-				if m.showLogPanel {
-					m.focusedPanel = PanelLog
+			case key.Matches(msg, m.keyMap.Cancel):
+				// Cancel running command or quit
+				if m.execService.IsRunning() {
+					if err := m.execService.Cancel(); err == nil {
+						m.addLogLine("Command cancelled")
+					}
 				} else {
+					// Save UI state before quitting
+					if err := m.SaveUIState(); err != nil {
+						m.addLogLine(fmt.Sprintf("Warning: failed to save UI state: %v", err))
+					}
+					return m, tea.Quit
+				}
+
+			case key.Matches(msg, m.keyMap.Up):
+				m.selectPrevious()
+				m.updateTaskListViewport()
+				m.updateDetailsViewport()
+
+			case key.Matches(msg, m.keyMap.Down):
+				m.selectNext()
+				m.updateTaskListViewport()
+				m.updateDetailsViewport()
+
+			case key.Matches(msg, m.keyMap.Left):
+				m.collapseSelected()
+				m.updateTaskListViewport()
+
+			case key.Matches(msg, m.keyMap.Right):
+				m.expandSelected()
+				m.updateTaskListViewport()
+
+			case key.Matches(msg, m.keyMap.ToggleExpand):
+				m.toggleExpanded()
+				m.updateTaskListViewport()
+
+			case key.Matches(msg, m.keyMap.Select):
+				m.toggleSelection()
+				m.updateTaskListViewport()
+
+			case key.Matches(msg, m.keyMap.Refresh):
+				// Reload tasks manually
+				m.addLogLine("Manually reloading tasks...")
+				cmds = append(cmds, LoadTasksCmd(m.taskService))
+
+			case key.Matches(msg, m.keyMap.NextTask):
+				// Execute task-master next command via executor
+				if !m.execService.IsRunning() {
+					m.addLogLine("Executing: task-master next")
+					if err := m.execService.Execute("next"); err != nil {
+						m.addLogLine(fmt.Sprintf("Error: %v", err))
+					}
+				} else {
+					m.addLogLine("Command already running")
+				}
+
+			case key.Matches(msg, m.keyMap.JumpToID):
+				// Enter command mode for quick jump
+				m.commandMode = true
+				m.commandInput = ""
+				m.addLogLine("Jump to task ID: (type ID and press Enter)")
+
+			case key.Matches(msg, m.keyMap.Search):
+				// Enter search mode
+				m.searchMode = true
+				m.searchInput.Focus()
+
+				// Update input with previous query if it exists
+				if m.searchQuery != "" {
+					m.searchInput.SetValue(m.searchQuery)
+					// Select all text so typing immediately replaces it
+					m.searchInput.CursorEnd()
+					// This would ideally select all text, but the API doesn't directly support it
+					// We position cursor at end for better UX
+				} else {
+					m.searchInput.SetValue("")
+				}
+
+				m.addLogLine("Search: (type query and press Enter, Esc to cancel)")
+				return m, textinput.Blink
+
+			case key.Matches(msg, m.keyMap.Filter):
+				// Cycle through status filters
+				m.cycleStatusFilter()
+
+			case key.Matches(msg, m.keyMap.SetInProgress):
+				// Set task(s) to in-progress
+				m.setTaskStatus("in-progress")
+
+			case key.Matches(msg, m.keyMap.SetDone):
+				// Set task(s) to done
+				m.setTaskStatus("done")
+
+			case key.Matches(msg, m.keyMap.SetBlocked):
+				// Set task(s) to blocked
+				m.setTaskStatus("blocked")
+
+			case key.Matches(msg, m.keyMap.SetCancelled):
+				// Set task(s) to cancelled
+				m.setTaskStatus("cancelled")
+
+			case key.Matches(msg, m.keyMap.SetDeferred):
+				// Set task(s) to deferred
+				m.setTaskStatus("deferred")
+
+			case key.Matches(msg, m.keyMap.SetPending):
+				// Set task(s) to pending
+				m.setTaskStatus("pending")
+
+			case key.Matches(msg, m.keyMap.CyclePanel):
+				// Cycle focus between panels
+				switch m.focusedPanel {
+				case PanelTaskList:
+					if m.showDetailsPanel {
+						m.focusedPanel = PanelDetails
+					} else if m.showLogPanel {
+						m.focusedPanel = PanelLog
+					}
+				case PanelDetails:
+					if m.showLogPanel {
+						m.focusedPanel = PanelLog
+					} else {
+						m.focusedPanel = PanelTaskList
+					}
+				case PanelLog:
 					m.focusedPanel = PanelTaskList
 				}
-			case PanelLog:
-				m.focusedPanel = PanelTaskList
-			}
-			
-		case key.Matches(msg, m.keyMap.ToggleDetails):
-			// Toggle details panel
-			m.showDetailsPanel = !m.showDetailsPanel
-			m.updateViewportSizes()
-			
-		case key.Matches(msg, m.keyMap.ToggleLog):
-			// Toggle log panel
-			m.showLogPanel = !m.showLogPanel
-			m.updateViewportSizes()
-			
-		case key.Matches(msg, m.keyMap.ViewTree):
-			// Switch to tree view
-			if m.viewMode != ViewModeTree {
+
+			case key.Matches(msg, m.keyMap.AnalyzeComplexity):
+				// Start complexity analysis by opening scope selection dialog
+				m.addLogLine("Analyzing task complexity...")
+				m.showComplexityScopeDialog()
+
+			case key.Matches(msg, m.keyMap.ToggleDetails):
+				// Toggle details panel
+				m.showDetailsPanel = !m.showDetailsPanel
+				m.updateViewportSizes()
+
+			case key.Matches(msg, m.keyMap.ToggleLog):
+				// Toggle log panel
+				m.showLogPanel = !m.showLogPanel
+				m.updateViewportSizes()
+
+			case key.Matches(msg, m.keyMap.CommandPalette):
+				m.openCommandPalette()
+				return m, nil
+
+			case key.Matches(msg, m.keyMap.ViewTree):
+				// Switch to tree view
+				if m.viewMode != ViewModeTree {
+					selectedID := ""
+					if m.selectedTask != nil {
+						selectedID = m.selectedTask.ID
+					}
+					m.viewMode = ViewModeTree
+					m.rebuildVisibleTasks()
+					if selectedID != "" {
+						m.ensureTaskSelected(selectedID)
+					}
+					m.updateTaskListViewport()
+					m.addLogLine("Switched to tree view")
+				}
+
+			case key.Matches(msg, m.keyMap.ViewList):
+				// Switch to list view
+				if m.viewMode != ViewModeList {
+					selectedID := ""
+					if m.selectedTask != nil {
+						selectedID = m.selectedTask.ID
+					}
+					m.viewMode = ViewModeList
+					m.rebuildVisibleTasks()
+					if selectedID != "" {
+						m.ensureTaskSelected(selectedID)
+					}
+					m.updateTaskListViewport()
+					m.addLogLine("Switched to list view")
+				}
+
+			case key.Matches(msg, m.keyMap.CycleView):
+				// Cycle through view modes
 				selectedID := ""
 				if m.selectedTask != nil {
 					selectedID = m.selectedTask.ID
 				}
-				m.viewMode = ViewModeTree
+
+				switch m.viewMode {
+				case ViewModeTree:
+					m.viewMode = ViewModeList
+					m.addLogLine("Switched to list view")
+				case ViewModeList:
+					// Skip kanban for now since it's not implemented
+					m.viewMode = ViewModeTree
+					m.addLogLine("Switched to tree view")
+				case ViewModeKanban:
+					m.viewMode = ViewModeTree
+					m.addLogLine("Switched to tree view")
+				}
+
 				m.rebuildVisibleTasks()
 				if selectedID != "" {
 					m.ensureTaskSelected(selectedID)
 				}
 				m.updateTaskListViewport()
-				m.addLogLine("Switched to tree view")
-			}
-			
-		case key.Matches(msg, m.keyMap.ViewList):
-			// Switch to list view
-			if m.viewMode != ViewModeList {
-				selectedID := ""
-				if m.selectedTask != nil {
-					selectedID = m.selectedTask.ID
+
+			case key.Matches(msg, m.keyMap.Help):
+				// Toggle help
+				m.showHelp = !m.showHelp
+
+			case key.Matches(msg, m.keyMap.Back):
+				// Clear search and/or filter if active
+				cleared := false
+				if m.searchQuery != "" {
+					m.searchQuery = ""
+					m.searchInput.SetValue("")
+					m.searchResults = nil
+					cleared = true
 				}
-				m.viewMode = ViewModeList
-				m.rebuildVisibleTasks()
-				if selectedID != "" {
-					m.ensureTaskSelected(selectedID)
+				if m.statusFilter != "" {
+					m.statusFilter = ""
+					cleared = true
 				}
-				m.updateTaskListViewport()
-				m.addLogLine("Switched to list view")
+				if cleared {
+					m.visibleTasks = nil
+					m.updateFilteredTasks()
+					m.addLogLine("Search and filters cleared")
+				}
+
+			case key.Matches(keyMsg, m.keyMap.ClearState):
+				// Show confirmation dialog for clearing state
+				m.ShowConfirmationDialog("Clear UI State", "Are you sure you want to reset all UI state to defaults?", true)
 			}
-			
-		case key.Matches(msg, m.keyMap.CycleView):
-			// Cycle through view modes
-			selectedID := ""
-			if m.selectedTask != nil {
-				selectedID = m.selectedTask.ID
-			}
-			
-			switch m.viewMode {
-			case ViewModeTree:
-				m.viewMode = ViewModeList
-				m.addLogLine("Switched to list view")
-			case ViewModeList:
-				// Skip kanban for now since it's not implemented
-				m.viewMode = ViewModeTree
-				m.addLogLine("Switched to tree view")
-			case ViewModeKanban:
-				m.viewMode = ViewModeTree
-				m.addLogLine("Switched to tree view")
-			}
-			
-			m.rebuildVisibleTasks()
-			if selectedID != "" {
-				m.ensureTaskSelected(selectedID)
-			}
-			m.updateTaskListViewport()
-			
-		case key.Matches(msg, m.keyMap.Help):
-			// Toggle help
-			m.showHelp = !m.showHelp
-			
-		case key.Matches(msg, m.keyMap.Back):
-			// Clear search and/or filter if active
-			cleared := false
-			if m.searchQuery != "" {
-				m.searchQuery = ""
-				m.searchInput.SetValue("")
-				m.searchResults = nil
-				cleared = true
-			}
-			if m.statusFilter != "" {
-				m.statusFilter = ""
-				cleared = true
-			}
-			if cleared {
-				m.visibleTasks = nil
-				m.updateFilteredTasks()
-				m.addLogLine("Search and filters cleared")
-			}
-			
-		case key.Matches(msg, m.keyMap.ClearState):
-			// Enter confirmation mode for clearing state
-			m.confirmingClearState = true
-			m.addLogLine("Clear TUI state? (y/n)")
 		}
 	}
-	
+
 	// Handle viewport scrolling when focused
 	if m.focusedPanel == PanelTaskList {
 		var cmd tea.Cmd
-		m.taskListViewport, cmd = m.taskListViewport.Update(msg)
+		m.taskListViewport, cmd = m.taskListViewport.Update(incomingMsg)
 		cmds = append(cmds, cmd)
 	} else if m.focusedPanel == PanelDetails {
 		var cmd tea.Cmd
-		m.detailsViewport, cmd = m.detailsViewport.Update(msg)
+		m.detailsViewport, cmd = m.detailsViewport.Update(incomingMsg)
 		cmds = append(cmds, cmd)
 	} else if m.focusedPanel == PanelLog {
 		var cmd tea.Cmd
-		m.logViewport, cmd = m.logViewport.Update(msg)
+		m.logViewport, cmd = m.logViewport.Update(incomingMsg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -1601,9 +2213,44 @@ func (m Model) View() string {
 		return m.styles.Info.Render("Initializing Task Master TUI...")
 	}
 
-	// Help overlay takes priority over everything
+	// Check for active dialogs - display them over everything else
+	if dm := m.dialogManager(); dm != nil && dm.HasDialogs() {
+		// Render main UI, then overlay dialogs
+		var sections []string
+
+		// 1. Header
+		sections = append(sections, m.renderHeader())
+
+		// 2. Main content area
+		layout := m.calculateLayout()
+		mainContent := m.renderMainContent(layout)
+		sections = append(sections, mainContent)
+
+		// 3. Log panel (if visible)
+		if m.showLogPanel {
+			sections = append(sections, m.renderLogPanel(layout))
+		}
+
+		// 4. Status bar with help
+		sections = append(sections, m.renderStatusBar())
+
+		// Render the base UI first (not used for dialogs)
+		// Then overlay the active dialog
+		dialogContent := dm.View()
+
+		// For now, we just render the dialog content over the middle of the screen
+		// A more sophisticated implementation would overlay it properly
+		dialogStyle := lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			Align(lipgloss.Center, lipgloss.Center)
+
+		return dialogStyle.Render(dialogContent)
+	}
+
+	// Help overlay takes priority over everything except dialogs
 	if m.showHelp {
-		return m.renderCompactHelp()
+		return m.renderHelpOverlay()
 	}
 
 	// Check if taskmaster is not available
@@ -1614,34 +2261,34 @@ func (m Model) View() string {
 	if m.err != nil {
 		return m.styles.Error.Render(fmt.Sprintf("Error: %v\n\nPress 'q' to quit", m.err))
 	}
-	
+
 	// Calculate layout
 	layout := m.calculateLayout()
-	
+
 	var sections []string
-	
+
 	// 1. Header
 	sections = append(sections, m.renderHeader())
-	
+
 	// 2. Main content area (task list + details)
 	mainContent := m.renderMainContent(layout)
 	sections = append(sections, mainContent)
-	
+
 	// 3. Log panel (if visible)
 	if m.showLogPanel {
 		sections = append(sections, m.renderLogPanel(layout))
 	}
-	
+
 	// 4. Status bar with help
 	sections = append(sections, m.renderStatusBar())
-	
+
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
 // renderNoTaskmaster displays a message when .taskmaster is not found
 func (m Model) renderNoTaskmaster() string {
 	var b strings.Builder
-	
+
 	b.WriteString(m.styles.Title.Render("Task Master TUI"))
 	b.WriteString("\n\n")
 	b.WriteString(m.styles.Warning.Render("⚠ No .taskmaster directory found"))
@@ -1654,7 +2301,7 @@ func (m Model) renderNoTaskmaster() string {
 	b.WriteString("     task-master parse-prd .taskmaster/docs/prd.txt\n\n")
 	b.WriteString("  3. Restart the TUI\n\n")
 	b.WriteString(m.styles.Help.Render("Press 'q' to quit"))
-	
+
 	return b.String()
 }
 
@@ -1662,33 +2309,33 @@ func (m Model) renderNoTaskmaster() string {
 func (m Model) renderMainContent(layout LayoutDimensions) string {
 	// Get task list content from viewport
 	taskListContent := m.taskListViewport.View()
-	
+
 	// Create task list panel with border - let it naturally fit viewport content
 	taskListPanel := m.styles.Panel.Render(taskListContent)
-	
+
 	// Add focus indicator for task list
 	if m.focusedPanel == PanelTaskList {
 		taskListPanel = m.styles.PanelBorder.
 			BorderForeground(lipgloss.Color(ColorHighlight)).
 			Render(taskListPanel)
 	}
-	
+
 	// If details panel is hidden, return just the task list
 	if !m.showDetailsPanel {
 		return taskListPanel
 	}
-	
+
 	// Render details panel - let it naturally fit viewport content
 	detailsContent := m.detailsViewport.View()
 	detailsPanel := m.styles.Panel.Render(detailsContent)
-	
+
 	// Add focus indicator for details panel
 	if m.focusedPanel == PanelDetails {
 		detailsPanel = m.styles.PanelBorder.
 			BorderForeground(lipgloss.Color(ColorHighlight)).
 			Render(detailsPanel)
 	}
-	
+
 	// Join task list and details side by side
 	return lipgloss.JoinHorizontal(lipgloss.Top, taskListPanel, detailsPanel)
 }
@@ -1697,29 +2344,29 @@ func (m Model) renderMainContent(layout LayoutDimensions) string {
 func (m Model) renderLogPanel(layout LayoutDimensions) string {
 	title := m.styles.PanelTitle.Render("📝 Log")
 	logContent := title + "\n\n" + m.logViewport.View()
-	
+
 	// Let panel naturally fit viewport content
 	logPanel := m.styles.Panel.Render(logContent)
-	
+
 	// Add focus indicator for log panel
 	if m.focusedPanel == PanelLog {
 		logPanel = m.styles.PanelBorder.
 			BorderForeground(lipgloss.Color(ColorHighlight)).
 			Render(logPanel)
 	}
-	
+
 	return logPanel
 }
 
 // renderHelpOverlay renders a help overlay on top of the main content using bubbles/help
 func (m Model) renderHelpOverlay() string {
 	var sections []string
-	
+
 	// Title
 	title := m.styles.Title.Render("📚 Task Master TUI Help")
 	sections = append(sections, title)
 	sections = append(sections, "")
-	
+
 	// Navigation section
 	navSection := m.styles.Subtitle.Render("Navigation")
 	navHelp := []string{
@@ -1733,7 +2380,7 @@ func (m Model) renderHelpOverlay() string {
 	sections = append(sections, navSection)
 	sections = append(sections, strings.Join(navHelp, "\n"))
 	sections = append(sections, "")
-	
+
 	// Task Operations section
 	taskSection := m.styles.Subtitle.Render("Task Operations")
 	taskHelp := []string{
@@ -1746,7 +2393,7 @@ func (m Model) renderHelpOverlay() string {
 	sections = append(sections, taskSection)
 	sections = append(sections, strings.Join(taskHelp, "\n"))
 	sections = append(sections, "")
-	
+
 	// Status Changes section
 	statusSection := m.styles.Subtitle.Render("Status Changes")
 	statusHelp := []string{
@@ -1760,7 +2407,7 @@ func (m Model) renderHelpOverlay() string {
 	sections = append(sections, statusSection)
 	sections = append(sections, strings.Join(statusHelp, "\n"))
 	sections = append(sections, "")
-	
+
 	// Panel & View section
 	panelSection := m.styles.Subtitle.Render("Panels & Views")
 	panelHelp := []string{
@@ -1777,7 +2424,7 @@ func (m Model) renderHelpOverlay() string {
 	sections = append(sections, panelSection)
 	sections = append(sections, strings.Join(panelHelp, "\n"))
 	sections = append(sections, "")
-	
+
 	// General section
 	generalSection := m.styles.Subtitle.Render("General")
 	generalHelp := []string{
@@ -1790,7 +2437,7 @@ func (m Model) renderHelpOverlay() string {
 	sections = append(sections, generalSection)
 	sections = append(sections, strings.Join(generalHelp, "\n"))
 	sections = append(sections, "")
-	
+
 	// About section
 	aboutSection := m.styles.Subtitle.Render("About")
 	aboutHelp := []string{
@@ -1801,29 +2448,28 @@ func (m Model) renderHelpOverlay() string {
 	sections = append(sections, aboutSection)
 	sections = append(sections, strings.Join(aboutHelp, "\n"))
 	sections = append(sections, "")
-	
+
 	// Footer
 	footer := m.styles.Help.Render("Press '?' or 'Esc' to close help")
 	sections = append(sections, footer)
-	
+
 	// Join all sections
 	content := strings.Join(sections, "\n")
-	
+
 	// Create overlay style with distinct border and centering
 	overlayStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(lipgloss.Color(ColorHighlight)).
 		Padding(1, 2).
 		Width(80).
-		MaxHeight(m.height - 4).
 		Align(lipgloss.Center)
-	
+
 	// Create backdrop to ensure overlay appears on top
 	backdrop := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height).
 		Align(lipgloss.Center, lipgloss.Center)
-	
+
 	return backdrop.Render(overlayStyle.Render(content))
 }
 
@@ -1849,3 +2495,43 @@ func (m Model) renderBinding(binding key.Binding) string {
 	return ""
 }
 
+func (m *Model) complexityCompletionDelay(msg ComplexityAnalysisCompletedMsg) time.Duration {
+	if m.waitingForComplexityHold || msg.Error != nil {
+		return 0
+	}
+	delay := complexityProgressCompleteHold
+	if !m.complexityStartedAt.IsZero() {
+		elapsed := time.Since(m.complexityStartedAt)
+		if elapsed < complexityProgressMinDisplay {
+			delay += complexityProgressMinDisplay - elapsed
+		}
+	}
+	if delay < 0 {
+		return 0
+	}
+	return delay
+}
+
+func (m *Model) showComplexityCompletionMessage(msg ComplexityAnalysisCompletedMsg) {
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	dlg, ok := dm.GetDialogByType(dialog.DialogTypeProgress)
+	if !ok {
+		return
+	}
+	pd, ok := dlg.(*dialog.ProgressDialog)
+	if !ok {
+		return
+	}
+	label := "Preparing complexity report..."
+	if msg.Error != nil {
+		label = fmt.Sprintf("Analysis failed: %v", msg.Error)
+	} else if msg.Report != nil {
+		count := len(msg.Report.Tasks)
+		label = fmt.Sprintf("Analysis complete • %d task(s) analyzed\nPreparing report...", count)
+	}
+	pd.SetProgress(1.0)
+	pd.SetLabel(label)
+}

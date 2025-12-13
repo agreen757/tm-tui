@@ -2,8 +2,9 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
-	
+
 	"github.com/adriangreen/tm-tui/internal/taskmaster"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -20,26 +21,26 @@ type LayoutDimensions struct {
 	// Total dimensions
 	Width  int
 	Height int
-	
+
 	// Header
 	HeaderHeight int
-	
+
 	// Main content area
 	ContentWidth  int
 	ContentHeight int
-	
+
 	// Task list (left side)
 	TaskListWidth  int
 	TaskListHeight int
-	
+
 	// Details panel (right side)
 	DetailsWidth  int
 	DetailsHeight int
-	
+
 	// Log panel (bottom)
 	LogWidth  int
 	LogHeight int
-	
+
 	// Status bar
 	StatusBarHeight int
 }
@@ -52,13 +53,13 @@ func (m Model) calculateLayout() LayoutDimensions {
 		HeaderHeight:    headerHeight,
 		StatusBarHeight: statusBarHeight,
 	}
-	
+
 	// Calculate available content height
 	contentHeight := m.height - headerHeight - statusBarHeight
 	if contentHeight < 10 {
 		contentHeight = 10
 	}
-	
+
 	// Determine log panel height
 	logHeight := 0
 	if m.showLogPanel {
@@ -67,17 +68,17 @@ func (m Model) calculateLayout() LayoutDimensions {
 			logHeight = 5
 		}
 	}
-	
+
 	// Main content area (task list + details)
 	mainHeight := contentHeight - logHeight
 	if mainHeight < 5 {
 		mainHeight = 5
 	}
-	
+
 	// Calculate widths
 	taskListWidth := m.width / 2
 	detailsWidth := m.width / 2
-	
+
 	if !m.showDetailsPanel {
 		taskListWidth = m.width
 		detailsWidth = 0
@@ -89,14 +90,14 @@ func (m Model) calculateLayout() LayoutDimensions {
 		if detailsWidth < minPanelWidth {
 			detailsWidth = minPanelWidth
 		}
-		
+
 		// Adjust if total is too wide
 		if taskListWidth+detailsWidth > m.width {
 			taskListWidth = m.width / 2
 			detailsWidth = m.width - taskListWidth
 		}
 	}
-	
+
 	layout.ContentWidth = m.width
 	layout.ContentHeight = contentHeight
 	layout.TaskListWidth = taskListWidth
@@ -105,7 +106,7 @@ func (m Model) calculateLayout() LayoutDimensions {
 	layout.DetailsHeight = mainHeight
 	layout.LogWidth = m.width
 	layout.LogHeight = logHeight
-	
+
 	return layout
 }
 
@@ -120,7 +121,7 @@ func (m Model) renderHeader() string {
 			projectName = parts[len(parts)-1]
 		}
 	}
-	
+
 	// Count tasks by status
 	counts := make(map[string]int)
 	var countTasks func(tasks []taskmaster.Task)
@@ -133,10 +134,10 @@ func (m Model) renderHeader() string {
 		}
 	}
 	countTasks(m.tasks)
-	
+
 	// Build status counts string with colors
 	var statusParts []string
-	
+
 	if count := counts[taskmaster.StatusPending]; count > 0 {
 		statusParts = append(statusParts, m.styles.Pending.Render(fmt.Sprintf("%d pending", count)))
 	}
@@ -155,75 +156,98 @@ func (m Model) renderHeader() string {
 	if count := counts[taskmaster.StatusCancelled]; count > 0 {
 		statusParts = append(statusParts, m.styles.Cancelled.Render(fmt.Sprintf("%d cancelled", count)))
 	}
-	
+
 	statusLine := strings.Join(statusParts, " | ")
-	
+
 	// Build header
 	titleLine := m.styles.Header.Width(m.width).Render(m.styles.Title.Render(projectName))
 	countsLine := m.styles.StatusBar.Width(m.width).Render(statusLine)
-	
+
 	// Add search input if in search mode
 	if m.searchMode {
 		searchLabel := m.styles.Info.Render("Search: ")
-		
+
 		// Apply styling to the search input for better visibility
 		searchBoxStyle := lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#00FFFF")).  // ColorHighlight
+			BorderForeground(lipgloss.Color("#00FFFF")). // ColorHighlight
 			Padding(0, 1).
 			Width(40)
-		
+
 		searchBoxView := m.searchInput.View()
 		styledSearchBox := searchBoxStyle.Render(searchBoxView)
-		
+
 		searchHelp := m.styles.Subtle.Render(" (Enter to search, Esc to cancel)")
 		searchLine := searchLabel + styledSearchBox + searchHelp
-		
+
 		return titleLine + "\n" + countsLine + "\n" + searchLine + "\n"
 	}
-	
+
 	// Build filter/search status line
 	var filterParts []string
-	
+
 	// Show status filter if active
 	if m.statusFilter != "" {
 		filterInfo := m.styles.Warning.Render(fmt.Sprintf("📌 Filter: %s", m.statusFilter))
 		filterParts = append(filterParts, filterInfo)
 	}
-	
+
 	// Show search query if active
 	if m.searchQuery != "" {
 		resultsCount := 0
 		if m.searchResults != nil {
 			resultsCount = len(m.searchResults)
 		}
-		
+
 		// Apply more visible styling to the search info
 		searchStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FFFF")).  // ColorHighlight
+			Foreground(lipgloss.Color("#00FFFF")). // ColorHighlight
 			Bold(true)
-		
+
 		resultStyle := lipgloss.NewStyle()
 		if resultsCount == 0 {
-			resultStyle = resultStyle.Foreground(lipgloss.Color("#DC143C"))  // ColorBlocked
+			resultStyle = resultStyle.Foreground(lipgloss.Color("#DC143C")) // ColorBlocked
 		} else {
-			resultStyle = resultStyle.Foreground(lipgloss.Color("#32CD32"))  // ColorDone
+			resultStyle = resultStyle.Foreground(lipgloss.Color("#32CD32")) // ColorDone
 		}
-		
+
 		searchText := fmt.Sprintf("🔍 Search: '%s'", m.searchQuery)
 		resultsText := fmt.Sprintf(" (%d results)", resultsCount)
-		
+
 		searchInfo := searchStyle.Render(searchText) + resultStyle.Render(resultsText)
 		filterParts = append(filterParts, searchInfo)
 	}
-	
+
 	if len(filterParts) > 0 {
 		filterLine := strings.Join(filterParts, " | ")
 		clearHint := m.styles.Subtle.Render(" (F=filter, /=search, Esc=clear)")
 		return titleLine + "\n" + countsLine + "\n" + filterLine + clearHint + "\n"
 	}
-	
+
 	return titleLine + "\n" + countsLine + "\n"
+}
+
+func (m Model) activeProjectStatus() string {
+	name := ""
+	if m.activeProject != nil && strings.TrimSpace(m.activeProject.Name) != "" {
+		name = m.activeProject.Name
+	} else if m.config != nil && strings.TrimSpace(m.config.TaskMasterPath) != "" {
+		name = filepath.Base(strings.TrimSpace(m.config.TaskMasterPath))
+	}
+	tag := ""
+	if m.config != nil {
+		tag = strings.TrimSpace(m.config.ActiveTag)
+	}
+	if name == "" && tag == "" {
+		return ""
+	}
+	if name == "" {
+		name = "Project"
+	}
+	if tag != "" {
+		return fmt.Sprintf("Active: %s [%s]", name, tag)
+	}
+	return fmt.Sprintf("Active: %s", name)
 }
 
 // renderStatusBar renders the bottom status bar with keyboard hints
@@ -233,47 +257,50 @@ func (m Model) renderStatusBar() string {
 		prompt := "Clear TUI state? (y/n): "
 		return m.styles.StatusBar.Width(m.width).Render(prompt)
 	}
-	
+
 	// Show command input if in command mode
 	if m.commandMode {
 		prompt := fmt.Sprintf("Jump to task ID: %s", m.commandInput)
 		return m.styles.StatusBar.Width(m.width).Render(prompt)
 	}
-	
+
 	// Show search mode status if in search mode
 	if m.searchMode {
 		searchStatus := fmt.Sprintf("🔍 SEARCH MODE: Type search query and press Enter, or Esc to cancel")
 		return m.styles.StatusBar.
-			Foreground(lipgloss.Color("#00FFFF")).  // ColorHighlight
+			Foreground(lipgloss.Color("#00FFFF")). // ColorHighlight
 			Width(m.width).
 			Render(searchStatus)
 	}
-	
+
 	// Normal help text
 	helpText := m.helpModel.ShortHelpView(m.keyMap.ShortHelp())
+	if active := m.activeProjectStatus(); active != "" {
+		helpText = fmt.Sprintf("%s | %s", helpText, active)
+	}
 	return m.styles.StatusBar.Width(m.width).Render(helpText)
 }
 
 // updateViewportSizes updates the viewport sizes based on current layout
 func (m *Model) updateViewportSizes() {
 	layout := m.calculateLayout()
-	
+
 	// Update task list viewport
 	m.taskListViewport.Width = layout.TaskListWidth - panelPadding*2
 	m.taskListViewport.Height = layout.TaskListHeight - panelPadding
-	
+
 	// Update details viewport
 	if m.showDetailsPanel {
 		m.detailsViewport.Width = layout.DetailsWidth - panelPadding*2
 		m.detailsViewport.Height = layout.DetailsHeight - panelPadding
 	}
-	
+
 	// Update log viewport
 	if m.showLogPanel {
 		m.logViewport.Width = layout.LogWidth - panelPadding*2
 		m.logViewport.Height = layout.LogHeight - panelPadding
 	}
-	
+
 	// Refresh task list viewport content after resize
 	m.updateTaskListViewport()
 }

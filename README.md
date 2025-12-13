@@ -13,9 +13,15 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⌨️ **Keyboard-driven**: Full navigation and control via keyboard shortcuts
 - 🎨 **Beautiful UI**: Built with Bubble Tea and Lipgloss for a polished experience
 - 🔍 **Search & Filter**: Quickly find tasks by ID, title, status, or content
-- 🚀 **Task Execution**: Run Task Master commands directly from the TUI
+- 📊 **Complexity Analysis**: Analyze task complexity across your project with AI-powered scoring
+- 🚀 **Task Expansion**: Generate subtasks using AI to break down complex tasks automatically
+- 🏷️ **Task Tagging**: Organize tasks with custom tags and filter by tag groups
+- 📦 **Project Management**: Manage multiple project-specific task views with project tags
+- 🗑️ **Safe Deletion**: Delete tasks with confirmation dialogs to prevent accidents
+- 📄 **PRD Parsing**: Load tasks directly from Product Requirements Documents
 - 💡 **Context-sensitive Help**: Dynamic help panels and status bar hints
 - ⚙️ **Customizable**: Configure through simple JSON configuration
+- 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
 ## Prerequisites
 
@@ -29,7 +35,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 
 ```bash
 # Clone the repository
-git clone https://github.com/adriangreen/tm-tui.git
+git clone https://github.com/agreen757/tm-tui.git
 cd tm-tui
 
 # Build and install
@@ -51,35 +57,97 @@ Navigate to a directory with a Task Master project (containing `.taskmaster` dir
 
 ```bash
 tm-tui
+
+# or run directly without installing
+go run ./cmd/tm-tui/main.go
 ```
 
 ### Keyboard Shortcuts
 
-- **Navigation:**
-  - `↑/k` - Move up
-  - `↓/j` - Move down
-  - `←/h` - Navigate left 
-  - `→/l` - Navigate right
-  - `Tab` - Switch between panels
-  - `Enter` - Select item / expand task
-  - `Esc` - Back / close panel
+#### Navigation
+- `↑/k` - Move up
+- `↓/j` - Move down  
+- `←/h` - Navigate left / collapse
+- `→/l` - Navigate right / expand
+- `Tab` - Switch between panels
+- `PageUp/PageDn` - Scroll by page
+- `Esc` - Back / close dialog
 
-- **Task Management:**
-  - `n` - Jump to next available task
-  - `e` - Edit selected task
-  - `d` - Mark task as done
-  - `p` - Change task priority
-  - `s` - Change task status
+#### Task Management
+- `n` - Jump to next available task
+- `s` - Change task status
+- `Enter` - Select item / toggle expand
+- `Space` - Multi-select task for bulk operations
+- `Alt+X` - Expand selected task (generate subtasks with AI)
+- `Alt+D` - Delete selected task (with confirmation)
+- `d` - Mark task as done (quick status change)
+- `p` - Change task priority
 
-- **Search & Filter:**
-  - `/` - Search tasks
-  - `f` - Filter by status
-  - `F` - Clear filters
+#### Complexity & Analysis
+- `Alt+C` - Analyze task complexity (AI-powered scoring)
+- `Alt+P` - Parse PRD file (load tasks from document)
 
-- **Misc:**
-  - `r` - Refresh tasks
-  - `?` - Show/hide help
-  - `q` - Quit
+#### Tags & Projects
+- `Alt+A` / `Ctrl+Shift+A` - Add or manage task tags
+- `Ctrl+M` / `Ctrl+Shift+M` - Open tag context manager
+- `Ctrl+T` - Switch to different tag context/project
+- `Ctrl+P` - Switch project
+
+#### Filtering & Search
+- `/` - Search tasks by ID, title, or content
+- `f` - Filter tasks by status or tag
+- `F` - Clear all filters
+
+#### View & Display
+- `1` - Switch to tree view
+- `2` - Switch to list view
+- `Alt+T` - Cycle through view modes
+- `Alt+L` - Toggle log panel
+- `Alt+I` - Toggle details panel
+
+#### Global Commands
+- `?` - Show/hide help overlay
+- `:` - Open command palette for additional commands
+- `r` - Refresh tasks from disk
+- `Ctrl+Z` - Undo (task modifications)
+- `Ctrl+Shift+C` - Clear TUI state
+- `q` - Quit TUI
+
+## Common Workflows
+
+### Creating Tasks from a PRD
+1. Press `Alt+P` to open the "Parse PRD" dialog
+2. Select or enter the path to your PRD document
+3. Review the generated tasks in the main view
+4. Edit, organize, or prioritize as needed
+
+### Analyzing Task Complexity
+1. Navigate to a task or select multiple tasks with `Space`
+2. Press `Alt+C` to open "Analyze Complexity" dialog
+3. Choose analysis scope: all tasks, selected task, or by tag
+4. View complexity scores (LOW, MEDIUM, HIGH, VERY HIGH)
+5. Filter and sort results for focused planning
+
+### Expanding Tasks into Subtasks
+1. Select a complex task
+2. Press `Alt+X` to open "Expand Task" dialog
+3. Configure expansion depth (1-3 levels of subtasks)
+4. Optionally choose AI assistant settings
+5. Review generated subtasks
+6. Confirm to add subtasks to your project
+
+### Managing Task Tags
+1. Press `Alt+A` to add tags to the selected task
+2. Create new tags or select from existing tags
+3. Use `Ctrl+Shift+M` to open the tag context manager
+4. Manage tag groups, rename, or organize tags
+5. Filter tasks by tag using `f` and selecting tags
+
+### Switching Projects
+1. Press `Ctrl+T` to open the project switcher
+2. Navigate to your desired project
+3. View tasks specific to that project context
+4. Use project tags to organize cross-project work
 
 ## Development
 

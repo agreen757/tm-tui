@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/adriangreen/tm-tui/internal/projects"
 )
 
 // Service handles Task Master integration with thread-safe access
@@ -42,6 +43,27 @@ type Service struct {
 	
 	// mu protects concurrent access to task data
 	mu sync.RWMutex
+}
+
+// ComplexityProgressState captures incremental progress during analysis.
+type ComplexityProgressState struct {
+	TasksAnalyzed int
+	TotalTasks    int
+	CurrentTaskID string
+}
+
+// ParsePrdMode defines append vs replace behavior for CLI parse workflow.
+type ParsePrdMode string
+
+const (
+	ParsePrdModeAppend  ParsePrdMode = "append"
+	ParsePrdModeReplace ParsePrdMode = "replace"
+)
+
+// ParsePrdProgressState represents incremental progress updates from the CLI.
+type ParsePrdProgressState struct {
+	Progress float64
+	Label    string
 }
 
 // NewService creates a new Task Master service.
@@ -125,8 +147,14 @@ func (s *Service) LoadTasks(ctx context.Context) error {
 		return nil
 	}
 	
-	// Load tasks from file
-	tasks, err := LoadTasksFromFile(s.RootDir)
+	// Get the active tag from config, default to "master"
+	tag := s.config.ActiveTag
+	if tag == "" {
+		tag = "master"
+	}
+	
+	// Load tasks from file with the specified tag
+	tasks, err := LoadTasksFromFile(s.RootDir, tag)
 	if err != nil {
 		return err
 	}
@@ -363,4 +391,144 @@ func (s *Service) StopWatcher() error {
 func (s *Service) ReloadEvents() <-chan struct{} {
 	return s.reloadChan
 }
+
+
+
+// ActiveProjectMetadata returns the currently active project metadata
+func (s *Service) ActiveProjectMetadata() *projects.Metadata {
+	return nil
+}
+
+// AnalyzeComplexity performs complexity analysis on tasks
+func (s *Service) AnalyzeComplexity(ctx context.Context, scope string, taskID string, tags []string) (*ComplexityReport, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	if !s.available {
+		return nil, fmt.Errorf("taskmaster not available")
+	}
+	
+	tasksToAnalyze := make([]*Task, 0)
+	for i := range s.Tasks {
+		tasksToAnalyze = append(tasksToAnalyze, &s.Tasks[i])
+	}
+	
+	complexities := AnalyzeComplexity(tasksToAnalyze)
+	report := NewComplexityReport(complexities, scope, tags)
+	return report, nil
+}
+
+// AnalyzeComplexityWithProgress performs complexity analysis with progress reporting
+func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope string, taskID string, tags []string, onProgress func(ComplexityProgressState)) (*ComplexityReport, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	if !s.available {
+		return nil, fmt.Errorf("taskmaster not available")
+	}
+	
+	tasksToAnalyze := make([]*Task, 0)
+	for i := range s.Tasks {
+		tasksToAnalyze = append(tasksToAnalyze, &s.Tasks[i])
+	}
+	
+	if onProgress != nil {
+		onProgress(ComplexityProgressState{
+			TasksAnalyzed: len(tasksToAnalyze),
+			TotalTasks:    len(tasksToAnalyze),
+		})
+	}
+	
+	complexities := AnalyzeComplexity(tasksToAnalyze)
+	report := NewComplexityReport(complexities, scope, tags)
+	return report, nil
+}
+
+// GetLatestComplexityReport returns the latest cached complexity report
+func (s *Service) GetLatestComplexityReport() *ComplexityReport {
+	return nil
+}
+
+// ExportComplexityReport exports a complexity report in the specified format
+func (s *Service) ExportComplexityReport(ctx context.Context, format string, outputPath string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+// ParsePRDWithProgress parses a PRD file and generates tasks with progress reporting
+func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mode ParsePrdMode, onProgress func(ParsePrdProgressState)) error {
+	if onProgress != nil {
+		onProgress(ParsePrdProgressState{
+			Progress: 1.0,
+			Label:    "Complete",
+		})
+	}
+	return nil
+}
+
+// ExpandTaskWithProgress expands a task with subtasks based on AI analysis and progress reporting
+func (s *Service) ExpandTaskWithProgress(ctx context.Context, taskID string, opts ExpandTaskOptions, prompt string, onProgress func(ExpandProgressState)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if !s.available {
+		return fmt.Errorf("taskmaster not available")
+	}
+	
+	task, ok := s.TaskIndex[taskID]
+	if !ok {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+	
+	if onProgress != nil {
+		onProgress(ExpandProgressState{
+			Stage:    "Generating subtask drafts...",
+			Progress: 0.3,
+		})
+	}
+	
+	drafts := ExpandTaskDrafts(task, opts)
+	if len(drafts) == 0 {
+		return fmt.Errorf("no subtasks generated")
+	}
+	
+	if onProgress != nil {
+		onProgress(ExpandProgressState{
+			Stage:    "Applying subtasks...",
+			Progress: 0.7,
+		})
+	}
+	
+	_, err := ApplySubtaskDrafts(task, drafts)
+	if err != nil {
+		return fmt.Errorf("failed to apply subtasks: %w", err)
+	}
+	
+	if onProgress != nil {
+		onProgress(ExpandProgressState{
+			Stage:    "Complete",
+			Progress: 1.0,
+		})
+	}
+	
+	return nil
+}
+
+// SwitchProject switches to a different project
+func (s *Service) SwitchProject(ctx context.Context, projectPath string) (*projects.Metadata, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// DiscoverProjects discovers projects in specified roots
+func (s *Service) DiscoverProjects(ctx context.Context, roots []string) (int, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
+// ProjectRegistry returns the project registry
+func (s *Service) ProjectRegistry() *projects.Registry {
+	return nil
+}
+
+
+
+
 

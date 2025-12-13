@@ -158,7 +158,7 @@ func TestLoadTasksFromFile(t *testing.T) {
 			}
 			
 			// Test loading
-			tasks, err := LoadTasksFromFile(tmpDir)
+			tasks, err := LoadTasksFromFile(tmpDir, "master")
 			
 			if tt.wantErr {
 				if err == nil {
@@ -182,7 +182,7 @@ func TestLoadTasksFromFile(t *testing.T) {
 func TestLoadTasksFromFile_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	
-	_, err := LoadTasksFromFile(tmpDir)
+	_, err := LoadTasksFromFile(tmpDir, "master")
 	if err == nil {
 		t.Error("LoadTasksFromFile() with missing file should return error")
 	}
@@ -248,7 +248,7 @@ func TestLoadTasksFromFile_ComplexHierarchy(t *testing.T) {
 		t.Fatal(err)
 	}
 	
-	tasks, err := LoadTasksFromFile(tmpDir)
+	tasks, err := LoadTasksFromFile(tmpDir, "master")
 	if err != nil {
 		t.Fatalf("LoadTasksFromFile() error = %v", err)
 	}

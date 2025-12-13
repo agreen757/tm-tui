@@ -25,13 +25,15 @@ const (
 
 // Config represents the TUI configuration
 type Config struct {
-	TaskMasterPath string            `json:"taskmasterPath"`
-	KeyBindings    map[string]string `json:"keyBindings"`
-	Theme          ThemeConfig       `json:"theme"`
-	UI             UIConfig          `json:"ui"`
-	StatePath      string            `json:"statePath"`
-	ModelProvider  string            `json:"modelProvider,omitempty"`
-	ModelName      string            `json:"modelName,omitempty"`
+	TaskMasterPath      string            `json:"taskmasterPath"`
+	KeyBindings         map[string]string `json:"keyBindings"`
+	Theme               ThemeConfig       `json:"theme"`
+	UI                  UIConfig          `json:"ui"`
+	StatePath           string            `json:"statePath"`
+	ProjectRegistryPath string            `json:"projectRegistryPath"`
+	ModelProvider       string            `json:"modelProvider,omitempty"`
+	ModelName           string            `json:"modelName,omitempty"`
+	ActiveTag           string            `json:"activeTag,omitempty"` // Specific tag to use in tasks.json
 }
 
 // ThemeConfig defines color and styling options
@@ -61,6 +63,7 @@ type UIState struct {
 	ShowDetailsPanel bool           `json:"showDetailsPanel"`
 	ShowLogPanel     bool           `json:"showLogPanel"`
 	PanelHeights     map[string]int `json:"panelHeights,omitempty"`
+	LastPrdPath      string         `json:"lastPrdPath,omitempty"`
 }
 
 // Load loads configuration from the specified path
@@ -77,6 +80,7 @@ func Load() (*Config, error) {
 
 	cfg.TaskMasterPath = tmDir
 	cfg.StatePath = filepath.Join(tmDir, ".taskmaster", "tui-state.json")
+	cfg.ProjectRegistryPath = filepath.Join(tmDir, ".taskmaster", "projects.json")
 
 	// Load default.json if it exists
 	configPath := filepath.Join("configs", "default.json")
@@ -152,6 +156,10 @@ func mergeConfigFile(target *Config, path string) error {
 	}
 	if partial.UI.RefreshInterval > 0 {
 		target.UI.RefreshInterval = partial.UI.RefreshInterval
+	}
+
+	if partial.ProjectRegistryPath != "" {
+		target.ProjectRegistryPath = partial.ProjectRegistryPath
 	}
 
 	return nil
@@ -434,7 +442,7 @@ func GetEnv(key, fallback string) string {
 // This is intended for passing to child processes (e.g., task-master CLI)
 func GetAPIKeys() map[string]string {
 	keys := make(map[string]string)
-	
+
 	envVars := []string{
 		EnvOpenAIKey,
 		EnvAnthropicKey,
@@ -446,13 +454,13 @@ func GetAPIKeys() map[string]string {
 		EnvAzureOpenAIKey,
 		EnvOllamaKey,
 	}
-	
+
 	for _, key := range envVars {
 		if value := os.Getenv(key); value != "" {
 			keys[key] = value
 		}
 	}
-	
+
 	return keys
 }
 
@@ -464,25 +472,24 @@ func HasAPIKey(key string) bool {
 // GetConfiguredProviders returns a list of providers that have API keys configured
 func GetConfiguredProviders() []string {
 	var providers []string
-	
+
 	providerMap := map[string]string{
-		"openai":      EnvOpenAIKey,
-		"anthropic":   EnvAnthropicKey,
-		"perplexity":  EnvPerplexityKey,
-		"google":      EnvGoogleKey,
-		"xai":         EnvXAIKey,
-		"openrouter":  EnvOpenRouterKey,
-		"mistral":     EnvMistralKey,
-		"azure":       EnvAzureOpenAIKey,
-		"ollama":      EnvOllamaKey,
+		"openai":     EnvOpenAIKey,
+		"anthropic":  EnvAnthropicKey,
+		"perplexity": EnvPerplexityKey,
+		"google":     EnvGoogleKey,
+		"xai":        EnvXAIKey,
+		"openrouter": EnvOpenRouterKey,
+		"mistral":    EnvMistralKey,
+		"azure":      EnvAzureOpenAIKey,
+		"ollama":     EnvOllamaKey,
 	}
-	
+
 	for provider, envVar := range providerMap {
 		if HasAPIKey(envVar) {
 			providers = append(providers, provider)
 		}
 	}
-	
+
 	return providers
 }
-

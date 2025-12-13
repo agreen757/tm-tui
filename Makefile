@@ -1,4 +1,4 @@
-.PHONY: build run test clean install help
+.PHONY: build run test clean install help install-memory
 
 # Binary name
 BINARY_NAME=tm-tui
@@ -32,6 +32,10 @@ clean: ## Clean build artifacts
 install: build ## Install the binary to $GOPATH/bin
 	@echo "Installing $(BINARY_NAME)..."
 	@go install ./cmd/tm-tui
+
+install-memory: ## Install the memory tool for LLM agents
+	@echo "Installing memory tool..."
+	@go build -o $(GOPATH)/bin/memory ./cmd/memory
 
 fmt: ## Format code
 	@echo "Formatting code..."

@@ -14,9 +14,9 @@ func (m Model) renderCompactHelp() string {
 		Foreground(lipgloss.Color(ColorHighlight)).
 		Bold(true).
 		Align(lipgloss.Center)
-	
+
 	title := titleStyle.Render("🍃 Task Master TUI Help")
-	
+
 	var b strings.Builder
 	b.WriteString(title)
 	b.WriteString("\n\n")
@@ -43,6 +43,10 @@ func (m Model) renderCompactHelp() string {
 	b.WriteString(formatCompactKey("n", "Get next available task", helpWidth))
 	b.WriteString(formatCompactKey("r", "Refresh tasks from disk", helpWidth))
 	b.WriteString(formatCompactKey(":", "Jump to task by ID", helpWidth))
+	b.WriteString(formatCompactKey("alt+c", "Analyze task complexity workflow", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+p", "Open Command Palette (pick any action)", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+shift+a", "Add a new tag context", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+shift+m", "Open tag context manager", helpWidth))
 	b.WriteString("\n")
 
 	// Status keys in two columns
@@ -79,12 +83,12 @@ func (m Model) renderCompactHelp() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(ColorHighlight)).
-		Width(helpWidth).  // Give some margin
+		Width(helpWidth). // Give some margin
 		Align(lipgloss.Center)
 
 	// Center the box in the available width
 	boxedContent := boxStyle.Render(b.String())
-	
+
 	// Wrapper style to center the boxed content in the terminal
 	wrapperStyle := lipgloss.NewStyle().
 		Width(m.width).
@@ -104,15 +108,15 @@ func formatCompactKey(keyName string, description string, width int) string {
 
 	// Render the key with background
 	key := keyStyle.Render(keyName)
-	
+
 	// Format the line with centered content
 	lineContent := fmt.Sprintf("%s - %s", key, description)
-	
+
 	// Center the entire line
 	centerStyle := lipgloss.NewStyle().
 		Width(width).
 		Align(lipgloss.Center)
-	
+
 	return centerStyle.Render(lineContent) + "\n"
 }
 
@@ -128,23 +132,23 @@ func formatTableRow(key1 string, desc1 string, key2 string, desc2 string, width 
 	// Render the keys with background
 	keyBox1 := keyStyle.Render(key1)
 	keyBox2 := keyStyle.Render(key2)
-	
+
 	// Calculate column widths
 	halfWidth := (width - 4) / 2 // 4 for some padding between columns
-	
+
 	// Create the left and right columns
 	leftCol := fmt.Sprintf("%s - %s", keyBox1, desc1)
 	rightCol := fmt.Sprintf("%s - %s", keyBox2, desc2)
-	
+
 	// Style for each column, right-pad the left column to ensure spacing
 	leftStyle := lipgloss.NewStyle().Width(halfWidth).PaddingRight(2)
 	rightStyle := lipgloss.NewStyle().Width(halfWidth)
-	
+
 	// Join the columns side by side
-	row := lipgloss.JoinHorizontal(lipgloss.Top, 
-		leftStyle.Render(leftCol), 
+	row := lipgloss.JoinHorizontal(lipgloss.Top,
+		leftStyle.Render(leftCol),
 		rightStyle.Render(rightCol))
-	
+
 	// Center the entire row
 	centerStyle := lipgloss.NewStyle().Width(width).Align(lipgloss.Center)
 	return centerStyle.Render(row) + "\n"

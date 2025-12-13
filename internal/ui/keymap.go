@@ -14,7 +14,7 @@ type KeyMap struct {
 	Right    key.Binding
 	PageUp   key.Binding
 	PageDown key.Binding
-	
+
 	// Task operations
 	ToggleExpand key.Binding
 	Collapse     key.Binding
@@ -25,7 +25,7 @@ type KeyMap struct {
 	JumpToID     key.Binding
 	Search       key.Binding
 	Filter       key.Binding
-	
+
 	// Status changes
 	SetInProgress key.Binding
 	SetDone       key.Binding
@@ -33,30 +33,45 @@ type KeyMap struct {
 	SetCancelled  key.Binding
 	SetDeferred   key.Binding
 	SetPending    key.Binding
-	
+
 	// Panel focus
 	FocusTaskList key.Binding
 	FocusDetails  key.Binding
 	FocusLog      key.Binding
 	CyclePanel    key.Binding
 	Back          key.Binding
-	
+
 	// Panel visibility
 	ToggleDetails key.Binding
 	ToggleLog     key.Binding
-	
+
+	// Global commands
+	CommandPalette     key.Binding
+	ParsePRD           key.Binding
+	ExpandTask         key.Binding
+	DeleteTask         key.Binding
+	ManageTags         key.Binding
+	TagManagement      key.Binding
+	UseTag             key.Binding
+	ProjectTags        key.Binding
+	ProjectQuickSwitch key.Binding
+	ProjectSearch      key.Binding
+
 	// View modes
-	ViewTree   key.Binding
-	ViewList   key.Binding
-	CycleView  key.Binding
-	
+	ViewTree  key.Binding
+	ViewList  key.Binding
+	CycleView key.Binding
+
 	// Help and quit
 	Help   key.Binding
 	Quit   key.Binding
 	Cancel key.Binding
-	
+
 	// State management
 	ClearState key.Binding
+
+	// Analysis
+	AnalyzeComplexity key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings
@@ -87,7 +102,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("pgdown"),
 			key.WithHelp("pgdn", "page down"),
 		),
-		
+
 		// Task operations
 		ToggleExpand: key.NewBinding(
 			key.WithKeys("enter", "e"),
@@ -125,7 +140,11 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("F"),
 			key.WithHelp("F", "filter by status"),
 		),
-		
+		AnalyzeComplexity: key.NewBinding(
+			key.WithKeys("alt+c"),
+			key.WithHelp("Alt+C", "analyze complexity"),
+		),
+
 		// Status changes
 		SetInProgress: key.NewBinding(
 			key.WithKeys("i"),
@@ -151,7 +170,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("p"),
 			key.WithHelp("p", "set pending"),
 		),
-		
+
 		// Panel focus
 		FocusTaskList: key.NewBinding(
 			key.WithKeys("1"),
@@ -173,7 +192,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "back/clear"),
 		),
-		
+
 		// Panel visibility
 		ToggleDetails: key.NewBinding(
 			key.WithKeys("d"),
@@ -183,7 +202,49 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("L"),
 			key.WithHelp("L", "toggle log"),
 		),
-		
+
+		// Command palette and workflows
+		CommandPalette: key.NewBinding(
+			key.WithKeys("ctrl+p"),
+			key.WithHelp("ctrl+p", "command palette"),
+		),
+		ParsePRD: key.NewBinding(
+			key.WithKeys("alt+p"),
+			key.WithHelp("alt+p", "parse prd"),
+		),
+		ExpandTask: key.NewBinding(
+			key.WithKeys("alt+e"),
+			key.WithHelp("alt+e", "expand task"),
+		),
+		DeleteTask: key.NewBinding(
+			key.WithKeys("alt+d"),
+			key.WithHelp("alt+d", "delete task"),
+		),
+		ManageTags: key.NewBinding(
+			key.WithKeys("ctrl+shift+a"),
+			key.WithHelp("ctrl+shift+a", "add tag context"),
+		),
+		TagManagement: key.NewBinding(
+			key.WithKeys("ctrl+shift+m"),
+			key.WithHelp("ctrl+shift+m", "manage tag contexts"),
+		),
+		UseTag: key.NewBinding(
+			key.WithKeys("ctrl+shift+u"),
+			key.WithHelp("ctrl+shift+u", "use tag"),
+		),
+		ProjectTags: key.NewBinding(
+			key.WithKeys("ctrl+t"),
+			key.WithHelp("ctrl+t", "project tags"),
+		),
+		ProjectQuickSwitch: key.NewBinding(
+			key.WithKeys("ctrl+q"),
+			key.WithHelp("ctrl+q", "quick project switch"),
+		),
+		ProjectSearch: key.NewBinding(
+			key.WithKeys("ctrl+shift+t"),
+			key.WithHelp("ctrl+shift+t", "search projects"),
+		),
+
 		// View modes
 		ViewTree: key.NewBinding(
 			key.WithKeys("t"),
@@ -191,13 +252,13 @@ func DefaultKeyMap() KeyMap {
 		),
 		ViewList: key.NewBinding(
 			key.WithKeys("T"),
-			key.WithHelp("T", "list view"),  
+			key.WithHelp("T", "list view"),
 		),
 		CycleView: key.NewBinding(
 			key.WithKeys("v"),
 			key.WithHelp("v", "cycle view"),
 		),
-		
+
 		// Help and quit
 		Help: key.NewBinding(
 			key.WithKeys("?"),
@@ -211,7 +272,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "cancel/quit"),
 		),
-		
+
 		// State management
 		ClearState: key.NewBinding(
 			key.WithKeys("C"),
@@ -224,12 +285,12 @@ func DefaultKeyMap() KeyMap {
 func NewKeyMap(cfg *config.Config) KeyMap {
 	// Start with defaults
 	km := DefaultKeyMap()
-	
+
 	// If no config or no keybindings, return defaults
 	if cfg == nil || len(cfg.KeyBindings) == 0 {
 		return km
 	}
-	
+
 	// Helper function to get key binding or use default
 	getKey := func(name, defaultKey string) string {
 		if key, ok := cfg.KeyBindings[name]; ok && key != "" {
@@ -237,7 +298,7 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		}
 		return defaultKey
 	}
-	
+
 	// Override with configured keybindings
 	if quitKey := getKey("quit", "q"); quitKey != "" {
 		km.Quit = key.NewBinding(
@@ -245,70 +306,140 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 			key.WithHelp(quitKey, "quit"),
 		)
 	}
-	
+
 	if helpKey := getKey("help", "?"); helpKey != "" {
 		km.Help = key.NewBinding(
 			key.WithKeys(helpKey),
 			key.WithHelp(helpKey, "toggle help"),
 		)
 	}
-	
+
 	if nextKey := getKey("next", "n"); nextKey != "" {
 		km.NextTask = key.NewBinding(
 			key.WithKeys(nextKey),
 			key.WithHelp(nextKey, "next task"),
 		)
 	}
-	
+
 	if refreshKey := getKey("refresh", "r"); refreshKey != "" {
 		km.Refresh = key.NewBinding(
 			key.WithKeys(refreshKey),
 			key.WithHelp(refreshKey, "refresh"),
 		)
 	}
-	
+
 	if expandKey := getKey("expand", "enter"); expandKey != "" {
 		km.ToggleExpand = key.NewBinding(
 			key.WithKeys(expandKey),
 			key.WithHelp(expandKey, "toggle expand"),
 		)
 	}
-	
+
 	if detailsKey := getKey("details", "d"); detailsKey != "" {
 		km.ToggleDetails = key.NewBinding(
 			key.WithKeys(detailsKey),
 			key.WithHelp(detailsKey, "toggle details"),
 		)
 	}
-	
+
 	if inProgressKey := getKey("inProgress", "i"); inProgressKey != "" {
 		km.SetInProgress = key.NewBinding(
 			key.WithKeys(inProgressKey),
 			key.WithHelp(inProgressKey, "set in-progress"),
 		)
 	}
-	
+
 	if doneKey := getKey("done", "D"); doneKey != "" {
 		km.SetDone = key.NewBinding(
 			key.WithKeys(doneKey),
 			key.WithHelp(doneKey, "set done"),
 		)
 	}
-	
+
 	if blockedKey := getKey("blocked", "b"); blockedKey != "" {
 		km.SetBlocked = key.NewBinding(
 			key.WithKeys(blockedKey),
 			key.WithHelp(blockedKey, "set blocked"),
 		)
 	}
-	
+
 	if cancelledKey := getKey("cancelled", "c"); cancelledKey != "" {
 		km.SetCancelled = key.NewBinding(
 			key.WithKeys(cancelledKey),
 			key.WithHelp(cancelledKey, "set cancelled"),
 		)
 	}
-	
+
+	if paletteKey := getKey("commandPalette", "ctrl+p"); paletteKey != "" {
+		km.CommandPalette = key.NewBinding(
+			key.WithKeys(paletteKey),
+			key.WithHelp(paletteKey, "command palette"),
+		)
+	}
+
+	if parseKey := getKey("parsePrd", "alt+p"); parseKey != "" {
+		km.ParsePRD = key.NewBinding(
+			key.WithKeys(parseKey),
+			key.WithHelp(parseKey, "parse prd"),
+		)
+	}
+
+	if expandKey := getKey("expandTask", "alt+e"); expandKey != "" {
+		km.ExpandTask = key.NewBinding(
+			key.WithKeys(expandKey),
+			key.WithHelp(expandKey, "expand task"),
+		)
+	}
+
+	if deleteKey := getKey("deleteTask", "alt+d"); deleteKey != "" {
+		km.DeleteTask = key.NewBinding(
+			key.WithKeys(deleteKey),
+			key.WithHelp(deleteKey, "delete task"),
+		)
+	}
+
+	if manageKey := getKey("manageTags", "ctrl+shift+a"); manageKey != "" {
+		km.ManageTags = key.NewBinding(
+			key.WithKeys(manageKey),
+			key.WithHelp(manageKey, "add tag context"),
+		)
+	}
+
+	if tagMgmtKey := getKey("tagManagement", "ctrl+shift+m"); tagMgmtKey != "" {
+		km.TagManagement = key.NewBinding(
+			key.WithKeys(tagMgmtKey),
+			key.WithHelp(tagMgmtKey, "delete tag context"),
+		)
+	}
+
+	if useTagKey := getKey("useTag", "ctrl+shift+u"); useTagKey != "" {
+		km.UseTag = key.NewBinding(
+			key.WithKeys(useTagKey),
+			key.WithHelp(useTagKey, "use tag"),
+		)
+	}
+
+	if projectTagsKey := getKey("projectTags", "ctrl+t"); projectTagsKey != "" {
+		km.ProjectTags = key.NewBinding(
+			key.WithKeys(projectTagsKey),
+			key.WithHelp(projectTagsKey, "project tags"),
+		)
+	}
+
+	if quickSwitchKey := getKey("projectQuickSwitch", "ctrl+q"); quickSwitchKey != "" {
+		km.ProjectQuickSwitch = key.NewBinding(
+			key.WithKeys(quickSwitchKey),
+			key.WithHelp(quickSwitchKey, "quick project switch"),
+		)
+	}
+
+	if searchKey := getKey("projectSearch", "ctrl+shift+t"); searchKey != "" {
+		km.ProjectSearch = key.NewBinding(
+			key.WithKeys(searchKey),
+			key.WithHelp(searchKey, "search projects"),
+		)
+	}
+
 	return km
 }
 
@@ -328,5 +459,9 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.FocusTaskList, k.FocusDetails, k.FocusLog, k.CyclePanel},
 		{k.ToggleDetails, k.ToggleLog},
 		{k.Help, k.Quit, k.Cancel, k.ClearState},
+		{k.AnalyzeComplexity},
+		{k.CommandPalette, k.ParsePRD, k.ExpandTask, k.DeleteTask},
+		{k.ManageTags, k.TagManagement, k.UseTag},
+		{k.ProjectTags, k.ProjectQuickSwitch, k.ProjectSearch},
 	}
 }

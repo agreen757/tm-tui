@@ -1,18 +1,20 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
 // Color constants from PRD
 const (
-	ColorPending   = "#FFD700" // Gold
+	ColorPending    = "#FFD700" // Gold
 	ColorInProgress = "#4169E1" // Royal Blue
-	ColorDone      = "#32CD32" // Lime Green
-	ColorBlocked   = "#DC143C" // Crimson
-	ColorDeferred  = "#808080" // Gray
-	ColorCancelled = "#404040" // Dark Gray
-	
+	ColorDone       = "#32CD32" // Lime Green
+	ColorBlocked    = "#DC143C" // Crimson
+	ColorDeferred   = "#808080" // Gray
+	ColorCancelled  = "#404040" // Dark Gray
+
 	ColorBorder    = "#555555"
 	ColorText      = "#FFFFFF"
 	ColorSubtle    = "#666666"
@@ -22,131 +24,131 @@ const (
 // Styles contains all the lipgloss styles for the TUI
 type Styles struct {
 	// Status colors
-	Pending   lipgloss.Style
+	Pending    lipgloss.Style
 	InProgress lipgloss.Style
-	Done      lipgloss.Style
-	Blocked   lipgloss.Style
-	Deferred  lipgloss.Style
-	Cancelled lipgloss.Style
-	
+	Done       lipgloss.Style
+	Blocked    lipgloss.Style
+	Deferred   lipgloss.Style
+	Cancelled  lipgloss.Style
+
 	// Layout styles
-	Header     lipgloss.Style
-	StatusBar  lipgloss.Style
-	Border     lipgloss.Style
-	
+	Header    lipgloss.Style
+	StatusBar lipgloss.Style
+	Border    lipgloss.Style
+
 	// Panel styles
 	Panel       lipgloss.Style
 	PanelTitle  lipgloss.Style
 	PanelBorder lipgloss.Style
-	
+
 	// Task list styles
 	TaskSelected   lipgloss.Style
 	TaskUnselected lipgloss.Style
 	TaskCursor     lipgloss.Style
-	
+
 	// Help styles
 	Help    lipgloss.Style
 	HelpKey lipgloss.Style
 	HelpSep lipgloss.Style
-	
+
 	// Text styles
 	Title    lipgloss.Style
 	Subtitle lipgloss.Style
-	Subtle   lipgloss.Style  // For subtle/muted text
+	Subtle   lipgloss.Style // For subtle/muted text
 	Error    lipgloss.Style
 	Warning  lipgloss.Style
 	Success  lipgloss.Style
 	Info     lipgloss.Style
-	Key      lipgloss.Style  // For keyboard shortcuts
+	Key      lipgloss.Style // For keyboard shortcuts
 }
 
 // NewStyles creates a new Styles instance with default values
 func NewStyles() *Styles {
 	return &Styles{
 		// Status colors
-		Pending:   lipgloss.NewStyle().Foreground(lipgloss.Color(ColorPending)),
+		Pending:    lipgloss.NewStyle().Foreground(lipgloss.Color(ColorPending)),
 		InProgress: lipgloss.NewStyle().Foreground(lipgloss.Color(ColorInProgress)),
-		Done:      lipgloss.NewStyle().Foreground(lipgloss.Color(ColorDone)),
-		Blocked:   lipgloss.NewStyle().Foreground(lipgloss.Color(ColorBlocked)),
-		Deferred:  lipgloss.NewStyle().Foreground(lipgloss.Color(ColorDeferred)),
-		Cancelled: lipgloss.NewStyle().Foreground(lipgloss.Color(ColorCancelled)),
-		
+		Done:       lipgloss.NewStyle().Foreground(lipgloss.Color(ColorDone)),
+		Blocked:    lipgloss.NewStyle().Foreground(lipgloss.Color(ColorBlocked)),
+		Deferred:   lipgloss.NewStyle().Foreground(lipgloss.Color(ColorDeferred)),
+		Cancelled:  lipgloss.NewStyle().Foreground(lipgloss.Color(ColorCancelled)),
+
 		// Layout styles
 		Header: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(ColorHighlight)).
 			Background(lipgloss.Color(ColorBorder)).
 			Padding(0, 1),
-		
+
 		StatusBar: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorSubtle)).
 			Background(lipgloss.Color(ColorBorder)).
 			Padding(0, 1),
-		
+
 		Border: lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(ColorBorder)),
-		
+
 		// Panel styles
 		Panel: lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(ColorBorder)).
 			Padding(0, 1),
-		
+
 		PanelTitle: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(ColorHighlight)),
-		
+
 		PanelBorder: lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(ColorBorder)),
-		
+
 		// Task list styles
 		TaskSelected: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorHighlight)).
 			Bold(true),
-		
+
 		TaskUnselected: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorText)),
-		
+
 		TaskCursor: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorHighlight)).
 			Bold(true),
-		
+
 		// Help styles
 		Help: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorSubtle)),
-		
+
 		HelpKey: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorHighlight)),
-		
+
 		HelpSep: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorSubtle)),
-		
+
 		// Text styles
 		Title: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(ColorHighlight)),
-		
+
 		Subtitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorText)),
-		
+
 		Subtle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorSubtle)),
-		
+
 		Error: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorBlocked)).
 			Bold(true),
-		
+
 		Warning: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorPending)),
-		
+
 		Success: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorDone)),
-		
+
 		Info: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorInProgress)),
-		
+
 		Key: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorHighlight)).
 			Background(lipgloss.Color("#222222")).
@@ -193,4 +195,62 @@ func GetStatusIcon(status string) string {
 	default:
 		return "?"
 	}
+}
+
+// GetStatusLabel returns a text label for a given status
+// Accessibility: Provides text alternative to icon-only indicators
+func GetStatusLabel(status string) string {
+	switch status {
+	case "pending":
+		return "PENDING"
+	case "in-progress":
+		return "IN-PROGRESS"
+	case "done":
+		return "DONE"
+	case "blocked":
+		return "BLOCKED"
+	case "deferred":
+		return "DEFERRED"
+	case "cancelled":
+		return "CANCELLED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// GetStatusIndicator returns both icon and text for status
+// This combines visual and text representation for accessibility
+func GetStatusIndicator(status string) string {
+	icon := GetStatusIcon(status)
+	label := GetStatusLabel(status)
+	if icon == "" {
+		return label
+	}
+	return icon + " " + label
+}
+
+// GetComplexityLabel returns a text label for complexity score
+// Accessibility: Provides text alternative to color-only indicators
+func GetComplexityLabel(complexity int) string {
+	if complexity <= 0 {
+		return ""
+	}
+	if complexity <= 3 {
+		return "LOW"
+	} else if complexity <= 6 {
+		return "MEDIUM"
+	} else {
+		return "HIGH"
+	}
+}
+
+// GetComplexityIndicator returns both icon and text for complexity
+// This combines visual and text representation for accessibility
+func GetComplexityIndicator(complexity int) string {
+	label := GetComplexityLabel(complexity)
+	if label == "" {
+		return ""
+	}
+	// Format: LEVEL(numeric) e.g., "HIGH(8)"
+	return fmt.Sprintf("%s(%d)", label, complexity)
 }

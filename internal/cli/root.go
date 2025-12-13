@@ -28,6 +28,7 @@ view, organize, and track your project tasks.`,
 	
 	// Add flags
 	cmd.PersistentFlags().Bool("clear-state", false, "Clear the TUI state before starting")
+	cmd.PersistentFlags().String("tag", "", "Specify the active tag to use for loading tasks (defaults to 'master')")
 
 	return cmd
 }
@@ -62,6 +63,12 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		} else if err == nil {
 			fmt.Fprintf(os.Stderr, "TUI state cleared successfully\n")
 		}
+	}
+	
+	// Check if --tag flag is set
+	if tag, _ := cmd.Flags().GetString("tag"); tag != "" {
+		cfg.ActiveTag = tag
+		fmt.Fprintf(os.Stderr, "Using tag '%s' to load tasks\n", tag)
 	}
 
 	// Check if taskmaster path is found
