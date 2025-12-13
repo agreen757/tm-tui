@@ -1,10 +1,16 @@
 package taskmaster
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -511,6 +517,243 @@ func (s *Service) ExpandTaskWithProgress(ctx context.Context, taskID string, opt
 	}
 	
 	return nil
+}
+
+// ExecuteExpandWithProgress executes the task-master expand CLI command with
+// real-time progress reporting. It supports multiple expansion scopes:
+//   - "single": Expand a single task by ID
+//   - "all": Expand all tasks in the project
+//   - "range": Expand tasks within a specified ID range
+//   - "tag": Expand tasks matching specified tags
+//
+// The onProgress callback receives updates during execution, including stage,
+// progress percentage, and current task being processed. The context can be
+// used for cancellation.
+//
+// After successful expansion, tasks are automatically reloaded.
+func (s *Service) ExecuteExpandWithProgress(
+	ctx context.Context,
+	scope string,
+	taskID string,
+	fromID string,
+	toID string,
+	tags []string,
+	opts ExpandTaskOptions,
+	onProgress func(ExpandProgressState),
+) error {
+	if !s.available {
+		return fmt.Errorf("taskmaster not available")
+	}
+
+	// Build CLI command args
+	args := []string{"expand"}
+
+	switch scope {
+	case "single":
+		if taskID == "" {
+			return fmt.Errorf("task ID is required for single scope")
+		}
+		args = append(args, fmt.Sprintf("--id=%s", taskID))
+	case "all":
+		args = append(args, "--all")
+	case "range":
+		if fromID != "" {
+			args = append(args, fmt.Sprintf("--from=%s", fromID))
+		}
+		if toID != "" {
+			args = append(args, fmt.Sprintf("--to=%s", toID))
+		}
+		if fromID == "" && toID == "" {
+			return fmt.Errorf("at least one of from/to ID is required for range scope")
+		}
+	case "tag":
+		if len(tags) == 0 {
+			return fmt.Errorf("tags are required for tag scope")
+		}
+		// Note: CLI may not support --tag flag yet, this is a future enhancement
+		for _, tag := range tags {
+			args = append(args, fmt.Sprintf("--tag=%s", tag))
+		}
+	default:
+		return fmt.Errorf("invalid scope: %s", scope)
+	}
+
+	// Add optional flags
+	if opts.UseAI {
+		args = append(args, "--research")
+	}
+	if opts.NumSubtasks > 0 {
+		args = append(args, fmt.Sprintf("--num=%d", opts.NumSubtasks))
+	}
+	if opts.Force {
+		args = append(args, "--force")
+	}
+
+	// Execute command with streaming output
+	cmd := exec.CommandContext(ctx, "task-master", args...)
+	cmd.Dir = s.RootDir
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Stream output and parse progress
+	progressCh := make(chan ExpandProgressState, 10)
+	errCh := make(chan error, 1)
+
+	// Parse stdout in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if state := parseExpandProgress(line); state.Message != "" {
+				select {
+				case progressCh <- state:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	// Capture stderr
+	go func() {
+		errOutput, _ := io.ReadAll(stderr)
+		if len(errOutput) > 0 {
+			select {
+			case errCh <- fmt.Errorf("CLI error: %s", string(errOutput)):
+			default:
+			}
+		}
+	}()
+
+	// Forward progress updates to callback
+	go func() {
+		for {
+			select {
+			case state := <-progressCh:
+				if onProgress != nil {
+					onProgress(state)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Wait for completion
+	cmdErr := cmd.Wait()
+
+	// Check for errors
+	if cmdErr != nil {
+		if ctx.Err() == context.Canceled {
+			return context.Canceled
+		}
+		select {
+		case err := <-errCh:
+			return fmt.Errorf("command failed: %w: %v", cmdErr, err)
+		default:
+			return fmt.Errorf("command failed: %w", cmdErr)
+		}
+	}
+
+	// Send completion update
+	if onProgress != nil {
+		onProgress(ExpandProgressState{
+			Stage:    "Complete",
+			Progress: 1.0,
+			Message:  "Expansion complete, reloading tasks...",
+		})
+	}
+
+	// Reload tasks after expansion
+	reloadCtx := context.WithValue(context.Background(), "force", true)
+	return s.LoadTasks(reloadCtx)
+}
+
+// parseExpandProgress parses progress information from CLI output
+func parseExpandProgress(line string) ExpandProgressState {
+	state := ExpandProgressState{
+		Message: line,
+	}
+
+	// Parse different CLI output patterns
+	// Example patterns to look for:
+	// "Expanding task 1.2..."
+	// "Generated 5 subtasks for task 1.2"
+	// "Progress: 3/10"
+	// "Analyzing task complexity..."
+
+	line = strings.TrimSpace(line)
+
+	// Parse "Expanding task X..."
+	if strings.Contains(line, "Expanding task") {
+		re := regexp.MustCompile(`Expanding task (\S+)`)
+		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+			state.Stage = "Expanding"
+			state.CurrentTask = matches[1]
+			state.Progress = 0.3
+		}
+		return state
+	}
+
+	// Parse "Generated N subtasks"
+	if strings.Contains(line, "Generated") && strings.Contains(line, "subtask") {
+		re := regexp.MustCompile(`Generated (\d+) subtask`)
+		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+			if count, err := strconv.Atoi(matches[1]); err == nil {
+				state.SubtasksCreated = count
+				state.Stage = "Generating"
+				state.Progress = 0.6
+			}
+		}
+		return state
+	}
+
+	// Parse "Progress: X/Y"
+	if strings.Contains(line, "Progress:") {
+		re := regexp.MustCompile(`Progress:\s*(\d+)/(\d+)`)
+		if matches := re.FindStringSubmatch(line); len(matches) > 2 {
+			if current, err1 := strconv.Atoi(matches[1]); err1 == nil {
+				if total, err2 := strconv.Atoi(matches[2]); err2 == nil && total > 0 {
+					state.TasksExpanded = current
+					state.TotalTasks = total
+					state.Progress = float64(current) / float64(total)
+					state.Stage = "Processing"
+				}
+			}
+		}
+		return state
+	}
+
+	// Parse "Analyzing..."
+	if strings.Contains(line, "Analyzing") {
+		state.Stage = "Analyzing"
+		state.Progress = 0.1
+		return state
+	}
+
+	// Parse "Applying..."
+	if strings.Contains(line, "Applying") {
+		state.Stage = "Applying"
+		state.Progress = 0.8
+		return state
+	}
+
+	// Default: just pass through the message
+	state.Stage = "Processing"
+	state.Progress = 0.5
+	return state
 }
 
 // SwitchProject switches to a different project
