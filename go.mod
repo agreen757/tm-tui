@@ -1,4 +1,4 @@
-module github.com/adriangreen/tm-tui
+module github.com/agreen757/tm-tui
 
 go 1.25.0
 
