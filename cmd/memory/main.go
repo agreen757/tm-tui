@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/adriangreen/tm-tui/internal/memory"
+	"github.com/agreen757/tm-tui/internal/memory"
 )
 
 func main() {

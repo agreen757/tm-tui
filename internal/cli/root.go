@@ -7,10 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/adriangreen/tm-tui/internal/config"
-	"github.com/adriangreen/tm-tui/internal/executor"
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
-	"github.com/adriangreen/tm-tui/internal/ui"
+	"github.com/agreen757/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/executor"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )

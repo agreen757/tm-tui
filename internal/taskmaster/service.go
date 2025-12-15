@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adriangreen/tm-tui/internal/config"
-	"github.com/adriangreen/tm-tui/internal/projects"
+	"github.com/agreen757/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/projects"
 )
 
 // Service handles Task Master integration with thread-safe access

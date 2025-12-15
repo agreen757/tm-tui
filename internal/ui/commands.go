@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 
-	"github.com/adriangreen/tm-tui/internal/ui/dialog"
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )

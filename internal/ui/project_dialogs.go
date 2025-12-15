@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adriangreen/tm-tui/internal/projects"
-	"github.com/adriangreen/tm-tui/internal/ui/dialog"
+	"github.com/agreen757/tm-tui/internal/projects"
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

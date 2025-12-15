@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/adriangreen/tm-tui/internal/ui/dialog"
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 )
 
 func newTestModel() Model {

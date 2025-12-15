@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adriangreen/tm-tui/internal/config"
-	"github.com/adriangreen/tm-tui/internal/projects"
+	"github.com/agreen757/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/projects"
 )
 
 func TestProjectListItemIncludesTag(t *testing.T) {

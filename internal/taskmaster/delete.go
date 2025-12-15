@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // DeleteOptions captures options surfaced to the delete workflow.

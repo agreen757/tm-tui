@@ -3,7 +3,7 @@ package dialog
 import (
 	"testing"
 
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

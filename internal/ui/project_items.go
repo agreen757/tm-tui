@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adriangreen/tm-tui/internal/projects"
+	"github.com/agreen757/tm-tui/internal/projects"
 )
 
 type projectTagItem struct {

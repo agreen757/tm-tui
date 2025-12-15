@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/adriangreen/tm-tui/internal/config"
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 )
 
 func main() {

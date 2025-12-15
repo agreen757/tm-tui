@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/adriangreen/tm-tui/internal/cli"
+	"github.com/agreen757/tm-tui/internal/cli"
 )
 
 func main() {

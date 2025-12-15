@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // generateLargeTasks creates a large number of tasks for benchmarking

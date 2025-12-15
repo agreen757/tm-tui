@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 func TestNewService(t *testing.T) {

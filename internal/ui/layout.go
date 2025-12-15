@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 	"github.com/charmbracelet/lipgloss"
 )
 

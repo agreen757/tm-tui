@@ -3,8 +3,8 @@ package ui
 import (
 	"context"
 
-	"github.com/adriangreen/tm-tui/internal/projects"
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/projects"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 )
 
 // TaskService defines the subset of taskmaster.Service behavior required by the UI.

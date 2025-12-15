@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/adriangreen/tm-tui/internal/ui/dialog/demo"
+	"github.com/agreen757/tm-tui/internal/ui/dialog/demo"
 )
 
 func main() {

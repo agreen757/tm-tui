@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 func setupDeleteService(t *testing.T, tasks []Task) *Service {

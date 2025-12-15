@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/adriangreen/tm-tui/internal/ui/dialog"
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

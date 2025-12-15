@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/charmbracelet/bubbles/key"
 )
 

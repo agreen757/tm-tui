@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // Command represents a single command execution record

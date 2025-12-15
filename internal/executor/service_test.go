@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adriangreen/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // setupTestService creates a test service with a temporary directory

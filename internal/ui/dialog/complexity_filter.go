@@ -1,7 +1,7 @@
 package dialog
 
 import (
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 )
 
 // NewComplexityFilterDialog creates a dialog for filtering complexity report results

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/adriangreen/tm-tui/internal/ui/dialog"
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 )
 
 // ValidateDialogComponents runs validation of all dialog components
