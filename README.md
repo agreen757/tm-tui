@@ -196,7 +196,24 @@ make build
 ### Using Go Install
 
 ```bash
-go install github.com/adriangreen/tm-tui/cmd/tm-tui@latest
+go install github.com/agreen757/tm-tui/cmd/tm-tui@latest
+```
+
+**Note:** After installation, ensure `~/go/bin` is in your PATH:
+
+```bash
+# For Zsh (macOS default)
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# For Bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bash_profile
+source ~/.bash_profile
+```
+
+Alternatively, run directly with the full path:
+```bash
+~/go/bin/tm-tui
 ```
 
 ## Usage
