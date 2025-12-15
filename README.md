@@ -196,7 +196,7 @@ make build
 ### Using Go Install
 
 ```bash
-go install github.com/adriangreen/tm-tui/cmd/tm-tui@latest
+go install github.com/agreen757/tm-tui/cmd/tm-tui@latest
 ```
 
 ## Usage
