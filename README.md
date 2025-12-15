@@ -23,6 +23,154 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
+## Memory System
+
+Task Master TUI includes a persistent memory system powered by **BadgerDB** for AI agents and LLMs. This enables cross-session learning, context preservation, and implementation artifact storage with high-performance key-value operations.
+
+The memory system is a **core feature** that works seamlessly with your Task Master workflow, allowing agents to learn from previous implementations and maintain context across sessions.
+
+### Quick Start
+
+```bash
+# Build the project (includes memory binary)
+make build
+
+# Store information
+./bin/memory store -key "readme:main" -file README.md
+./bin/memory store -key "log:2.1" -value "Completed auth implementation"
+
+# Retrieve information
+./bin/memory get -key "log:2.1"
+
+# List all stored keys
+./bin/memory list
+./bin/memory list -prefix "log:"  # Filter by prefix
+
+# Log task progress
+./bin/memory log -task "2.1" -message "Started implementing JWT validation"
+```
+
+Memory data is stored in `.taskmaster/memory/` using BadgerDB for reliable persistence across sessions.
+
+### How It Works
+
+The memory system stores key-value pairs persistently with BadgerDB:
+
+- **Keys**: Organized by prefix (task:, readme:, log:, context:)
+- **Values**: Text or structured JSON data
+- **Storage**: BadgerDB embedded key-value store at `.taskmaster/memory/`
+- **Access**: Command-line tool or Go API
+- **Performance**: O(1) lookups, ACID transactions, optimized for fast queries
+
+### Memory Key Conventions
+
+| Prefix | Purpose | Example |
+|--------|---------|----------|
+| `task:` | Task metadata and status | `task:2.1` → task info |
+| `log:` | Task completion logs | `log:2.1` → implementation details |
+| `readme:` | Cached documentation | `readme:main` → README content |
+| `context:` | LLM context snapshots | `context:session-1` → session notes |
+
+### Storage & Performance
+
+**Default**: BadgerDB storage at `.taskmaster/memory/`
+- **Fast**: O(1) key lookups
+- **Reliable**: ACID transactions for data consistency
+- **Embedded**: No external server required
+- **Scalable**: Optimized for development and production
+- **Typical disk usage**: <100MB for thousands of entries
+- **Concurrent safe**: Handles multiple CLI invocations
+
+**Implementation details**:
+- Database path: `.taskmaster/memory/` (auto-created)
+- Concurrent safe (handles multiple CLI invocations)
+- Automatic garbage collection for obsolete values
+- Supports key scanning with prefixes (efficient filtering)
+- Data persists across Task Master TUI restarts
+
+### Command Reference
+
+Full command documentation available via:
+
+```bash
+./bin/memory help
+```
+
+Key commands:
+
+**Store data**
+
+```bash
+./bin/memory store -key <key> -file <file>
+./bin/memory store -key <key> -value <value> [-json]
+```
+
+**Retrieve data**
+
+```bash
+./bin/memory get -key <key>
+```
+
+**Delete data**
+
+```bash
+./bin/memory delete -key <key>
+```
+
+**List keys**
+
+```bash
+./bin/memory list [-prefix <prefix>] [-json]
+```
+
+**Log task activity**
+
+```bash
+./bin/memory log -task <id> -message "<activity>"
+```
+
+**List stored READMEs**
+
+```bash
+./bin/memory readmes
+```
+
+## Agent Workflow Integration
+
+The memory system is designed to seamlessly integrate with AI agent workflows. Agents can use the memory system to maintain context, log progress, and store implementation artifacts across sessions.
+
+### Integration with Task Master CLI
+
+Agents working with Task Master can leverage memory for:
+
+- **Context Preservation**: Store session context and previous implementation details
+- **Task Logging**: Use `./bin/memory log` to track task completion and progress
+- **Implementation Artifacts**: Store code snippets, design decisions, and test results
+- **Cross-Session Learning**: Retrieve previous implementations to inform new work
+
+### Typical Agent Workflow
+
+1. **Initialize**: Agent creates a Task Master helper with `DefaultHelper()`
+2. **Load Context**: Retrieve previous implementation notes from memory
+3. **Implement**: Work on the task, storing progress in memory
+4. **Persist**: Log completion details with `memory log` command
+5. **Next Task**: Retrieve context for the next task from memory
+
+### Example Integration
+
+```bash
+# Load previous implementation context
+./bin/memory get -key "log:task-2.1"
+
+# Store implementation notes during work
+./bin/memory store -key "log:current-task" -value "Completed JWT validation middleware"
+
+# Log task completion
+./bin/memory log -task "3.1" -message "Implemented role-based access control"
+```
+
+This integration enables continuous learning and improved decision-making across development sessions.
+
 ## Prerequisites
 
 - Go 1.23 or later

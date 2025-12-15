@@ -15,6 +15,7 @@ build: ## Build the binary
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p bin
 	@go build $(BUILD_FLAGS) -o $(BINARY_PATH) ./cmd/tm-tui
+	@go build $(BUILD_FLAGS) -o ./bin/memory ./cmd/memory
 
 run: build ## Build and run the TUI
 	@echo "Starting $(BINARY_NAME)..."

@@ -462,13 +462,107 @@ func (s *Service) ExportComplexityReport(ctx context.Context, format string, out
 
 // ParsePRDWithProgress parses a PRD file and generates tasks with progress reporting
 func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mode ParsePrdMode, onProgress func(ParsePrdProgressState)) error {
+	if !s.available {
+		return fmt.Errorf("taskmaster not available")
+	}
+
+	// Build CLI command args
+	args := []string{"parse-prd", inputPath}
+	
+	// Add mode flag
+	if mode == ParsePrdModeAppend {
+		args = append(args, "--append")
+	}
+
+	// Execute command with streaming output
+	cmd := exec.CommandContext(ctx, "task-master", args...)
+	cmd.Dir = s.RootDir
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Stream output and parse progress
+	progressCh := make(chan ParsePrdProgressState, 10)
+	errCh := make(chan error, 1)
+
+	// Parse stdout in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if state := parseParsePrdProgress(line); state.Label != "" {
+				select {
+				case progressCh <- state:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	// Capture stderr
+	go func() {
+		errOutput, _ := io.ReadAll(stderr)
+		if len(errOutput) > 0 {
+			select {
+			case errCh <- fmt.Errorf("CLI error: %s", string(errOutput)):
+			default:
+			}
+		}
+	}()
+
+	// Forward progress updates to callback
+	go func() {
+		for {
+			select {
+			case state := <-progressCh:
+				if onProgress != nil {
+					onProgress(state)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Wait for completion
+	cmdErr := cmd.Wait()
+
+	// Check for errors
+	if cmdErr != nil {
+		if ctx.Err() == context.Canceled {
+			return context.Canceled
+		}
+		select {
+		case err := <-errCh:
+			return fmt.Errorf("command failed: %w: %v", cmdErr, err)
+		default:
+			return fmt.Errorf("command failed: %w", cmdErr)
+		}
+	}
+
+	// Send completion update
 	if onProgress != nil {
 		onProgress(ParsePrdProgressState{
 			Progress: 1.0,
 			Label:    "Complete",
 		})
 	}
-	return nil
+
+	// Reload tasks after parsing
+	reloadCtx := context.WithValue(context.Background(), "force", true)
+	return s.LoadTasks(reloadCtx)
 }
 
 // ExpandTaskWithProgress expands a task with subtasks based on AI analysis and progress reporting
@@ -769,6 +863,112 @@ func parseExpandProgress(line string) ExpandProgressState {
 	// Default: pass through recognized informational messages
 	state.Stage = "Processing"
 	state.Progress = 0.5
+	return state
+}
+
+// parseParsePrdProgress parses progress information from parse-prd CLI output
+func parseParsePrdProgress(line string) ParsePrdProgressState {
+	state := ParsePrdProgressState{}
+
+	line = strings.TrimSpace(line)
+	
+	// Filter out empty lines
+	if line == "" {
+		return state
+	}
+	
+	// Filter out Node.js warnings and deprecation notices
+	if strings.Contains(line, "DeprecationWarning") ||
+	   strings.Contains(line, "(node:") ||
+	   strings.Contains(line, "Use `node --trace") ||
+	   strings.Contains(line, "punycode") {
+		return state
+	}
+	
+	// Strip [INFO] prefix if present
+	line = strings.TrimPrefix(line, "[INFO] ")
+	line = strings.TrimSpace(line)
+	
+	// Parse "Parsing PRD file:" with path
+	if strings.Contains(line, "Parsing PRD file:") {
+		state.Label = "Reading PRD file..."
+		state.Progress = 0.1
+		return state
+	}
+	
+	// Parse "Reading PRD content"
+	if strings.Contains(line, "Reading PRD content") {
+		state.Label = "Reading PRD content..."
+		state.Progress = 0.2
+		return state
+	}
+	
+	// Parse "Calling AI service" or "Generating"
+	if strings.Contains(line, "Calling AI service") || 
+	   (strings.Contains(line, "Generating") && strings.Contains(line, "task")) {
+		state.Label = "Generating tasks with AI..."
+		state.Progress = 0.4
+		return state
+	}
+	
+	// Parse "New AI service call"
+	if strings.Contains(line, "New AI service call") {
+		state.Label = "Calling AI service..."
+		state.Progress = 0.5
+		return state
+	}
+
+	// Parse "Generated N tasks"
+	if strings.Contains(line, "Generated") && strings.Contains(line, "task") {
+		re := regexp.MustCompile(`Generated (\d+) task`)
+		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+			if count, err := strconv.Atoi(matches[1]); err == nil {
+				state.Label = fmt.Sprintf("Generated %d tasks", count)
+				state.Progress = 0.8
+			}
+		}
+		return state
+	}
+
+	// Parse "Saving" or "Writing" or "Appending"
+	if strings.Contains(line, "Saving") || 
+	   strings.Contains(line, "Writing") ||
+	   strings.Contains(line, "Appending to existing") {
+		state.Label = "Saving tasks..."
+		state.Progress = 0.9
+		return state
+	}
+	
+	// Parse "Successfully generated" or completion messages
+	if strings.Contains(line, "Successfully") || strings.Contains(line, "Complete") {
+		state.Label = "Complete"
+		state.Progress = 1.0
+		return state
+	}
+
+	// Filter out very long lines (likely file paths or stack traces)
+	if len(line) > 150 {
+		return state
+	}
+	
+	// Filter out npm/node installation noise
+	if strings.Contains(line, "npm") ||
+	   strings.Contains(line, "installed") {
+		return state
+	}
+	
+	// Filter out emoji and tag lines
+	if strings.HasPrefix(line, "🏷️") || strings.HasPrefix(line, "✓") {
+		return state
+	}
+
+	// Pass through other informational messages with default progress
+	if len(line) >= 10 {
+		state.Label = line
+		state.Progress = 0.3
+		return state
+	}
+	
 	return state
 }
 

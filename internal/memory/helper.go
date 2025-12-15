@@ -41,19 +41,26 @@ func DefaultHelper() (*Helper, error) {
 		return nil, err
 	}
 	
-	// Create the default path
-	memoryFilePath := filepath.Join(cwd, ".taskmaster", "memory.json")
-	
-	// Ensure the directory exists
-	err = os.MkdirAll(filepath.Dir(memoryFilePath), 0755)
+	// Try BadgerDB first (primary backend)
+	var store Memory
+	badgerPath := filepath.Join(cwd, DefaultDBPath)
+	badgerStore, err := NewBadgerMemory(badgerPath)
 	if err != nil {
-		return nil, err
-	}
-	
-	// Create a new in-memory store with file persistence
-	store, err := NewInMemoryStorage(memoryFilePath)
-	if err != nil {
-		return nil, err
+		// Fallback to InMemoryStorage on error
+		memoryFilePath := filepath.Join(cwd, ".taskmaster", "memory.json")
+		
+		// Ensure the directory exists
+		err = os.MkdirAll(filepath.Dir(memoryFilePath), 0755)
+		if err != nil {
+			return nil, err
+		}
+		
+		store, err = NewInMemoryStorage(memoryFilePath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		store = badgerStore
 	}
 	
 	return NewHelper(store), nil
