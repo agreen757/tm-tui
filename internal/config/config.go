@@ -82,6 +82,17 @@ func Load() (*Config, error) {
 	cfg.StatePath = filepath.Join(tmDir, ".taskmaster", "tui-state.json")
 	cfg.ProjectRegistryPath = filepath.Join(tmDir, ".taskmaster", "projects.json")
 
+	// Read the active tag from .taskmaster/state.json
+	stateFilePath := filepath.Join(tmDir, ".taskmaster", "state.json")
+	if stateData, err := os.ReadFile(stateFilePath); err == nil {
+		var state struct {
+			CurrentTag string `json:"currentTag"`
+		}
+		if err := json.Unmarshal(stateData, &state); err == nil && state.CurrentTag != "" {
+			cfg.ActiveTag = state.CurrentTag
+		}
+	}
+
 	// Load default.json if it exists
 	configPath := filepath.Join("configs", "default.json")
 	if _, err := os.Stat(configPath); err == nil {
