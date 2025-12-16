@@ -44,6 +44,16 @@ type ErrorMsg struct {
 	Err error
 }
 
+// TickMsg is sent periodically to update the UI (e.g., for elapsed time in task runner)
+type TickMsg struct{}
+
+// TickCmd returns a command that sends a tick message every second
+func TickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return TickMsg{}
+	})
+}
+
 // WaitForTasksReload returns a command that waits for tasks to be reloaded
 // and sends a TasksReloadedMsg when that happens
 func WaitForTasksReload(service TaskService) tea.Cmd {

@@ -1993,6 +1993,8 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+		// Start ticker for UI updates (elapsed time, etc.)
+		cmds = append(cmds, TickCmd())
 		return m, tea.Batch(cmds...)
 
 	case dialog.CrushExecutionSub:
@@ -2089,6 +2091,14 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addLogLine(fmt.Sprintf("Task %s cancelled", msg.TaskID))
 		return m, tea.Batch(cmds...)
 
+	case TickMsg:
+		// Handle periodic UI updates (for elapsed time, etc.)
+		// Continue ticking only if there are running tasks
+		if m.taskRunner != nil && m.taskRunner.HasRunningTasks() {
+			return m, TickCmd()
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		// Handle help overlay mode first - takes priority
 		if m.showHelp {
@@ -2161,8 +2171,12 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
-			// Modal handled the key, don't pass to main app
-			return m, tea.Batch(cmds...)
+			// Modal handled the key, don't pass to main app UNLESS minimized
+			// When minimized, allow keys to pass through so user can interact with main UI
+			if !m.taskRunner.GetMinimized() {
+				return m, tea.Batch(cmds...)
+			}
+			// If minimized, fall through to main app key handling
 		}
 
 		// Handle search mode separately
