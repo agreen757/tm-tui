@@ -792,6 +792,9 @@ func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, m
 		return nil
 	}
 
+	// Log the generated prompt for debugging
+	m.addLogLine(fmt.Sprintf("Generated prompt (first 200 chars): %s...", truncateString(prompt, 200)))
+
 	// Ensure task runner modal exists and is visible
 	if m.taskRunner == nil {
 		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
@@ -2849,4 +2852,12 @@ func (m *Model) showComplexityCompletionMessage(msg ComplexityAnalysisCompletedM
 	}
 	pd.SetProgress(1.0)
 	pd.SetLabel(label)
+}
+
+// truncateString truncates a string to the given length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
 }
