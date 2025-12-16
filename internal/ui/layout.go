@@ -301,6 +301,20 @@ func (m *Model) updateViewportSizes() {
 		m.logViewport.Height = layout.LogHeight - panelPadding
 	}
 
+	// Update task runner modal dimensions
+	if m.taskRunner != nil {
+		// Modal should take up most of the screen but leave some border
+		modalWidth := m.width - 4
+		modalHeight := m.height - 4
+		if modalWidth < 40 {
+			modalWidth = 40
+		}
+		if modalHeight < 10 {
+			modalHeight = 10
+		}
+		m.taskRunner.SetRect(2, 2, modalWidth, modalHeight)
+	}
+
 	// Refresh task list viewport content after resize
 	m.updateTaskListViewport()
 }

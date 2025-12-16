@@ -186,17 +186,27 @@ This integration enables continuous learning and improved decision-making across
 git clone https://github.com/agreen757/tm-tui.git
 cd tm-tui
 
-# Build and install
+# Build and install (includes Crush CLI for task execution)
 make install
 
-# Or just build
+# Or install everything (tm-tui, memory tool, crush)
+make install-all
+
+# Or just build without installing
 make build
+
+# Check if Crush is installed
+make check-crush
 ```
 
 ### Using Go Install
 
 ```bash
+# Install tm-tui
 go install github.com/agreen757/tm-tui/cmd/tm-tui@latest
+
+# Install Crush CLI (required for task execution feature)
+go install github.com/charmbracelet/crush@latest
 ```
 
 ## Usage
@@ -226,6 +236,7 @@ go run ./cmd/tm-tui/main.go
 - `s` - Change task status
 - `Enter` - Select item / toggle expand
 - `Space` - Multi-select task for bulk operations
+- `Ctrl+R` / `Alt+R` - Run task with Crush AI agent
 - `Alt+X` - Expand tasks (opens scope selection dialog)
   - Supports single task, all tasks, task range, or by tag
   - AI-powered expansion with --research flag
@@ -296,6 +307,56 @@ go run ./cmd/tm-tui/main.go
 7. Tasks are automatically reloaded after expansion completes
 
 **Note:** This feature executes `task-master expand` CLI commands. Ensure the Task Master CLI is properly installed and accessible.
+
+### Running Tasks with Crush AI
+
+Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush), an AI-powered terminal assistant, to execute tasks automatically.
+
+#### Prerequisites
+- Crush CLI installed and accessible in PATH (`crush` command available)
+- API keys configured in Crush for your preferred AI provider
+
+#### Running a Task
+1. Navigate to the task you want to execute
+2. Press `Ctrl+R` (or `Alt+R`) to open the model selection dialog
+3. Choose your preferred AI model from the list
+4. The Task Runner modal opens and shows real-time output from Crush
+5. Monitor progress as Crush works through the task
+
+#### Task Runner Modal Controls
+- `Tab` / `Shift+Tab` - Switch between task tabs (when running multiple tasks)
+- `1-9` - Jump directly to tab number
+- `↑/↓` - Scroll output
+- `PgUp/PgDn` - Page scroll
+- `Home/End` - Scroll to top/bottom
+- `M` - Minimize/maximize modal
+- `Ctrl+C` - Cancel running task (with confirmation for long-running tasks)
+- `Esc` - Close modal (only when no tasks are running)
+
+#### Features
+- **Real-time streaming**: See Crush's output as it works
+- **Multi-task support**: Run up to 9 tasks concurrently in separate tabs
+- **Automatic logging**: All output saved to `.taskmaster/logs/crush-run-<task-id>-<timestamp>.log`
+- **Cancellation**: Stop tasks that are stuck or producing incorrect results
+- **Minimizable**: Continue using the TUI while tasks run in the background
+
+#### Task Prompt Generation
+When you run a task, the TUI generates a prompt for Crush that includes:
+- Task ID and title
+- Full task description
+- Implementation details
+- Test strategy
+- Priority level
+- Dependencies (if any)
+
+You can customize the prompt template by creating a `CRUSH_RUN_INSTRUCTIONS.md` file in your project root. The template supports Go text/template syntax with the following variables:
+- `{{.TaskID}}` - Task identifier
+- `{{.Title}}` - Task title
+- `{{.Description}}` - Task description
+- `{{.Details}}` - Implementation details
+- `{{.TestStrategy}}` - Testing approach
+- `{{.Priority}}` - Task priority
+- `{{.Dependencies}}` - Comma-separated dependency IDs
 
 ### Managing Task Tags
 1. Press `Alt+A` to add tags to the selected task

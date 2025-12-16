@@ -50,6 +50,7 @@ type KeyMap struct {
 	ParsePRD           key.Binding
 	ExpandTask         key.Binding
 	DeleteTask         key.Binding
+	RunTask            key.Binding
 	ManageTags         key.Binding
 	TagManagement      key.Binding
 	UseTag             key.Binding
@@ -219,6 +220,10 @@ func DefaultKeyMap() KeyMap {
 		DeleteTask: key.NewBinding(
 			key.WithKeys("alt+d"),
 			key.WithHelp("alt+d", "delete task"),
+		),
+		RunTask: key.NewBinding(
+			key.WithKeys("alt+r", "ctrl+r"),
+			key.WithHelp("alt+r/ctrl+r", "run task with crush"),
 		),
 		ManageTags: key.NewBinding(
 			key.WithKeys("ctrl+shift+a"),
@@ -398,6 +403,13 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		)
 	}
 
+	if runTaskKey := getKey("runTask", "alt+r"); runTaskKey != "" {
+		km.RunTask = key.NewBinding(
+			key.WithKeys(runTaskKey, "ctrl+r"),
+			key.WithHelp(runTaskKey+"/ctrl+r", "run task with crush"),
+		)
+	}
+
 	if manageKey := getKey("manageTags", "ctrl+shift+a"); manageKey != "" {
 		km.ManageTags = key.NewBinding(
 			key.WithKeys(manageKey),
@@ -460,7 +472,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.ToggleDetails, k.ToggleLog},
 		{k.Help, k.Quit, k.Cancel, k.ClearState},
 		{k.AnalyzeComplexity},
-		{k.CommandPalette, k.ParsePRD, k.ExpandTask, k.DeleteTask},
+		{k.CommandPalette, k.ParsePRD, k.ExpandTask, k.DeleteTask, k.RunTask},
 		{k.ManageTags, k.TagManagement, k.UseTag},
 		{k.ProjectTags, k.ProjectQuickSwitch, k.ProjectSearch},
 	}

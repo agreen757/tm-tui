@@ -143,6 +143,17 @@ type Model struct {
 	// Confirmation mode state
 	confirmingClearState bool
 
+	// Task Runner Modal
+	taskRunner        *dialog.TaskRunnerModal
+	taskRunnerVisible bool
+
+	// Crush run context (for tracking model selection -> crush execution flow)
+	crushRunPending   bool
+	crushRunTaskID    string
+	crushRunTaskTitle string
+	crushRunTask      *taskmaster.Task
+	crushRunChannels  map[string]chan tea.Msg // taskID -> output channel for active runs
+
 	// Styles
 	styles *Styles
 
@@ -199,36 +210,42 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	keyMap := NewKeyMap(cfg)
 	appState := NewAppState(dialogManager, &keyMap)
 
+	// Initialize TaskRunnerModal (size will be set on first WindowSizeMsg)
+	taskRunner := dialog.NewTaskRunnerModal(0, 0, dialogStyle)
+
 	m := Model{
-		config:           cfg,
-		configManager:    configManager,
-		taskService:      taskService,
-		execService:      execService,
-		tasks:            tasks,
-		taskIndex:        make(map[string]*taskmaster.Task),
-		visibleTasks:     []*taskmaster.Task{},
-		selectedIndex:    0,
-		ready:            false,
-		viewMode:         ViewModeTree,
-		focusedPanel:     PanelTaskList,
-		expandedNodes:    make(map[string]bool),
-		selectedIDs:      make(map[string]bool),
-		taskListViewport: taskListVP,
-		detailsViewport:  detailsVP,
-		logViewport:      logVP,
-		helpModel:        help.New(),
-		keyMap:           keyMap,
-		appState:         appState,
-		showDetailsPanel: true,
-		showLogPanel:     false,
-		showHelp:         false,
-		commandMode:      false,
-		commandInput:     "",
-		searchInput:      searchInput,
-		styles:           NewStyles(),
-		logLines:         []string{},
-		projectRegistry:  taskService.ProjectRegistry(),
-		activeProject:    taskService.ActiveProjectMetadata(),
+		config:            cfg,
+		configManager:     configManager,
+		taskService:       taskService,
+		execService:       execService,
+		tasks:             tasks,
+		taskIndex:         make(map[string]*taskmaster.Task),
+		visibleTasks:      []*taskmaster.Task{},
+		selectedIndex:     0,
+		ready:             false,
+		viewMode:          ViewModeTree,
+		focusedPanel:      PanelTaskList,
+		expandedNodes:     make(map[string]bool),
+		selectedIDs:       make(map[string]bool),
+		taskListViewport:  taskListVP,
+		detailsViewport:   detailsVP,
+		logViewport:       logVP,
+		helpModel:         help.New(),
+		keyMap:            keyMap,
+		appState:          appState,
+		taskRunner:        taskRunner,
+		taskRunnerVisible: false,
+		crushRunChannels:  make(map[string]chan tea.Msg), // Initialize crush run channels map
+		showDetailsPanel:  true,
+		showLogPanel:      false,
+		showHelp:          false,
+		commandMode:       false,
+		commandInput:      "",
+		searchInput:       searchInput,
+		styles:            NewStyles(),
+		logLines:          []string{},
+		projectRegistry:   taskService.ProjectRegistry(),
+		activeProject:     taskService.ActiveProjectMetadata(),
 	}
 
 	m.commands = defaultCommandSpecs()
@@ -264,6 +281,7 @@ func (m *Model) registerDefaultCommandShortcuts() {
 		{binding: m.keyMap.AnalyzeComplexity, command: CommandAnalyzeComplexity, help: "Analyze Complexity"},
 		{binding: m.keyMap.ExpandTask, command: CommandExpandTask, help: "Expand Task"},
 		{binding: m.keyMap.DeleteTask, command: CommandDeleteTask, help: "Delete Task"},
+		{binding: m.keyMap.RunTask, command: CommandRunTask, help: "Run Task with Crush"},
 		{binding: m.keyMap.ManageTags, command: CommandManageTags, help: "Add Tag Context"},
 		{binding: m.keyMap.TagManagement, command: CommandTagManagement, help: "Manage Tags"},
 		{binding: m.keyMap.UseTag, command: CommandUseTag, help: "Use Tag"},
@@ -668,6 +686,115 @@ func (m *Model) UpdateProgress(progress float64, label string) tea.Cmd {
 // CloseAllDialogs closes all open dialogs
 func (m *Model) CloseAllDialogs() {
 	m.appState.ClearDialogs()
+}
+
+// ShowModelSelectionDialog opens the model selection dialog
+func (m *Model) ShowModelSelectionDialog() {
+	if m.dialogManager() == nil {
+		return
+	}
+	modelSelectionDialog := dialog.NewModelSelectionDialog()
+	m.appState.PushDialog(modelSelectionDialog)
+}
+
+// handleModelSelection handles model selection from the dialog
+func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
+	// Save the selected model to config
+	if err := config.SaveModelConfig(msg.Provider, msg.ModelName); err != nil {
+		m.addLogLine(fmt.Sprintf("Error saving model config: %v", err))
+		return nil
+	}
+
+	m.addLogLine(fmt.Sprintf("Model set to: %s (%s)", msg.ModelID, msg.Provider))
+
+	// Close the dialog
+	m.appState.PopDialog()
+
+	// Check if this model selection is for a Crush run
+	if m.crushRunPending && m.crushRunTask != nil {
+		// Clear the pending state
+		m.crushRunPending = false
+		taskID := m.crushRunTaskID
+		taskTitle := m.crushRunTaskTitle
+		task := m.crushRunTask
+		
+		// Clear context
+		m.crushRunTaskID = ""
+		m.crushRunTaskTitle = ""
+		m.crushRunTask = nil
+		
+		// Start the Crush run
+		return m.startCrushRun(taskID, taskTitle, task, msg.ModelID)
+	}
+
+	return nil
+}
+
+// openModelSelectionForCrushRun opens the model selection dialog specifically for Crush run
+// The selected model will be used to execute the task via Crush
+func (m *Model) openModelSelectionForCrushRun(taskID, taskTitle string) tea.Cmd {
+	if m.dialogManager() == nil {
+		return nil
+	}
+
+	// Store task context for after model selection
+	m.crushRunPending = true
+	m.crushRunTaskID = taskID
+	m.crushRunTaskTitle = taskTitle
+	
+	// Look up the full task object for use in prompt generation
+	if task, ok := m.taskIndex[taskID]; ok {
+		m.crushRunTask = task
+	}
+
+	modelSelectionDialog := dialog.NewModelSelectionDialog()
+	m.appState.PushDialog(modelSelectionDialog)
+	m.addLogLine(fmt.Sprintf("Select AI model to run task %s: %s", taskID, taskTitle))
+	
+	return nil
+}
+
+// startCrushRun initiates a Crush subprocess execution for the given task
+func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, modelID string) tea.Cmd {
+	// Validate crush binary
+	if err := dialog.ValidateCrushBinary(); err != nil {
+		appErr := NewDependencyError("Crush Run", err.Error(), err).
+			WithRecoveryHints(
+				"Install Crush: go install github.com/crush-ai/crush@latest",
+				"Ensure Crush is in your PATH",
+				"Verify the installation with: crush --version",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Generate the prompt for Crush
+	prompt, err := dialog.GenerateCrushPrompt(task, modelID)
+	if err != nil {
+		appErr := NewOperationError("Crush Run", "Failed to generate prompt", err).
+			WithRecoveryHints(
+				"Check if CRUSH_RUN_INSTRUCTIONS.md is valid",
+				"Verify task details are complete",
+				"Try again",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Ensure task runner modal exists and is visible
+	if m.taskRunner == nil {
+		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
+	}
+	m.taskRunnerVisible = true
+
+	// Send TaskStartedMsg to create a new tab
+	m.addLogLine(fmt.Sprintf("Starting Crush run for task %s with model %s", taskID, modelID))
+	
+	// Return commands: first start the tab, then start execution with prompt
+	return tea.Sequence(
+		dialog.StartCrushExecution(taskID, taskTitle, modelID, prompt, m.taskRunner),
+		dialog.ExecuteCrushSubprocess(taskID, modelID, prompt),
+	)
 }
 
 // renderTaskTree renders the task tree with proper indentation and expand/collapse
@@ -1787,6 +1914,11 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	case dialog.ModelSelectionMsg:
+		if cmd := m.handleModelSelection(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
 	case tagListLoadedMsg:
 		if msg.Err != nil {
 			appErr := NewOperationError("Tag Contexts", "Failed to load tag contexts", msg.Err).
@@ -1833,6 +1965,118 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+		return m, tea.Batch(cmds...)
+
+	// TaskRunnerModal message handlers
+	case dialog.TaskStartedMsg:
+		m.taskRunnerVisible = true
+		if m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog != nil {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
+	case dialog.CrushExecutionSub:
+		// Store the output channel for this task
+		m.crushRunChannels[msg.TaskID] = msg.OutCh
+		// Start listening for messages from this channel
+		cmds = append(cmds, dialog.WaitForCrushMsg(msg.OutCh))
+		return m, tea.Batch(cmds...)
+
+	case dialog.CrushExecutionContextMsg:
+		// Set the cancellation context on the appropriate tab
+		if m.taskRunner != nil {
+			tab := m.taskRunner.GetTabByTaskID(msg.TaskID)
+			if tab != nil {
+				tab.SetCancellationContext(msg.Cmd, msg.CancelFunc)
+			}
+		}
+		// Continue listening for more messages from this task's channel
+		if ch, ok := m.crushRunChannels[msg.TaskID]; ok {
+			cmds = append(cmds, dialog.WaitForCrushMsg(ch))
+		}
+		return m, tea.Batch(cmds...)
+
+	case dialog.TaskOutputMsg:
+		m.addLogLine(fmt.Sprintf("DEBUG: Received TaskOutputMsg for task %s: %s", msg.TaskID, msg.Output))
+		if m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog != nil {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		} else {
+			m.addLogLine("DEBUG: taskRunner is nil!")
+		}
+		// Continue listening for more output from this task's channel
+		if ch, ok := m.crushRunChannels[msg.TaskID]; ok {
+			cmds = append(cmds, dialog.WaitForCrushMsg(ch))
+		} else {
+			m.addLogLine(fmt.Sprintf("DEBUG: No channel found for task %s", msg.TaskID))
+		}
+		return m, tea.Batch(cmds...)
+
+	case dialog.TaskCompletedMsg:
+		if m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog != nil {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			// Hide modal if no tasks are running
+			if !m.taskRunner.HasRunningTasks() {
+				m.taskRunnerVisible = false
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		// Clean up the channel for this task
+		delete(m.crushRunChannels, msg.TaskID)
+		return m, tea.Batch(cmds...)
+
+	case dialog.TaskFailedMsg:
+		if m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog != nil {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			// Hide modal if no tasks are running
+			if !m.taskRunner.HasRunningTasks() {
+				m.taskRunnerVisible = false
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		// Clean up the channel for this task
+		delete(m.crushRunChannels, msg.TaskID)
+		m.addLogLine(fmt.Sprintf("Task %s failed: %s", msg.TaskID, msg.Error))
+		return m, tea.Batch(cmds...)
+
+	case dialog.TaskCancelledMsg:
+		if m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog != nil {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			// Hide modal if no tasks are running
+			if !m.taskRunner.HasRunningTasks() {
+				m.taskRunnerVisible = false
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		// Clean up the channel for this task
+		delete(m.crushRunChannels, msg.TaskID)
+		m.addLogLine(fmt.Sprintf("Task %s cancelled", msg.TaskID))
 		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
@@ -1894,6 +2138,23 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle task runner modal keyboard input when visible
+		if m.taskRunnerVisible && m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog != nil {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			// Check if modal should be closed (returns nil when closed)
+			if updatedDialog == nil {
+				m.taskRunnerVisible = false
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			// Modal handled the key, don't pass to main app
+			return m, tea.Batch(cmds...)
+		}
+
 		// Handle search mode separately
 		if m.searchMode {
 			var cmd tea.Cmd
@@ -1933,6 +2194,9 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Check if we have any active dialogs - let dialogue manager handle messages first
 		if m.appState != nil && m.appState.HasActiveDialog() {
+			// Log that dialog is active and blocking shortcuts
+			m.addLogLine("DEBUG: Active dialog is blocking key events")
+			
 			// Let dialog manager handle the message
 			cmd := m.appState.HandleDialogMsg(incomingMsg)
 			if cmd != nil {
@@ -2316,7 +2580,17 @@ func (m Model) View() string {
 	// 4. Status bar with help
 	sections = append(sections, m.renderStatusBar())
 
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	// Join all sections
+	baseContent := lipgloss.JoinVertical(lipgloss.Left, sections...)
+
+	// 5. TaskRunnerModal overlay (if visible)
+	if m.taskRunnerVisible && m.taskRunner != nil {
+		modalContent := m.taskRunner.View()
+		// Overlay the modal on top of the base content
+		return baseContent + "\n" + modalContent
+	}
+
+	return baseContent
 }
 
 // renderNoTaskmaster displays a message when .taskmaster is not found

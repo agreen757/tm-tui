@@ -40,6 +40,8 @@ func (m *Model) dispatchCommand(id CommandID) tea.Cmd {
 		return m.handleExpandTaskCommand()
 	case CommandDeleteTask:
 		m.handleDeleteTaskCommand()
+	case CommandRunTask:
+		return m.handleRunTaskCommand()
 	case CommandManageTags:
 		m.openAddTagDialog()
 	case CommandTagManagement:
@@ -72,6 +74,33 @@ func (m *Model) handleExpandTaskCommand() tea.Cmd {
 	// Show scope dialog (new approach)
 	m.showExpansionScopeDialog()
 	return nil
+}
+
+func (m *Model) handleRunTaskCommand() tea.Cmd {
+	// Log that the command was triggered
+	m.addLogLine("Alt+R pressed - Run Task with Crush")
+	
+	// Check if a task is selected
+	if m.selectedTask == nil {
+		m.addLogLine("ERROR: No task selected")
+		appErr := NewValidationError("Run Task", "No task selected. Please select a task to run with Crush.", nil).
+			WithRecoveryHints(
+				"Use arrow keys to navigate and select a task",
+				"Press Alt+R again after selecting a task",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Store the task ID for later use after model selection
+	taskID := m.selectedTask.ID
+	taskTitle := m.selectedTask.Title
+	
+	m.addLogLine(fmt.Sprintf("Opening model selection for task %s: %s", taskID, taskTitle))
+
+	// Open model selection dialog
+	// When model is selected, it will trigger the Crush run via the model selection callback
+	return m.openModelSelectionForCrushRun(taskID, taskTitle)
 }
 
 // DEPRECATED: Replaced by ExpansionScopeDialog
