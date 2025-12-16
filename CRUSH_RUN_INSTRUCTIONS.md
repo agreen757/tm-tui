@@ -1,8 +1,25 @@
-# Crush Run Instructions
+# Task Execution: {{.TaskID}} - {{.Title}}
+
+## Task Details
+
+**Task ID**: {{.TaskID}}
+**Priority**: {{.Priority}}
+{{if .Dependencies}}**Dependencies**: {{.Dependencies}}{{end}}
+
+### Description
+{{.Description}}
+
+### Implementation Details
+{{.Details}}
+
+### Test Strategy
+{{.TestStrategy}}
+
+---
 
 ## Logging Requirements
 
-When executing tasks through Crush, please adhere to the following logging requirements:
+When executing this task through Crush, please adhere to the following logging requirements:
 
 1. **Log File Location**: Write all logs to `.taskmaster/<tag-name>/<task-or-subtask-number>.log`
    - Create the directory structure if it doesn't exist
