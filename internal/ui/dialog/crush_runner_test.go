@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adriangreen/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 )
 
 func TestValidateCrushBinary(t *testing.T) {

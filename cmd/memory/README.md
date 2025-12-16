@@ -9,7 +9,7 @@ This command-line tool provides a simple interface for LLM agents to store and r
 go build -o $GOPATH/bin/memory cmd/memory/main.go
 
 # Or install directly
-go install github.com/adriangreen/tm-tui/cmd/memory@latest
+go install github.com/agreen757/tm-tui/cmd/memory@latest
 ```
 
 ## Usage

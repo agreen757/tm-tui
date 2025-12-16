@@ -343,6 +343,17 @@ func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
 	if projectItem, ok := msg.SelectedItem.(*projectListItem); ok {
 		return m.handleProjectListItemSelection(projectItem)
 	}
+	// Handle model selection from ModelSelectionDialog
+	if modelItem, ok := msg.SelectedItem.(*dialog.ModelSelectionListItem); ok {
+		opt := modelItem.GetOption()
+		return func() tea.Msg {
+			return dialog.ModelSelectionMsg{
+				Provider:  opt.Provider,
+				ModelName: opt.ModelID,
+				ModelID:   opt.ModelID,
+			}
+		}
+	}
 	if msg.SelectedItem != nil {
 		m.addLogLine(fmt.Sprintf("Selected item: %s", msg.SelectedItem.Title()))
 	}
@@ -693,7 +704,7 @@ func (m *Model) ShowModelSelectionDialog() {
 	if m.dialogManager() == nil {
 		return
 	}
-	modelSelectionDialog := dialog.NewModelSelectionDialog()
+	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
 	m.appState.PushDialog(modelSelectionDialog)
 }
 
@@ -747,7 +758,7 @@ func (m *Model) openModelSelectionForCrushRun(taskID, taskTitle string) tea.Cmd 
 		m.crushRunTask = task
 	}
 
-	modelSelectionDialog := dialog.NewModelSelectionDialog()
+	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
 	m.appState.PushDialog(modelSelectionDialog)
 	m.addLogLine(fmt.Sprintf("Select AI model to run task %s: %s", taskID, taskTitle))
 	

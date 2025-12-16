@@ -26,6 +26,13 @@ type ModelSelectionResult struct {
 	ModelID  string // "claude-3-5-sonnet-20241022"
 }
 
+// ModelSelectionMsg is sent when a model is selected from the dialog
+type ModelSelectionMsg struct {
+	Provider  string
+	ModelName string
+	ModelID   string
+}
+
 // ModelSelectionListItem wraps ModelOption to implement ListItem interface
 type ModelSelectionListItem struct {
 	option ModelOption
@@ -263,6 +270,12 @@ func (d *ModelSelectionDialog) WriteSelectionToConfig() error {
 	}
 
 	return nil
+}
+
+// NewModelSelectionDialogSimple creates a model selection dialog with default settings
+// This is a convenience constructor for callers that don't need custom dimensions
+func NewModelSelectionDialogSimple() *ModelSelectionDialog {
+	return NewModelSelectionDialog(60, 20, "")
 }
 
 
