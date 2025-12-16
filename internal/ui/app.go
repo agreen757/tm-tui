@@ -2003,7 +2003,7 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case dialog.TaskOutputMsg:
-		m.addLogLine(fmt.Sprintf("DEBUG: Received TaskOutputMsg for task %s: %s", msg.TaskID, msg.Output))
+		m.addLogLine(fmt.Sprintf("[Task %s] %s", msg.TaskID, msg.Output))
 		if m.taskRunner != nil {
 			updatedDialog, cmd := m.taskRunner.Update(msg)
 			if updatedDialog != nil {
@@ -2012,14 +2012,10 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
-		} else {
-			m.addLogLine("DEBUG: taskRunner is nil!")
 		}
 		// Continue listening for more output from this task's channel
 		if ch, ok := m.crushRunChannels[msg.TaskID]; ok {
 			cmds = append(cmds, dialog.WaitForCrushMsg(ch))
-		} else {
-			m.addLogLine(fmt.Sprintf("DEBUG: No channel found for task %s", msg.TaskID))
 		}
 		return m, tea.Batch(cmds...)
 
