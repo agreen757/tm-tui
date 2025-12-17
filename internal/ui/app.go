@@ -428,17 +428,19 @@ func (m *Model) useProjectTag(tag string) tea.Cmd {
 // buildTaskIndex creates a flat index of all tasks by ID for quick lookup
 func (m *Model) buildTaskIndex() {
 	m.taskIndex = make(map[string]*taskmaster.Task)
-	var indexTasks func(tasks []taskmaster.Task)
-	indexTasks = func(tasks []taskmaster.Task) {
-		for i := range tasks {
-			task := &tasks[i]
-			m.taskIndex[task.ID] = task
-			if len(task.Subtasks) > 0 {
-				indexTasks(task.Subtasks)
-			}
+	
+	// Use stable pointer recursion to avoid creating pointers to temporary slice elements
+	var indexTask func(task *taskmaster.Task)
+	indexTask = func(task *taskmaster.Task) {
+		m.taskIndex[task.ID] = task
+		for i := range task.Subtasks {
+			indexTask(&task.Subtasks[i])
 		}
 	}
-	indexTasks(m.tasks)
+	
+	for i := range m.tasks {
+		indexTask(&m.tasks[i])
+	}
 }
 
 // rebuildVisibleTasks rebuilds the visibleTasks slice based on view mode and expanded state
@@ -889,10 +891,12 @@ func (m Model) flattenTasks() []*taskmaster.Task {
 	var flatten func(tasks []taskmaster.Task)
 	flatten = func(tasks []taskmaster.Task) {
 		for i := range tasks {
-			task := &tasks[i]
-			result = append(result, task)
-			if len(task.Subtasks) > 0 && m.expandedNodes[task.ID] {
-				flatten(task.Subtasks)
+			// Use task index to get stable pointer instead of creating pointer to slice element
+			if task, ok := m.taskIndex[tasks[i].ID]; ok {
+				result = append(result, task)
+				if len(task.Subtasks) > 0 && m.expandedNodes[task.ID] {
+					flatten(task.Subtasks)
+				}
 			}
 		}
 	}
@@ -912,7 +916,13 @@ func (m *Model) selectNext() {
 	}
 
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.visibleTasks) {
-		m.selectedTask = m.visibleTasks[m.selectedIndex]
+		// Ensure we're using the stable pointer from the index
+		taskID := m.visibleTasks[m.selectedIndex].ID
+		if task, ok := m.taskIndex[taskID]; ok {
+			m.selectedTask = task
+		} else {
+			m.selectedTask = m.visibleTasks[m.selectedIndex]
+		}
 	}
 }
 
@@ -928,7 +938,13 @@ func (m *Model) selectPrevious() {
 	}
 
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.visibleTasks) {
-		m.selectedTask = m.visibleTasks[m.selectedIndex]
+		// Ensure we're using the stable pointer from the index
+		taskID := m.visibleTasks[m.selectedIndex].ID
+		if task, ok := m.taskIndex[taskID]; ok {
+			m.selectedTask = task
+		} else {
+			m.selectedTask = m.visibleTasks[m.selectedIndex]
+		}
 	}
 }
 
@@ -1258,6 +1274,10 @@ func (m Model) renderTaskDetails() string {
 	}
 
 	task := m.selectedTask
+	// Re-fetch from index to ensure we have the latest stable pointer
+	if freshTask, ok := m.taskIndex[task.ID]; ok {
+		task = freshTask
+	}
 	var b strings.Builder
 
 	// Title
@@ -1480,10 +1500,12 @@ func (m Model) flattenAllTasks() []*taskmaster.Task {
 	var flatten func(tasks []taskmaster.Task)
 	flatten = func(tasks []taskmaster.Task) {
 		for i := range tasks {
-			task := &tasks[i]
-			result = append(result, task)
-			if len(task.Subtasks) > 0 {
-				flatten(task.Subtasks)
+			// Use task index to get stable pointer instead of creating pointer to slice element
+			if task, ok := m.taskIndex[tasks[i].ID]; ok {
+				result = append(result, task)
+				if len(task.Subtasks) > 0 {
+					flatten(task.Subtasks)
+				}
 			}
 		}
 	}
