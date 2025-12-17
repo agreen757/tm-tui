@@ -753,20 +753,16 @@ func (m *Model) openModelSelectionForCrushRun(taskID, taskTitle string) tea.Cmd 
 	m.crushRunTaskID = taskID
 	m.crushRunTaskTitle = taskTitle
 	
-	// Fetch the latest task details from task-master CLI
-	// This ensures we have the most up-to-date information
-	task, err := m.taskService.GetTaskFromCLI(taskID)
-	if err != nil {
-		m.addLogLine(fmt.Sprintf("Warning: Failed to fetch task from CLI, using cached version: %v", err))
-		// Fallback to in-memory task if CLI fetch fails
-		if cachedTask, ok := m.taskIndex[taskID]; ok {
-			m.crushRunTask = cachedTask
-		}
+	// Use the in-memory task from the task index
+	// This ensures we use the exact task that was selected in the UI
+	if cachedTask, ok := m.taskIndex[taskID]; ok {
+		m.crushRunTask = cachedTask
+		m.addLogLine(fmt.Sprintf("Using task from index for task %s: %s", taskID, taskTitle))
+		// Debug: Log the actual task data we're using
+		m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", cachedTask.ID, cachedTask.Title, cachedTask.Dependencies))
 	} else {
-		m.crushRunTask = task
-		m.addLogLine(fmt.Sprintf("Fetched latest task details from task-master CLI for task %s", taskID))
-		// Debug: Log the actual task data we got
-		m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", task.ID, task.Title, task.Dependencies))
+		m.addLogLine(fmt.Sprintf("Warning: Task %s not found in index", taskID))
+		m.crushRunTask = nil
 	}
 
 	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
