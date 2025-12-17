@@ -112,29 +112,47 @@ func (s *Service) GetTaskDetails(taskID string) (string, error) {
 	return b.String(), nil
 }
 
-// GetTaskFromCLI retrieves task details directly from the task-master CLI
-// This ensures we get the most up-to-date task information from the database
-// It reloads tasks from disk (respecting the active tag) and returns a deep copy
+// GetTaskFromCLI retrieves task details directly by reading tasks.json
+// This ensures we get the correct task for the active tag context
 func (s *Service) GetTaskFromCLI(taskID string) (*Task, error) {
-	// Force reload tasks from disk to ensure we have the latest data
-	// This respects the active tag from config
-	ctx := context.WithValue(context.Background(), "force", true)
-	if err := s.LoadTasks(ctx); err != nil {
-		return nil, fmt.Errorf("failed to reload tasks: %w", err)
+	// Get the active tag from config
+	tag := s.config.ActiveTag
+	if tag == "" {
+		tag = "master"
 	}
 	
-	// Get the task from the freshly loaded index
-	// This returns a pointer to the actual task in the tree structure
-	s.mu.RLock()
-	task, ok := s.TaskIndex[taskID]
-	s.mu.RUnlock()
+	// Read tasks from file for the specific tag
+	tasks, err := LoadTasksFromFile(s.RootDir, tag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tasks from file: %w", err)
+	}
 	
-	if !ok {
+	// Search for the task recursively
+	var findTask func(tasks []Task) *Task
+	findTask = func(tasks []Task) *Task {
+		for i := range tasks {
+			if tasks[i].ID == taskID {
+				// Found it! Create a deep copy to return
+				return copyTask(&tasks[i])
+			}
+			// Check subtasks
+			if result := findTask(tasks[i].Subtasks); result != nil {
+				return result
+			}
+		}
+		return nil
+	}
+	
+	task := findTask(tasks)
+	if task == nil {
 		return nil, fmt.Errorf("task not found: %s", taskID)
 	}
 	
-	// Create a deep copy of the task to avoid mutations
-	// and ensure we have a clean snapshot of dependencies
+	return task, nil
+}
+
+// copyTask creates a deep copy of a task (without subtasks to avoid bloat)
+func copyTask(task *Task) *Task {
 	taskCopy := &Task{
 		ID:             task.ID,
 		Title:          task.Title,
@@ -175,5 +193,5 @@ func (s *Service) GetTaskFromCLI(taskID string) (*Task, error) {
 		copy(taskCopy.Tags, task.Tags)
 	}
 	
-	return taskCopy, nil
+	return taskCopy
 }

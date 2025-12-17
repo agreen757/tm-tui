@@ -765,6 +765,8 @@ func (m *Model) openModelSelectionForCrushRun(taskID, taskTitle string) tea.Cmd 
 	} else {
 		m.crushRunTask = task
 		m.addLogLine(fmt.Sprintf("Fetched latest task details from task-master CLI for task %s", taskID))
+		// Debug: Log the actual task data we got
+		m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", task.ID, task.Title, task.Dependencies))
 	}
 
 	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
