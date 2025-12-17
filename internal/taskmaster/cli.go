@@ -114,24 +114,66 @@ func (s *Service) GetTaskDetails(taskID string) (string, error) {
 
 // GetTaskFromCLI retrieves task details directly from the task-master CLI
 // This ensures we get the most up-to-date task information from the database
+// It reloads tasks from disk (respecting the active tag) and returns a deep copy
 func (s *Service) GetTaskFromCLI(taskID string) (*Task, error) {
-	// Execute task-master show command to verify the task exists
-	_, err := s.ExecuteCommand("show", taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task from CLI: %w", err)
-	}
-	
-	// Reload tasks to get the latest data
+	// Force reload tasks from disk to ensure we have the latest data
+	// This respects the active tag from config
 	ctx := context.WithValue(context.Background(), "force", true)
 	if err := s.LoadTasks(ctx); err != nil {
 		return nil, fmt.Errorf("failed to reload tasks: %w", err)
 	}
 	
 	// Get the task from the freshly loaded index
-	task, err := s.GetTask(taskID)
-	if err != nil {
-		return nil, fmt.Errorf("task not found after reload: %w", err)
+	// This returns a pointer to the actual task in the tree structure
+	s.mu.RLock()
+	task, ok := s.TaskIndex[taskID]
+	s.mu.RUnlock()
+	
+	if !ok {
+		return nil, fmt.Errorf("task not found: %s", taskID)
 	}
 	
-	return task, nil
+	// Create a deep copy of the task to avoid mutations
+	// and ensure we have a clean snapshot of dependencies
+	taskCopy := &Task{
+		ID:             task.ID,
+		Title:          task.Title,
+		Description:    task.Description,
+		Status:         task.Status,
+		Priority:       task.Priority,
+		Dependencies:   make([]string, len(task.Dependencies)),
+		Details:        task.Details,
+		TestStrategy:   task.TestStrategy,
+		Complexity:     task.Complexity,
+		EstimatedHours: task.EstimatedHours,
+		ActualHours:    task.ActualHours,
+		ParentID:       task.ParentID,
+		CreatedAt:      task.CreatedAt,
+		UpdatedAt:      task.UpdatedAt,
+	}
+	
+	// Deep copy dependencies
+	copy(taskCopy.Dependencies, task.Dependencies)
+	
+	// Deep copy metadata if present
+	if task.Metadata != nil {
+		taskCopy.Metadata = make(map[string]string)
+		for k, v := range task.Metadata {
+			taskCopy.Metadata[k] = v
+		}
+	}
+	
+	// Deep copy notes if present
+	if task.Notes != nil {
+		taskCopy.Notes = make([]string, len(task.Notes))
+		copy(taskCopy.Notes, task.Notes)
+	}
+	
+	// Deep copy tags if present
+	if task.Tags != nil {
+		taskCopy.Tags = make([]string, len(task.Tags))
+		copy(taskCopy.Tags, task.Tags)
+	}
+	
+	return taskCopy, nil
 }

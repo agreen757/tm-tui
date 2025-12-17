@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -109,7 +110,7 @@ func GenerateCrushPrompt(task *taskmaster.Task, model string) (string, error) {
 	// Prepare context data
 	depsStr := ""
 	if len(task.Dependencies) > 0 {
-		depsStr = fmt.Sprintf("%v", task.Dependencies)
+		depsStr = strings.Join(task.Dependencies, ", ")
 	}
 
 	context := CrushPromptContext{
