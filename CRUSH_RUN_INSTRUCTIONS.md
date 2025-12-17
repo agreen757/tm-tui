@@ -1,13 +1,18 @@
 # Task Execution: {{.TaskID}} - {{.Title}}
 
+## Task Type Detection
+
+**Task ID Format**: `{{.TaskID}}`
+- **Parent Task**: Numeric ID only (e.g., `1`, `2`, `3`) - Has subtasks to complete
+- **Subtask**: Dotted notation (e.g., `1.1`, `1.2`, `2.3.1`) - Direct implementation task
+
 ## Task Master Integration
 
 **IMPORTANT**: Before starting work, retrieve full task details from Task Master:
 
 1. **Get Task Details**: Run `task-master show {{.TaskID}}` to get complete task information
-2. **Review Subtasks**: Examine all subtasks and their current status
-3. **Check Dependencies**: Verify all dependencies are completed before starting
-4. **Update Status**: Mark task as in-progress: `task-master set-status --id={{.TaskID}} --status=in-progress`
+2. **Check Dependencies**: Verify all dependencies are completed before starting
+3. **Update Status**: Mark task as in-progress: `task-master set-status --id={{.TaskID}} --status=in-progress`
 
 ## Task Details
 
@@ -29,11 +34,55 @@
 
 ---
 
-## Systematic Subtask Completion Workflow
+## Execution Strategy
 
-When this task has subtasks, follow this systematic approach:
+### If This is a Subtask (ID contains dots: X.Y or X.Y.Z):
 
-### For Each Subtask (in consecutive order):
+**This is a direct implementation task. Proceed immediately with implementation:**
+
+1. **Start Implementation**
+   - Mark as in-progress: `task-master set-status --id={{.TaskID}} --status=in-progress`
+   - Create log file: `.taskmaster/<tag-name>/{{.TaskID}}.log`
+   - Follow the implementation details and test strategy provided above
+
+2. **Implement the Subtask**
+   - Write code according to the specifications above
+   - Adhere to the test strategy
+   - Document your work in the log file as you progress
+
+3. **Log Progress**
+   - Update Task Master with detailed implementation notes:
+     ```bash
+     task-master update-subtask --id={{.TaskID}} --prompt="Implementation completed:
+     - [Specific features/functions implemented]
+     - [Files modified and why]
+     - [Any challenges encountered and solutions]
+     - [Test results and coverage]
+     - [Integration points with other tasks]"
+     ```
+
+4. **Complete Subtask**
+   - Verify all requirements met
+   - Ensure tests pass according to test strategy
+   - Update task-master with completion notes:
+     ```bash
+     task-master update-subtask --id={{.TaskID}} --prompt="Subtask completion summary:
+     - [What was implemented]
+     - [Test results]
+     - [Any notes for future reference]"
+     ```
+   - Mark as done: `task-master set-status --id={{.TaskID}} --status=done`
+   - Finalize log file with summary
+
+### If This is a Parent Task (ID is numeric only: X):
+
+**This task has subtasks. Follow the systematic subtask completion workflow:**
+
+**Note**: DO NOT implement parent tasks directly. They are organizational containers. Work through subtasks sequentially.
+
+1. **Review Subtasks**: Run `task-master show {{.TaskID}}` to see all subtasks and their current status
+
+#### For Each Subtask (in consecutive order):
 
 1. **Retrieve Subtask Details**
 
@@ -90,7 +139,7 @@ When this task has subtasks, follow this systematic approach:
    - **Do NOT skip subtasks or work on them out of order**
    - **Always retrieve fresh details for each subtask before starting**
 
-### After All Subtasks Complete:
+#### After All Subtasks Complete:
 
 1. **Review All Subtask Logs**
 
