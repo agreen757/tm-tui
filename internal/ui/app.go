@@ -753,9 +753,18 @@ func (m *Model) openModelSelectionForCrushRun(taskID, taskTitle string) tea.Cmd 
 	m.crushRunTaskID = taskID
 	m.crushRunTaskTitle = taskTitle
 	
-	// Look up the full task object for use in prompt generation
-	if task, ok := m.taskIndex[taskID]; ok {
+	// Fetch the latest task details from task-master CLI
+	// This ensures we have the most up-to-date information
+	task, err := m.taskService.GetTaskFromCLI(taskID)
+	if err != nil {
+		m.addLogLine(fmt.Sprintf("Warning: Failed to fetch task from CLI, using cached version: %v", err))
+		// Fallback to in-memory task if CLI fetch fails
+		if cachedTask, ok := m.taskIndex[taskID]; ok {
+			m.crushRunTask = cachedTask
+		}
+	} else {
 		m.crushRunTask = task
+		m.addLogLine(fmt.Sprintf("Fetched latest task details from task-master CLI for task %s", taskID))
 	}
 
 	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()

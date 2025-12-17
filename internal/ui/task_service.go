@@ -10,6 +10,7 @@ import (
 // TaskService defines the subset of taskmaster.Service behavior required by the UI.
 type TaskService interface {
 	GetTasks() ([]taskmaster.Task, []string)
+	GetTaskFromCLI(taskID string) (*taskmaster.Task, error)
 	LoadTasks(ctx context.Context) error
 	ReloadEvents() <-chan struct{}
 	AnalyzeComplexity(ctx context.Context, scope string, taskID string, tags []string) (*taskmaster.ComplexityReport, error)

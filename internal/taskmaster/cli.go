@@ -111,3 +111,27 @@ func (s *Service) GetTaskDetails(taskID string) (string, error) {
 
 	return b.String(), nil
 }
+
+// GetTaskFromCLI retrieves task details directly from the task-master CLI
+// This ensures we get the most up-to-date task information from the database
+func (s *Service) GetTaskFromCLI(taskID string) (*Task, error) {
+	// Execute task-master show command to verify the task exists
+	_, err := s.ExecuteCommand("show", taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task from CLI: %w", err)
+	}
+	
+	// Reload tasks to get the latest data
+	ctx := context.WithValue(context.Background(), "force", true)
+	if err := s.LoadTasks(ctx); err != nil {
+		return nil, fmt.Errorf("failed to reload tasks: %w", err)
+	}
+	
+	// Get the task from the freshly loaded index
+	task, err := s.GetTask(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("task not found after reload: %w", err)
+	}
+	
+	return task, nil
+}
