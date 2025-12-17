@@ -92,7 +92,34 @@ func parseTasksData(tasksData interface{}) ([]Task, error) {
 	if err := json.Unmarshal(tasksJSON, &tasks); err != nil {
 		return nil, fmt.Errorf("failed to parse tasks array: %w", err)
 	}
+	
+	// Normalize subtask IDs to use proper dotted notation
+	normalizeSubtaskIDs(tasks)
+	
 	return tasks, nil
+}
+
+// normalizeSubtaskIDs fixes subtask IDs to follow proper dotted notation
+// Parent tasks keep their numeric IDs (1, 2, 3), but subtasks get
+// proper dotted IDs (1.1, 1.2, 2.1.1, etc.) based on their position
+func normalizeSubtaskIDs(tasks []Task) {
+	for i := range tasks {
+		fixSubtaskIDs(&tasks[i])
+	}
+}
+
+// fixSubtaskIDs recursively fixes subtask IDs for a task and all its descendants
+func fixSubtaskIDs(task *Task) {
+	for i := range task.Subtasks {
+		subtask := &task.Subtasks[i]
+		// Generate proper ID: parentID.childIndex
+		expectedID := fmt.Sprintf("%s.%d", task.ID, i+1)
+		if subtask.ID != expectedID {
+			subtask.ID = expectedID
+		}
+		// Recursively fix subtask's subtasks
+		fixSubtaskIDs(subtask)
+	}
 }
 
 // convertIDToString handles both int and string IDs from JSON
