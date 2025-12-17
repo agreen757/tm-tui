@@ -23,6 +23,37 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
+## Recent Improvements (v0.1.10)
+
+### Critical Bug Fixes
+
+**Task Selection & Display Stability** - Fixed a critical bug where selecting tasks in the tree view would display incorrect task details. For example, selecting Task 5 would show Task 10's information in the details panel.
+
+**Root Cause:** 
+- Subtasks in `tasks.json` had numeric IDs (1, 2, 3) instead of proper dotted notation ("1.1", "1.2", "1.3")
+- This caused ID collisions in the internal task index where subtask ID "1" would overwrite parent task "1"
+- Additionally, pointer instability in recursive task traversal created references to temporary memory
+
+**Solution Implemented:**
+- **Automatic ID Normalization**: Added `normalizeSubtaskIDs()` function that automatically fixes all subtask IDs during task loading
+  - Parent task "1" now correctly has subtasks "1.1", "1.2", "1.3"
+  - Nested subtasks properly cascade: "1.1" gets subtasks "1.1.1", "1.1.2", etc.
+  - Eliminates all ID collisions in the task index
+- **Pointer Stability**: Refactored all task indexing and flattening functions to use stable pointers
+  - `buildTaskIndex()` now uses stable pointer recursion
+  - `flattenTasks()` and `flattenAllTasks()` use task index lookups
+  - All selection paths (`selectNext`, `selectPrevious`, `ensureTaskSelected`) consistently use stable pointers
+  - Added defensive re-fetching in `renderTaskDetails()` to guarantee correctness
+
+**Benefits:**
+- Task details panel now always shows the correct task information
+- Tasks with subtasks (Tasks 1-5) are now properly expandable in the tree view
+- No more confusion between parent tasks and their subtasks
+- Robust against future task file format variations
+- Improved performance with O(1) task lookups
+
+These fixes ensure a reliable and predictable user experience when navigating complex task hierarchies.
+
 ## Memory System
 
 Task Master TUI includes a persistent memory system powered by **BadgerDB** for AI agents and LLMs. This enables cross-session learning, context preservation, and implementation artifact storage with high-performance key-value operations.
