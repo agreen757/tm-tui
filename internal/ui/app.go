@@ -267,7 +267,13 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 
 	// If state restoration didn't set a selection, select first task
 	if m.selectedTask == nil && len(m.visibleTasks) > 0 {
-		m.selectedTask = m.visibleTasks[0]
+		// Use task index to get stable pointer
+		taskID := m.visibleTasks[0].ID
+		if task, ok := m.taskIndex[taskID]; ok {
+			m.selectedTask = task
+		} else {
+			m.selectedTask = m.visibleTasks[0]
+		}
 		m.selectedIndex = 0
 	}
 
@@ -466,7 +472,13 @@ func (m *Model) rebuildVisibleTasks() {
 
 	// Update selectedTask based on selectedIndex
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.visibleTasks) {
-		m.selectedTask = m.visibleTasks[m.selectedIndex]
+		// Use task index to get stable pointer
+		taskID := m.visibleTasks[m.selectedIndex].ID
+		if task, ok := m.taskIndex[taskID]; ok {
+			m.selectedTask = task
+		} else {
+			m.selectedTask = m.visibleTasks[m.selectedIndex]
+		}
 	}
 }
 
@@ -606,7 +618,13 @@ func (m *Model) ClearUIState() error {
 
 	// Select first task if available
 	if len(m.visibleTasks) > 0 {
-		m.selectedTask = m.visibleTasks[0]
+		// Use task index to get stable pointer
+		taskID := m.visibleTasks[0].ID
+		if task, ok := m.taskIndex[taskID]; ok {
+			m.selectedTask = task
+		} else {
+			m.selectedTask = m.visibleTasks[0]
+		}
 		m.selectedIndex = 0
 	} else {
 		m.selectedTask = nil
@@ -1062,7 +1080,12 @@ func (m *Model) ensureTaskSelected(taskID string) {
 	for i, task := range m.visibleTasks {
 		if task.ID == taskID {
 			m.selectedIndex = i
-			m.selectedTask = task
+			// Use task index to get stable pointer
+			if stableTask, ok := m.taskIndex[taskID]; ok {
+				m.selectedTask = stableTask
+			} else {
+				m.selectedTask = task
+			}
 			return
 		}
 	}
@@ -1678,8 +1701,13 @@ func (m *Model) updateFilteredTasks() {
 			}
 		}
 		if !found && len(m.visibleTasks) > 0 {
-			// Select first visible task
-			m.selectedTask = m.visibleTasks[0]
+			// Select first visible task using task index
+			taskID := m.visibleTasks[0].ID
+			if task, ok := m.taskIndex[taskID]; ok {
+				m.selectedTask = task
+			} else {
+				m.selectedTask = m.visibleTasks[0]
+			}
 			m.selectedIndex = 0
 			m.updateDetailsViewport()
 		}
