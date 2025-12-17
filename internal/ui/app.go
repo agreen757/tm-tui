@@ -743,31 +743,25 @@ func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
 
 // openModelSelectionForCrushRun opens the model selection dialog specifically for Crush run
 // The selected model will be used to execute the task via Crush
-func (m *Model) openModelSelectionForCrushRun(taskID, taskTitle string) tea.Cmd {
+func (m *Model) openModelSelectionForCrushRun(task *taskmaster.Task) tea.Cmd {
 	if m.dialogManager() == nil {
 		return nil
 	}
 
 	// Store task context for after model selection
+	// Use the exact task object that was selected to ensure consistency
 	m.crushRunPending = true
-	m.crushRunTaskID = taskID
-	m.crushRunTaskTitle = taskTitle
+	m.crushRunTaskID = task.ID
+	m.crushRunTaskTitle = task.Title
+	m.crushRunTask = task
 	
-	// Use the in-memory task from the task index
-	// This ensures we use the exact task that was selected in the UI
-	if cachedTask, ok := m.taskIndex[taskID]; ok {
-		m.crushRunTask = cachedTask
-		m.addLogLine(fmt.Sprintf("Using task from index for task %s: %s", taskID, taskTitle))
-		// Debug: Log the actual task data we're using
-		m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", cachedTask.ID, cachedTask.Title, cachedTask.Dependencies))
-	} else {
-		m.addLogLine(fmt.Sprintf("Warning: Task %s not found in index", taskID))
-		m.crushRunTask = nil
-	}
+	m.addLogLine(fmt.Sprintf("Stored task for Crush run: ID=%s, Title='%s'", task.ID, task.Title))
+	// Debug: Log the actual task data we're using
+	m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", task.ID, task.Title, task.Dependencies))
 
 	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
 	m.appState.PushDialog(modelSelectionDialog)
-	m.addLogLine(fmt.Sprintf("Select AI model to run task %s: %s", taskID, taskTitle))
+	m.addLogLine(fmt.Sprintf("Select AI model to run task %s: %s", task.ID, task.Title))
 	
 	return nil
 }

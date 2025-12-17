@@ -92,15 +92,12 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 		return nil
 	}
 
-	// Store the task ID for later use after model selection
-	taskID := m.selectedTask.ID
-	taskTitle := m.selectedTask.Title
-	
-	m.addLogLine(fmt.Sprintf("Opening model selection for task %s: %s", taskID, taskTitle))
+	// Pass the entire selected task object to ensure consistency
+	m.addLogLine(fmt.Sprintf("Opening model selection for task %s: %s", m.selectedTask.ID, m.selectedTask.Title))
 
 	// Open model selection dialog
 	// When model is selected, it will trigger the Crush run via the model selection callback
-	return m.openModelSelectionForCrushRun(taskID, taskTitle)
+	return m.openModelSelectionForCrushRun(m.selectedTask)
 }
 
 // DEPRECATED: Replaced by ExpansionScopeDialog
