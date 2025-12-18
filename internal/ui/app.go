@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 )
 
 // formatHelpLine formats a help line with consistent alignment between keys and descriptions
@@ -2827,111 +2828,136 @@ func (m Model) renderLogPanel(layout LayoutDimensions) string {
 	return logPanel
 }
 
-// renderHelpOverlay renders a help overlay on top of the main content using bubbles/help
+// renderHelpOverlay renders a help overlay on top of the main content using organized sections
 func (m Model) renderHelpOverlay() string {
-	var sections []string
+	// Define styles
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorHighlight)).
+		Bold(true).
+		Align(lipgloss.Left).
+		Padding(0, 1)
+
+	sectionHeaderStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("220")).
+		Bold(true).
+		Align(lipgloss.Left).
+		Padding(0, 1)
+
+	contentStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255")).
+		Align(lipgloss.Left).
+		Padding(0, 1)
+
+	// Helper to create a section
+	createSection := func(title string, bindings [][]string) string {
+		t := table.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorHighlight))).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == table.HeaderRow {
+					return headerStyle
+				}
+				return contentStyle
+			}).
+			Headers("KEYBINDING").
+			Rows(bindings...)
+
+		section := lipgloss.JoinVertical(lipgloss.Center,
+			sectionHeaderStyle.Render(title),
+			t.Render(),
+		)
+		
+		// Apply consistent width to section (75 chars wide for clean layout)
+		sectionStyle := lipgloss.NewStyle().Width(75).Align(lipgloss.Center)
+		return sectionStyle.Render(section)
+	}
+
+	// Navigation section
+	navBindings := [][]string{
+		{m.renderBinding(m.keyMap.Up) + "  Move up"},
+		{m.renderBinding(m.keyMap.Down) + "  Move down"},
+		{m.renderBinding(m.keyMap.Left) + "  Collapse/Move left"},
+		{m.renderBinding(m.keyMap.Right) + "  Expand/Move right"},
+		{m.renderBinding(m.keyMap.PageUp) + "  Page up"},
+		{m.renderBinding(m.keyMap.PageDown) + "  Page down"},
+	}
+	navSection := createSection("📍 NAVIGATION", navBindings)
+
+	// Task Operations section
+	taskBindings := [][]string{
+		{m.renderBinding(m.keyMap.ToggleExpand) + "  Toggle expand/collapse"},
+		{m.renderBinding(m.keyMap.Select) + "  Select/deselect for bulk ops"},
+		{m.renderBinding(m.keyMap.NextTask) + "  Get next available task"},
+		{m.renderBinding(m.keyMap.Refresh) + "  Refresh tasks from disk"},
+		{m.renderBinding(m.keyMap.JumpToID) + "  Jump to task by ID"},
+	}
+	taskSection := createSection("✓ TASK OPERATIONS", taskBindings)
+
+	// Status Changes section
+	statusBindings := [][]string{
+		{m.renderBinding(m.keyMap.SetInProgress) + "  Set in-progress"},
+		{m.renderBinding(m.keyMap.SetDone) + "  Set done"},
+		{m.renderBinding(m.keyMap.SetBlocked) + "  Set blocked"},
+		{m.renderBinding(m.keyMap.SetCancelled) + "  Set cancelled"},
+		{m.renderBinding(m.keyMap.SetDeferred) + "  Set deferred"},
+		{m.renderBinding(m.keyMap.SetPending) + "  Set pending"},
+	}
+	statusSection := createSection("⚡ STATUS CHANGES", statusBindings)
+
+	// Panel & View section
+	panelBindings := [][]string{
+		{m.renderBinding(m.keyMap.FocusTaskList) + "  Focus task list panel"},
+		{m.renderBinding(m.keyMap.FocusDetails) + "  Focus details panel"},
+		{m.renderBinding(m.keyMap.FocusLog) + "  Focus log panel"},
+		{m.renderBinding(m.keyMap.CyclePanel) + "  Cycle through panels"},
+		{m.renderBinding(m.keyMap.ToggleDetails) + "  Toggle details panel"},
+		{m.renderBinding(m.keyMap.ToggleLog) + "  Toggle log panel"},
+		{m.renderBinding(m.keyMap.ViewTree) + "  Switch to tree view"},
+		{m.renderBinding(m.keyMap.ViewList) + "  Switch to list view"},
+		{m.renderBinding(m.keyMap.CycleView) + "  Cycle view modes"},
+	}
+	panelSection := createSection("🎨 PANELS & VIEWS", panelBindings)
+
+	// General section
+	generalBindings := [][]string{
+		{m.renderBinding(m.keyMap.Help) + "  Toggle this help"},
+		{m.renderBinding(m.keyMap.ClearState) + "  Clear TUI state (reset UI)"},
+		{m.renderBinding(m.keyMap.Back) + "  Back/Cancel/Close"},
+		{m.renderBinding(m.keyMap.Quit) + "  Quit application"},
+		{m.renderBinding(m.keyMap.Cancel) + "  Cancel command or quit"},
+	}
+	generalSection := createSection("⚙️ GENERAL", generalBindings)
 
 	// Title
 	title := m.styles.Title.Render("📚 Task Master TUI Help")
-	sections = append(sections, title)
-	sections = append(sections, "")
-
-	// Navigation section
-	navSection := m.styles.Subtitle.Render("Navigation")
-	navHelp := []string{
-		formatHelpLine(m.renderBinding(m.keyMap.Up), "Move up"),
-		formatHelpLine(m.renderBinding(m.keyMap.Down), "Move down"),
-		formatHelpLine(m.renderBinding(m.keyMap.Left), "Collapse/Move left"),
-		formatHelpLine(m.renderBinding(m.keyMap.Right), "Expand/Move right"),
-		formatHelpLine(m.renderBinding(m.keyMap.PageUp), "Page up"),
-		formatHelpLine(m.renderBinding(m.keyMap.PageDown), "Page down"),
-	}
-	sections = append(sections, navSection)
-	sections = append(sections, strings.Join(navHelp, "\n"))
-	sections = append(sections, "")
-
-	// Task Operations section
-	taskSection := m.styles.Subtitle.Render("Task Operations")
-	taskHelp := []string{
-		formatHelpLine(m.renderBinding(m.keyMap.ToggleExpand), "Toggle expand/collapse"),
-		formatHelpLine(m.renderBinding(m.keyMap.Select), "Select/deselect for bulk operations"),
-		formatHelpLine(m.renderBinding(m.keyMap.NextTask), "Get next available task"),
-		formatHelpLine(m.renderBinding(m.keyMap.Refresh), "Refresh tasks from disk"),
-		formatHelpLine(m.renderBinding(m.keyMap.JumpToID), "Jump to task by ID"),
-	}
-	sections = append(sections, taskSection)
-	sections = append(sections, strings.Join(taskHelp, "\n"))
-	sections = append(sections, "")
-
-	// Status Changes section
-	statusSection := m.styles.Subtitle.Render("Status Changes")
-	statusHelp := []string{
-		formatHelpLine(m.renderBinding(m.keyMap.SetInProgress), m.styles.InProgress.Render("► Set in-progress")),
-		formatHelpLine(m.renderBinding(m.keyMap.SetDone), m.styles.Done.Render("✓ Set done")),
-		formatHelpLine(m.renderBinding(m.keyMap.SetBlocked), m.styles.Blocked.Render("! Set blocked")),
-		formatHelpLine(m.renderBinding(m.keyMap.SetCancelled), m.styles.Cancelled.Render("✗ Set cancelled")),
-		formatHelpLine(m.renderBinding(m.keyMap.SetDeferred), m.styles.Deferred.Render("⏱ Set deferred")),
-		formatHelpLine(m.renderBinding(m.keyMap.SetPending), m.styles.Pending.Render("○ Set pending")),
-	}
-	sections = append(sections, statusSection)
-	sections = append(sections, strings.Join(statusHelp, "\n"))
-	sections = append(sections, "")
-
-	// Panel & View section
-	panelSection := m.styles.Subtitle.Render("Panels & Views")
-	panelHelp := []string{
-		formatHelpLine(m.renderBinding(m.keyMap.FocusTaskList), "Focus task list panel"),
-		formatHelpLine(m.renderBinding(m.keyMap.FocusDetails), "Focus details panel"),
-		formatHelpLine(m.renderBinding(m.keyMap.FocusLog), "Focus log panel"),
-		formatHelpLine(m.renderBinding(m.keyMap.CyclePanel), "Cycle through panels"),
-		formatHelpLine(m.renderBinding(m.keyMap.ToggleDetails), "Toggle details panel"),
-		formatHelpLine(m.renderBinding(m.keyMap.ToggleLog), "Toggle log panel"),
-		formatHelpLine(m.renderBinding(m.keyMap.ViewTree), "Switch to tree view"),
-		formatHelpLine(m.renderBinding(m.keyMap.ViewList), "Switch to list view"),
-		formatHelpLine(m.renderBinding(m.keyMap.CycleView), "Cycle view modes"),
-	}
-	sections = append(sections, panelSection)
-	sections = append(sections, strings.Join(panelHelp, "\n"))
-	sections = append(sections, "")
-
-	// General section
-	generalSection := m.styles.Subtitle.Render("General")
-	generalHelp := []string{
-		formatHelpLine(m.renderBinding(m.keyMap.Help), "Toggle this help"),
-		formatHelpLine(m.renderBinding(m.keyMap.ClearState), "Clear TUI state (reset UI)"),
-		formatHelpLine(m.renderBinding(m.keyMap.Back), "Back/Cancel/Close"),
-		formatHelpLine(m.renderBinding(m.keyMap.Quit), "Quit application"),
-		formatHelpLine(m.renderBinding(m.keyMap.Cancel), "Cancel command or quit"),
-	}
-	sections = append(sections, generalSection)
-	sections = append(sections, strings.Join(generalHelp, "\n"))
-	sections = append(sections, "")
-
-	// About section
-	aboutSection := m.styles.Subtitle.Render("About")
-	aboutHelp := []string{
-		"  Task Master TUI - Terminal interface for Task Master AI",
-		"  Documentation: https://github.com/task-master-ai/tm-tui",
-		"  Version: 1.0.0",
-	}
-	sections = append(sections, aboutSection)
-	sections = append(sections, strings.Join(aboutHelp, "\n"))
-	sections = append(sections, "")
 
 	// Footer
 	footer := m.styles.Help.Render("Press '?' or 'Esc' to close help")
-	sections = append(sections, footer)
 
-	// Join all sections
-	content := strings.Join(sections, "\n")
+	// Combine all sections with consistent width
+	contentBox := lipgloss.NewStyle().Width(75).Align(lipgloss.Center).Render(
+		lipgloss.JoinVertical(lipgloss.Center,
+			title,
+			"",
+			navSection,
+			"",
+			taskSection,
+			"",
+			statusSection,
+			"",
+			panelSection,
+			"",
+			generalSection,
+			"",
+			footer,
+		),
+	)
 
-	// Create overlay style with distinct border and centering
+	// Create overlay style with distinct border
 	overlayStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(lipgloss.Color(ColorHighlight)).
-		Padding(1, 2).
-		Width(80).
-		Align(lipgloss.Center)
+		Padding(1, 2)
 
 	// Create backdrop to ensure overlay appears on top
 	backdrop := lipgloss.NewStyle().
@@ -2939,7 +2965,7 @@ func (m Model) renderHelpOverlay() string {
 		Height(m.height).
 		Align(lipgloss.Center, lipgloss.Center)
 
-	return backdrop.Render(overlayStyle.Render(content))
+	return backdrop.Render(overlayStyle.Render(contentBox))
 }
 
 // renderBinding formats a key binding for display
