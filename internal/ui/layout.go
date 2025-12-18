@@ -104,7 +104,17 @@ func (m Model) calculateLayout() LayoutDimensions {
 	layout.TaskListHeight = mainHeight
 	layout.DetailsWidth = detailsWidth
 	layout.DetailsHeight = mainHeight
-	layout.LogWidth = m.width
+	
+	// Calculate LogWidth with proper constraints to ensure it never exceeds terminal width
+	logWidth := m.width
+	const minMargin = 2
+	if logWidth > m.width-minMargin {
+		logWidth = m.width - minMargin
+	}
+	if logWidth < 20 { // minimum usable width
+		logWidth = 20
+	}
+	layout.LogWidth = logWidth
 	layout.LogHeight = logHeight
 
 	return layout
@@ -299,6 +309,10 @@ func (m *Model) updateViewportSizes() {
 	if m.showLogPanel {
 		m.logViewport.Width = layout.LogWidth - panelPadding*2
 		m.logViewport.Height = layout.LogHeight - panelPadding
+		// Ensure viewport width is never less than 20
+		if m.logViewport.Width < 20 {
+			m.logViewport.Width = 20
+		}
 	}
 
 	// Update task runner modal dimensions

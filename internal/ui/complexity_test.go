@@ -262,6 +262,15 @@ func (s *mockService) DiscoverProjects(ctx context.Context, roots []string) (int
 	return 0, nil
 }
 
+func (s *mockService) GetTaskFromCLI(taskID string) (*taskmaster.Task, error) {
+	for i := range s.tasks {
+		if s.tasks[i].ID == taskID {
+			return &s.tasks[i], nil
+		}
+	}
+	return nil, nil
+}
+
 // TestComplexityAnalysisWorkflow tests the entire complexity analysis workflow
 func TestComplexityAnalysisWorkflow(t *testing.T) {
 	// Set up the model with mock services

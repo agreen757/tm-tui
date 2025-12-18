@@ -1543,13 +1543,90 @@ func (m *Model) addLogLine(line string) {
 }
 
 // renderLog renders the log panel content
+// renderLog renders the log panel content with word wrapping applied to each line.
+//
+// IMPORTANT - ANSI Color Code Handling:
+// The current implementation counts ANSI escape sequences (e.g., \x1b[31m for red)
+// toward the visual width constraint. This means that a line with 70 visible
+// characters plus 10 bytes of ANSI codes will be treated as 80 bytes and wrapped
+// accordingly, potentially causing visual misalignment.
+//
+// Example:
+// - Input: "\x1b[31mLong colored text here that should wrap\x1b[0m" (60 visible chars, 70 bytes)
+// - Configured wrapWidth: 60 characters
+// - Actual wrap point: ~50 visible chars (when byte-count reaches 60)
+//
+// This is acceptable for the initial simple implementation, matching the PRD
+// decision: "Start with simple implementation, add ANSI support if needed."
+//
+// FUTURE ENHANCEMENT:
+// To improve visual alignment with colored text, consider using a library like
+// github.com/charmbracelet/x/ansi to strip ANSI codes before measuring width:
+//   plain := ansi.Strip(line)        // Get visual text without codes
+//   width := len(plain)               // Measure actual visible width
+//   wrapped := wrapText(plain, width) // Wrap based on visual width
+//   reapplyColors(wrapped, line)      // Restore colors to wrapped lines
+//
+// This has been verified with exploratory tests in log_wrap_test.go:
+// - TestRenderLogWithANSIColoredText
+// - TestRenderLogWithMultipleANSIColors
+// Both tests pass and confirm ANSI codes are preserved without corruption.
 func (m Model) renderLog() string {
 	if len(m.logLines) == 0 {
 		return m.styles.Info.Render("No log output yet")
 	}
 
-	return strings.Join(m.logLines, "\n")
+	// Calculate available width for wrapping text
+	wrapWidth := m.logViewport.Width - 4
+	if wrapWidth < 20 {
+		wrapWidth = 20 // Minimum reasonable width
+	}
+
+	// Wrap each log line individually
+	var wrappedLines []string
+	for _, line := range m.logLines {
+		if line == "" {
+			wrappedLines = append(wrappedLines, "")
+			continue
+		}
+		wrappedLine := wrapText(line, wrapWidth)
+		wrappedLines = append(wrappedLines, wrappedLine)
+	}
+
+	return strings.Join(wrappedLines, "\n")
 }
+
+// FUTURE ENHANCEMENT: ANSI-aware wrapping helper
+// This commented-out helper demonstrates how to improve ANSI color handling in the future.
+// Do NOT enable this without adding the charmbracelet/x/ansi dependency.
+//
+// // ansiWrapText wraps text while respecting ANSI escape sequences for proper visual alignment.
+// // This is a future enhancement to replace the byte-based width counting in wrapText().
+// //
+// // Implementation would require: go get github.com/charmbracelet/x/ansi
+// //
+// // func ansiWrapText(text string, width int) string {
+// //     // Strip ANSI codes to get visual content
+// //     // This requires importing "github.com/charmbracelet/x/ansi"
+// //     plain := ansi.Strip(text)      // Get text without color codes
+// //     wrapped := wrapText(plain, width) // Wrap based on visual width
+// //
+// //     // If no ANSI codes were present, wrapped text is ready to use
+// //     if text == plain {
+// //         return wrapped
+// //     }
+// //
+// //     // If ANSI codes were present, this would require reapplying them to wrapped lines
+// //     // (Implementation detail omitted; this is more complex and depends on code structure)
+// //     return wrapped
+// // }
+//
+// Alternative simpler approach without a new dependency:
+// 1. Create a simple pattern matcher to find ANSI sequences
+// 2. Count only non-ANSI characters when checking line width
+// 3. Preserve ANSI codes in output unchanged
+//
+// This would avoid the visual misalignment without adding external dependencies.
 
 // updateLogViewport updates the log viewport content
 func (m *Model) updateLogViewport() {
@@ -1730,6 +1807,11 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update dialog manager dimensions
 		if dm := m.dialogManager(); dm != nil {
 			dm.SetTerminalSize(msg.Width, msg.Height)
+		}
+
+		// Re-render log panel with new width if it's visible
+		if m.showLogPanel {
+			m.updateLogViewport()
 		}
 
 		return m, nil
@@ -2469,6 +2551,10 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				// Toggle log panel
 				m.showLogPanel = !m.showLogPanel
 				m.updateViewportSizes()
+				// Update log viewport when showing the log panel
+				if m.showLogPanel {
+					m.updateLogViewport()
+				}
 
 			case key.Matches(msg, m.keyMap.CommandPalette):
 				m.openCommandPalette()
