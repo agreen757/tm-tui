@@ -2459,12 +2459,17 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				// Execute task-master next command via executor
 				if !m.execService.IsRunning() {
 					m.addLogLine("Executing: task-master next")
+					m.showLogPanel = true
 					if err := m.execService.Execute("next"); err != nil {
 						m.addLogLine(fmt.Sprintf("Error: %v", err))
+					} else {
+						// Start listening for executor output
+						cmds = append(cmds, WaitForExecutorOutput(m.execService))
 					}
 				} else {
 					m.addLogLine("Command already running")
 				}
+				return m, tea.Batch(cmds...)
 
 			case key.Matches(msg, m.keyMap.JumpToID):
 				// Enter command mode for quick jump

@@ -23,7 +23,25 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## Recent Improvements (v0.1.10)
+## Recent Improvements (v0.1.12)
+
+### Enhanced Command Integration
+
+**Next Task Hotkey Output** - The `n` hotkey now fully integrates with the Log panel to display real-time command output.
+
+**Changes:**
+- Pressing `n` executes `task-master next` and streams output to the Log panel
+- Log panel automatically shows when the command starts
+- Output displays in real-time as the command executes
+- Prevents concurrent command execution with guard checks
+- Full command history logged to `.taskmaster/logs/tui-session.log`
+
+**Benefits:**
+- Seamless workflow for jumping to next available task
+- Clear visibility of command results without context switching
+- Integrated logging for debugging and audit trails
+
+## Previous Improvements (v0.1.10)
 
 ### Critical Bug Fixes
 
