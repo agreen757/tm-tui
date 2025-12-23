@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/cellbuf"
 )
 
 // formatHelpLine formats a help line with consistent alignment between keys and descriptions
@@ -113,7 +116,7 @@ type Model struct {
 	expandTaskMsgCh    chan tea.Msg
 	expandTaskCancel   context.CancelFunc
 	expandTaskDrafts   []taskmaster.SubtaskDraft // Generated drafts waiting for preview/edit
-	expandTaskParentID string                     // ID of task being expanded
+	expandTaskParentID string                    // ID of task being expanded
 
 	// New expansion workflow state
 	expansionMsgCh          chan tea.Msg
@@ -435,7 +438,7 @@ func (m *Model) useProjectTag(tag string) tea.Cmd {
 // buildTaskIndex creates a flat index of all tasks by ID for quick lookup
 func (m *Model) buildTaskIndex() {
 	m.taskIndex = make(map[string]*taskmaster.Task)
-	
+
 	// Use stable pointer recursion to avoid creating pointers to temporary slice elements
 	var indexTask func(task *taskmaster.Task)
 	indexTask = func(task *taskmaster.Task) {
@@ -444,7 +447,7 @@ func (m *Model) buildTaskIndex() {
 			indexTask(&task.Subtasks[i])
 		}
 	}
-	
+
 	for i := range m.tasks {
 		indexTask(&m.tasks[i])
 	}
@@ -481,6 +484,120 @@ func (m *Model) rebuildVisibleTasks() {
 			m.selectedTask = m.visibleTasks[m.selectedIndex]
 		}
 	}
+}
+
+type uiLayer struct {
+	content string
+	x       int
+	y       int
+}
+
+func composeLayers(width, height int, layers []uiLayer) string {
+	if width <= 0 || height <= 0 || len(layers) == 0 {
+		return ""
+	}
+
+	screen := cellbuf.NewScreen(io.Discard, width, height, nil)
+	writer := cellbuf.NewScreenWriter(screen)
+
+	// Base layer clears the screen and establishes the background.
+	writer.SetContent(layers[0].content)
+
+	for i := 1; i < len(layers); i++ {
+		layer := layers[i]
+		if layer.content == "" {
+			continue
+		}
+		layerWidth := lipgloss.Width(layer.content)
+		layerHeight := lipgloss.Height(layer.content)
+		if layerWidth <= 0 || layerHeight <= 0 {
+			continue
+		}
+		rect := cellbuf.Rect(layer.x, layer.y, layerWidth, layerHeight)
+		cellbuf.SetContentRect(screen, normalizeLayerContent(layer.content), rect)
+	}
+
+	return renderScreen(screen)
+}
+
+func normalizeLayerContent(content string) string {
+	if content == "" {
+		return ""
+	}
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\n", "\r\n")
+	return content
+}
+
+func renderScreen(screen *cellbuf.Screen) string {
+	var b strings.Builder
+	bounds := screen.Bounds()
+	height := bounds.Dy()
+	for y := 0; y < height; y++ {
+		b.WriteString(renderLine(screen, y))
+		if y < height-1 {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+func renderLine(screen *cellbuf.Screen, row int) string {
+	var pen cellbuf.Style
+	var link cellbuf.Link
+	var b strings.Builder
+	var pendingLine string
+
+	writePending := func() {
+		if len(pendingLine) == 0 {
+			return
+		}
+		b.WriteString(pendingLine)
+		pendingLine = ""
+	}
+
+	bounds := screen.Bounds()
+	for x := 0; x < bounds.Dx(); x++ {
+		if cell := screen.Cell(x, row); cell != nil && cell.Width > 0 {
+			cellStyle := cell.Style
+			cellLink := cell.Link
+			if cellStyle.Empty() && !pen.Empty() {
+				writePending()
+				b.WriteString(ansi.ResetStyle)
+				pen.Reset()
+			}
+			if !cellStyle.Equal(&pen) {
+				writePending()
+				b.WriteString(cellStyle.DiffSequence(pen))
+				pen = cellStyle
+			}
+			if cellLink != link && link.URL != "" {
+				writePending()
+				b.WriteString(ansi.ResetHyperlink())
+				link.Reset()
+			}
+			if cellLink != link {
+				writePending()
+				b.WriteString(ansi.SetHyperlink(cellLink.URL, cellLink.Params))
+				link = cellLink
+			}
+			if cell.Equal(&cellbuf.BlankCell) {
+				pendingLine += cell.String()
+			} else {
+				writePending()
+				b.WriteString(cell.String())
+			}
+		}
+	}
+
+	writePending()
+	if link.URL != "" {
+		b.WriteString(ansi.ResetHyperlink())
+	}
+	if !pen.Empty() {
+		b.WriteString(ansi.ResetStyle)
+	}
+	return strings.ReplaceAll(b.String(), "\r\n", "\n")
 }
 
 // extractUIState extracts the current UI state from the model for persistence
@@ -749,12 +866,12 @@ func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
 		taskID := m.crushRunTaskID
 		taskTitle := m.crushRunTaskTitle
 		task := m.crushRunTask
-		
+
 		// Clear context
 		m.crushRunTaskID = ""
 		m.crushRunTaskTitle = ""
 		m.crushRunTask = nil
-		
+
 		// Start the Crush run
 		return m.startCrushRun(taskID, taskTitle, task, msg.ModelID)
 	}
@@ -775,7 +892,7 @@ func (m *Model) openModelSelectionForCrushRun(task *taskmaster.Task) tea.Cmd {
 	m.crushRunTaskID = task.ID
 	m.crushRunTaskTitle = task.Title
 	m.crushRunTask = task
-	
+
 	m.addLogLine(fmt.Sprintf("Stored task for Crush run: ID=%s, Title='%s'", task.ID, task.Title))
 	// Debug: Log the actual task data we're using
 	m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", task.ID, task.Title, task.Dependencies))
@@ -783,7 +900,7 @@ func (m *Model) openModelSelectionForCrushRun(task *taskmaster.Task) tea.Cmd {
 	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
 	m.appState.PushDialog(modelSelectionDialog)
 	m.addLogLine(fmt.Sprintf("Select AI model to run task %s: %s", task.ID, task.Title))
-	
+
 	return nil
 }
 
@@ -825,7 +942,7 @@ func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, m
 
 	// Send TaskStartedMsg to create a new tab
 	m.addLogLine(fmt.Sprintf("Starting Crush run for task %s with model %s", taskID, modelID))
-	
+
 	// Return commands: first start the tab, then start execution with prompt
 	return tea.Sequence(
 		dialog.StartCrushExecution(taskID, taskTitle, modelID, prompt, m.taskRunner),
@@ -1563,10 +1680,11 @@ func (m *Model) addLogLine(line string) {
 // FUTURE ENHANCEMENT:
 // To improve visual alignment with colored text, consider using a library like
 // github.com/charmbracelet/x/ansi to strip ANSI codes before measuring width:
-//   plain := ansi.Strip(line)        // Get visual text without codes
-//   width := len(plain)               // Measure actual visible width
-//   wrapped := wrapText(plain, width) // Wrap based on visual width
-//   reapplyColors(wrapped, line)      // Restore colors to wrapped lines
+//
+//	plain := ansi.Strip(line)        // Get visual text without codes
+//	width := len(plain)               // Measure actual visible width
+//	wrapped := wrapText(plain, width) // Wrap based on visual width
+//	reapplyColors(wrapped, line)      // Restore colors to wrapped lines
 //
 // This has been verified with exploratory tests in log_wrap_test.go:
 // - TestRenderLogWithANSIColoredText
@@ -2354,7 +2472,7 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.appState != nil && m.appState.HasActiveDialog() {
 			// Log that dialog is active and blocking shortcuts
 			m.addLogLine("DEBUG: Active dialog is blocking key events")
-			
+
 			// Let dialog manager handle the message
 			cmd := m.appState.HandleDialogMsg(incomingMsg)
 			if cmd != nil {
@@ -2678,16 +2796,24 @@ func (m Model) View() string {
 		return m.styles.Info.Render("Initializing Task Master TUI...")
 	}
 
-	// Check for active dialogs - display them over everything else
-	if dm := m.dialogManager(); dm != nil && dm.HasDialogs() {
-		// Render main UI, then overlay dialogs
+	// Build the base UI content first.
+	var baseContent string
+
+	// Check if taskmaster is not available
+	if len(m.tasks) == 0 && !m.taskService.IsAvailable() {
+		baseContent = m.renderNoTaskmaster()
+	} else if m.err != nil {
+		baseContent = m.styles.Error.Render(fmt.Sprintf("Error: %v\n\nPress 'q' to quit", m.err))
+	} else {
+		// Calculate layout
+		layout := m.calculateLayout()
+
 		var sections []string
 
 		// 1. Header
 		sections = append(sections, m.renderHeader())
 
-		// 2. Main content area
-		layout := m.calculateLayout()
+		// 2. Main content area (task list + details)
 		mainContent := m.renderMainContent(layout)
 		sections = append(sections, mainContent)
 
@@ -2699,65 +2825,54 @@ func (m Model) View() string {
 		// 4. Status bar with help
 		sections = append(sections, m.renderStatusBar())
 
-		// Render the base UI first (not used for dialogs)
-		// Then overlay the active dialog
-		dialogContent := dm.View()
-
-		// For now, we just render the dialog content over the middle of the screen
-		// A more sophisticated implementation would overlay it properly
-		dialogStyle := lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height).
-			Align(lipgloss.Center, lipgloss.Center)
-
-		return dialogStyle.Render(dialogContent)
+		// Join all sections
+		baseContent = lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
-	// Help overlay takes priority over everything except dialogs
-	if m.showHelp {
-		return m.renderHelpOverlay()
+	if m.width <= 0 || m.height <= 0 {
+		return baseContent
 	}
 
-	// Check if taskmaster is not available
-	if len(m.tasks) == 0 && !m.taskService.IsAvailable() {
-		return m.renderNoTaskmaster()
-	}
+	layers := []uiLayer{{content: baseContent, x: 0, y: 0}}
 
-	if m.err != nil {
-		return m.styles.Error.Render(fmt.Sprintf("Error: %v\n\nPress 'q' to quit", m.err))
-	}
-
-	// Calculate layout
-	layout := m.calculateLayout()
-
-	var sections []string
-
-	// 1. Header
-	sections = append(sections, m.renderHeader())
-
-	// 2. Main content area (task list + details)
-	mainContent := m.renderMainContent(layout)
-	sections = append(sections, mainContent)
-
-	// 3. Log panel (if visible)
-	if m.showLogPanel {
-		sections = append(sections, m.renderLogPanel(layout))
-	}
-
-	// 4. Status bar with help
-	sections = append(sections, m.renderStatusBar())
-
-	// Join all sections
-	baseContent := lipgloss.JoinVertical(lipgloss.Left, sections...)
-
-	// 5. TaskRunnerModal overlay (if visible)
 	if m.taskRunnerVisible && m.taskRunner != nil {
 		modalContent := m.taskRunner.View()
-		// Overlay the modal on top of the base content
-		return baseContent + "\n" + modalContent
+		modalWidth := lipgloss.Width(modalContent)
+		modalHeight := lipgloss.Height(modalContent)
+		modalX := 0
+		modalY := 0
+		if modalWidth > 0 && modalWidth < m.width {
+			modalX = (m.width - modalWidth) / 2
+		}
+		if modalHeight > 0 && modalHeight < m.height {
+			modalY = (m.height - modalHeight) / 2
+		}
+		layers = append(layers, uiLayer{content: modalContent, x: modalX, y: modalY})
 	}
 
-	return baseContent
+	if dm := m.dialogManager(); dm != nil && dm.HasDialogs() {
+		if activeDialog := dm.GetActiveDialog(); activeDialog != nil {
+			_, _, dialogX, dialogY := activeDialog.GetRect()
+			layers = append(layers, uiLayer{content: activeDialog.View(), x: dialogX, y: dialogY})
+		}
+	}
+
+	if m.showHelp {
+		helpContent := m.renderHelpOverlay()
+		_, _, helpWidth := m.helpOverlayLayout()
+		helpHeight := lipgloss.Height(helpContent)
+		helpX := 0
+		helpY := 0
+		if helpWidth > 0 && helpWidth < m.width {
+			helpX = (m.width - helpWidth) / 2
+		}
+		if helpHeight > 0 && helpHeight < m.height {
+			helpY = (m.height - helpHeight) / 2
+		}
+		layers = append(layers, uiLayer{content: helpContent, x: helpX, y: helpY})
+	}
+
+	return composeLayers(m.width, m.height, layers)
 }
 
 // renderNoTaskmaster displays a message when .taskmaster is not found
@@ -2835,6 +2950,9 @@ func (m Model) renderLogPanel(layout LayoutDimensions) string {
 
 // renderHelpOverlay renders a help overlay on top of the main content using organized sections
 func (m Model) renderHelpOverlay() string {
+	helpWidth, _, _ := m.helpOverlayLayout()
+	innerWidth := helpWidth
+
 	// Define styles
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(ColorHighlight)).
@@ -2855,9 +2973,18 @@ func (m Model) renderHelpOverlay() string {
 
 	// Helper to create a section
 	createSection := func(title string, bindings [][]string) string {
+		tableWidth := innerWidth - 4
+		if tableWidth > 40 {
+			tableWidth = 40
+		}
+		if tableWidth < 20 {
+			tableWidth = 20
+		}
 		t := table.New().
 			Border(lipgloss.NormalBorder()).
 			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorHighlight))).
+			Width(tableWidth).
+			Wrap(true).
 			StyleFunc(func(row, col int) lipgloss.Style {
 				if row == table.HeaderRow {
 					return headerStyle
@@ -2867,14 +2994,15 @@ func (m Model) renderHelpOverlay() string {
 			Headers("KEYBINDING").
 			Rows(bindings...)
 
-		section := lipgloss.JoinVertical(lipgloss.Center,
-			sectionHeaderStyle.Render(title),
-			t.Render(),
+		header := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).
+			Render(sectionHeaderStyle.Render(title))
+		tableView := t.Render()
+		tableView = lipgloss.Place(innerWidth, lipgloss.Height(tableView), lipgloss.Center, lipgloss.Top, tableView)
+
+		return lipgloss.JoinVertical(lipgloss.Center,
+			header,
+			tableView,
 		)
-		
-		// Apply consistent width to section (75 chars wide for clean layout)
-		sectionStyle := lipgloss.NewStyle().Width(75).Align(lipgloss.Center)
-		return sectionStyle.Render(section)
 	}
 
 	// Navigation section
@@ -2886,7 +3014,7 @@ func (m Model) renderHelpOverlay() string {
 		{m.renderBinding(m.keyMap.PageUp) + "  Page up"},
 		{m.renderBinding(m.keyMap.PageDown) + "  Page down"},
 	}
-	navSection := createSection("📍 NAVIGATION", navBindings)
+	navSection := createSection(" NAVIGATION", navBindings)
 
 	// Task Operations section
 	taskBindings := [][]string{
@@ -2896,7 +3024,7 @@ func (m Model) renderHelpOverlay() string {
 		{m.renderBinding(m.keyMap.Refresh) + "  Refresh tasks from disk"},
 		{m.renderBinding(m.keyMap.JumpToID) + "  Jump to task by ID"},
 	}
-	taskSection := createSection("✓ TASK OPERATIONS", taskBindings)
+	taskSection := createSection(" TASK OPERATIONS", taskBindings)
 
 	// Status Changes section
 	statusBindings := [][]string{
@@ -2907,7 +3035,7 @@ func (m Model) renderHelpOverlay() string {
 		{m.renderBinding(m.keyMap.SetDeferred) + "  Set deferred"},
 		{m.renderBinding(m.keyMap.SetPending) + "  Set pending"},
 	}
-	statusSection := createSection("⚡ STATUS CHANGES", statusBindings)
+	statusSection := createSection(" STATUS CHANGES", statusBindings)
 
 	// Panel & View section
 	panelBindings := [][]string{
@@ -2921,7 +3049,7 @@ func (m Model) renderHelpOverlay() string {
 		{m.renderBinding(m.keyMap.ViewList) + "  Switch to list view"},
 		{m.renderBinding(m.keyMap.CycleView) + "  Cycle view modes"},
 	}
-	panelSection := createSection("🎨 PANELS & VIEWS", panelBindings)
+	panelSection := createSection(" PANELS & VIEWS", panelBindings)
 
 	// General section
 	generalBindings := [][]string{
@@ -2931,16 +3059,17 @@ func (m Model) renderHelpOverlay() string {
 		{m.renderBinding(m.keyMap.Quit) + "  Quit application"},
 		{m.renderBinding(m.keyMap.Cancel) + "  Cancel command or quit"},
 	}
-	generalSection := createSection("⚙️ GENERAL", generalBindings)
+	generalSection := createSection(" GENERAL ", generalBindings)
 
 	// Title
-	title := m.styles.Title.Render("📚 Task Master TUI Help")
+	centerLine := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center)
+	title := centerLine.Render(m.styles.Title.Render(" Task Master TUI Help"))
 
 	// Footer
-	footer := m.styles.Help.Render("Press '?' or 'Esc' to close help")
+	footer := centerLine.Render(m.styles.Help.Render("Press '?' or 'Esc' to close help"))
 
 	// Combine all sections with consistent width
-	contentBox := lipgloss.NewStyle().Width(75).Align(lipgloss.Center).Render(
+	contentBox := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(
 		lipgloss.JoinVertical(lipgloss.Center,
 			title,
 			"",
@@ -2964,13 +3093,27 @@ func (m Model) renderHelpOverlay() string {
 		BorderForeground(lipgloss.Color(ColorHighlight)).
 		Padding(1, 2)
 
-	// Create backdrop to ensure overlay appears on top
-	backdrop := lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Align(lipgloss.Center, lipgloss.Center)
+	return overlayStyle.Render(contentBox)
+}
 
-	return backdrop.Render(overlayStyle.Render(contentBox))
+func (m Model) helpOverlayLayout() (helpWidth, contentWidth, overlayWidth int) {
+	helpWidth = 75
+	if m.width > 0 && helpWidth > m.width-6 {
+		helpWidth = m.width - 6
+		if helpWidth < 40 {
+			helpWidth = 40
+		}
+	}
+	contentWidth = helpWidth - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+	// content padding (1,2) adds 4 cols, border adds 2 cols
+	overlayWidth = contentWidth + 6
+	if m.width > 0 && overlayWidth > m.width {
+		overlayWidth = m.width
+	}
+	return helpWidth, contentWidth, overlayWidth
 }
 
 // renderBinding formats a key binding for display
