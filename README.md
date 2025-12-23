@@ -399,10 +399,11 @@ Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush),
 
 #### Running a Task
 1. Navigate to the task you want to execute
-2. Press `Ctrl+R` (or `Alt+R`) to open the model selection dialog
-3. Choose your preferred AI model from the list
-4. The Task Runner modal opens and shows real-time output from Crush
-5. Monitor progress as Crush works through the task
+2. Press `Ctrl+R` (or `Alt+R`) to start the task runner
+3. Model selection inside the task runner is not currently enabled
+4. To choose a model, open the Crush CLI (`crush`), press `Ctrl+L` to select a model, exit Crush, then restart the TUI
+5. The Task Runner modal opens and shows real-time output from Crush
+6. Monitor progress as Crush works through the task
 
 #### Task Runner Modal Controls
 - `Tab` / `Shift+Tab` - Switch between task tabs (when running multiple tasks)
