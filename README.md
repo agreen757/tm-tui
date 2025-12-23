@@ -23,7 +23,22 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## Recent Improvements (v0.1.12)
+## Recent Improvements (v0.1.13)
+
+### Dialog Layering & Help Modal
+
+**Centered Pop-up Help Dialog** - The help view now renders as a true modal overlay, centered on top of the TUI instead of replacing the screen.
+
+**Changes:**
+- Introduced a layered render pipeline to draw dialogs over the base UI
+- Help dialog is now a modal with proper borders, positioning, and background fill
+- Dialog stack honors focus and overlays without breaking the underlying layout
+
+**Benefits:**
+- Help stays readable without hiding the main UI context
+- Consistent modal behavior aligned with other dialogs
+
+## Previous Improvements (v0.1.12)
 
 ### Enhanced Command Integration
 
