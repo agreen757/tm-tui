@@ -2810,8 +2810,8 @@ func (m Model) View() string {
 
 		var sections []string
 
-		// 1. Header
-		sections = append(sections, m.renderHeader())
+		// 1. Header. REMOVING TEMPORARILY
+		//sections = append(sections, m.renderHeader())
 
 		// 2. Main content area (task list + details)
 		mainContent := m.renderMainContent(layout)
