@@ -591,7 +591,7 @@ func (m *Model) handleTagManagement() tea.Cmd {
 		return nil
 	}
 	m.addLogLine("Loading tag contexts from task-master...")
-	return loadTagListCmd(m.taskService, true)
+	return loadTagListCmd(m.taskService, false)
 }
 
 func stringValue(values map[string]interface{}, key string) string {

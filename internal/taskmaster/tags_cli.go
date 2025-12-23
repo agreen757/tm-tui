@@ -59,9 +59,9 @@ func (s *Service) ListTagContexts(ctx context.Context, includeMetadata bool) (*T
 	}
 
 	args := []string{"tags"}
-	if includeMetadata {
+	/* if includeMetadata {
 		args = append(args, "--show-metadata")
-	}
+	} */
 
 	output, err := s.runSimpleTaskMasterCommand(ctx, args...)
 	if err != nil {
@@ -88,7 +88,7 @@ func (s *Service) AddTagContext(ctx context.Context, opts TagAddOptions) (*TagOp
 		return nil, fmt.Errorf("tag name is required")
 	}
 
-	args := []string{"add-tag", strings.TrimSpace(opts.Name)}
+	args := []string{"tags", "add", strings.TrimSpace(opts.Name)}
 	if opts.CopyFromCurrent {
 		args = append(args, "--copy-from-current")
 	}
