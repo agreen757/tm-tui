@@ -131,6 +131,11 @@ func (d *ModalDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 	return DialogResultNone, nil
 }
 
+// Content returns the modal's content
+func (d *ModalDialog) Content() ModalContent {
+	return d.content
+}
+
 // ModalButtonKind represents the type of button in a modal
 type ModalButtonKind int
 

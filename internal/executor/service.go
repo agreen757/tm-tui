@@ -30,33 +30,48 @@ type Service struct {
 	running  bool
 	cancelFn context.CancelFunc
 	outCh    chan string
+	doneCh   chan CommandResult
 	history  []Command
 	logFile  *os.File
 }
 
+// CommandResult represents the result of a command execution
+type CommandResult struct {
+	Command string
+	Success bool
+	Error   error
+}
+
 // NewService creates a new executor service with log file initialization
 func NewService(cfg *config.Config) (*Service, error) {
-	// Create logs directory if it doesn't exist
-	logsDir := filepath.Join(cfg.TaskMasterPath, ".taskmaster", "logs")
-	if err := os.MkdirAll(logsDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create logs directory: %w", err)
-	}
+	var logFile *os.File
+	var err error
 
-	// Open log file in append mode
-	logPath := filepath.Join(logsDir, "tui-session.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file: %w", err)
-	}
+	// Only create log file if TaskMasterPath is set
+	if cfg.TaskMasterPath != "" {
+		// Create logs directory if it doesn't exist
+		logsDir := filepath.Join(cfg.TaskMasterPath, ".taskmaster", "logs")
+		if err := os.MkdirAll(logsDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create logs directory: %w", err)
+		}
 
-	// Write session start marker
-	timestamp := time.Now().Format(time.RFC3339)
-	fmt.Fprintf(logFile, "\n=== TUI Session Started: %s ===\n", timestamp)
+		// Open log file in append mode
+		logPath := filepath.Join(logsDir, "tui-session.log")
+		logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open log file: %w", err)
+		}
+
+		// Write session start marker
+		timestamp := time.Now().Format(time.RFC3339)
+		fmt.Fprintf(logFile, "\n=== TUI Session Started: %s ===\n", timestamp)
+	}
 
 	return &Service{
 		config:  cfg,
 		running: false,
 		outCh:   make(chan string, 100), // Buffered channel for output
+		doneCh:  make(chan CommandResult, 1), // Buffered channel for completion
 		history: []Command{},
 		logFile: logFile,
 	}, nil
@@ -68,6 +83,28 @@ func (s *Service) Execute(cmd string, args ...string) error {
 	if s.running {
 		s.mu.Unlock()
 		return fmt.Errorf("command already running")
+	}
+
+	// For 'next' command, check if we're in a Task Master workspace
+	if cmd == "next" {
+		if s.config.TaskMasterPath == "" {
+			s.mu.Unlock()
+			return fmt.Errorf("not running in a Task Master workspace")
+		}
+
+		// Check if binary exists and is executable
+		binPath := filepath.Join(s.config.TaskMasterPath, "task-master")
+		fileInfo, err := os.Stat(binPath)
+		if os.IsNotExist(err) {
+			s.mu.Unlock()
+			return fmt.Errorf("task-master binary not found")
+		}
+
+		// Check if binary has execute permissions
+		if fileInfo.Mode()&0111 == 0 {
+			s.mu.Unlock()
+			return fmt.Errorf("task-master binary not executable")
+		}
 	}
 
 	// Create cancellable context
@@ -168,6 +205,17 @@ func (s *Service) Execute(cmd string, args ...string) error {
 		} else {
 			s.outCh <- fmt.Sprintf("\n✗ Command failed with exit code %d", exitCode)
 		}
+
+		// Emit command result via done channel
+		select {
+		case s.doneCh <- CommandResult{
+			Command: cmd,
+			Success: exitCode == 0,
+			Error:   err,
+		}:
+		default:
+			// Channel full or receiver not waiting, skip
+		}
 	}()
 
 	return nil
@@ -217,6 +265,11 @@ func (s *Service) Cancel() error {
 // GetOutput returns a channel that receives command output
 func (s *Service) GetOutput() <-chan string {
 	return s.outCh
+}
+
+// GetDone returns a channel that receives command completion results
+func (s *Service) GetDone() <-chan CommandResult {
+	return s.doneCh
 }
 
 // IsRunning returns whether a command is currently executing

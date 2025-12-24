@@ -1793,11 +1793,13 @@ func (m Model) Init() tea.Cmd {
 	// 2. Start watching for task file changes
 	// 3. Start watching for config changes
 	// 4. Start listening for executor output
+	// 5. Start listening for executor completion
 	return tea.Batch(
 		LoadTasksCmd(m.taskService),
 		WaitForTasksReload(m.taskService),
 		WaitForConfigReload(m.configManager),
 		WaitForExecutorOutput(m.execService),
+		WaitForExecutorDone(m.execService),
 	)
 }
 
@@ -1977,11 +1979,65 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, WaitForConfigReload(m.configManager)
 
 	case ExecutorOutputMsg:
-		// Executor produced output, add to log
-		m.addLogLine(msg.Line)
+		// [BACKUP] Original implementation before modal routing:
+		// m.addLogLine(msg.Line)
+		// return m, WaitForExecutorOutput(m.execService)
+		// Only add to log if not in next task modal mode
+		if !m.appState.IsNextTaskModalActive() {
+			m.logLines = append(m.logLines, msg.Line)
+			if m.showLogPanel {
+				m.logViewport.SetContent(strings.Join(m.logLines, "\n"))
+				m.logViewport.GotoBottom()
+			}
+		}
+
+		// Route to next task modal if active
+		if m.appState.IsNextTaskModalActive() {
+			m.appState.AppendNextTaskOutput(msg.Line)
+			// Update the modal content if it's open using AppendOutput for batched updates
+			if dlg, ok := m.appState.ActiveDialog().(*dialog.ModalDialog); ok {
+				if content, ok := dlg.Content().(*dialog.NextTaskOutputContent); ok {
+					content.AppendOutput(msg.Line)
+				}
+			}
+		}
 
 		// Continue listening for next output
 		return m, WaitForExecutorOutput(m.execService)
+
+	case ExecutorDoneMsg:
+		// Handle command completion for the next task modal
+		if msg.Command == "next" && m.appState.IsNextTaskModalActive() {
+			// Update modal to show it's done loading
+			if dlg, ok := m.appState.ActiveDialog().(*dialog.ModalDialog); ok {
+				if content, ok := dlg.Content().(*dialog.NextTaskOutputContent); ok {
+					// Handle empty output or errors
+					if !msg.Success && msg.Error != nil {
+						// Display specific error messages based on error type
+						errMsg := msg.Error.Error()
+						var displayMsg string
+						switch {
+						case strings.Contains(errMsg, "not running in a Task Master workspace"):
+							displayMsg = "Not running in a Task Master workspace. Please open a valid project."
+						case strings.Contains(errMsg, "task-master binary not found"):
+							displayMsg = "task-master binary not found. Please check your installation."
+						case strings.Contains(errMsg, "task-master binary not executable"):
+							displayMsg = "task-master binary is not executable. Please check file permissions."
+						default:
+							displayMsg = fmt.Sprintf("Error: %s", errMsg)
+						}
+						content.AppendOutput("")
+						content.AppendOutput(displayMsg)
+					} else if len(m.appState.NextTaskOutput()) == 0 {
+						content.AppendOutput("No tasks available.")
+					}
+					// Finalize content and transition from loading state
+					content.FinalizeContent()
+				}
+			}
+		}
+
+		return m, WaitForExecutorDone(m.execService)
 
 	case CommandCompletedMsg:
 		// Command execution completed, log it and potentially reload tasks
@@ -2574,19 +2630,46 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, LoadTasksCmd(m.taskService))
 
 			case key.Matches(msg, m.keyMap.NextTask):
-				// Execute task-master next command via executor
-				if !m.execService.IsRunning() {
-					m.addLogLine("Executing: task-master next")
-					m.showLogPanel = true
-					if err := m.execService.Execute("next"); err != nil {
-						m.addLogLine(fmt.Sprintf("Error: %v", err))
-					} else {
-						// Start listening for executor output
-						cmds = append(cmds, WaitForExecutorOutput(m.execService))
-					}
-				} else {
+				// Check if command is already running
+				if m.execService.IsRunning() {
 					m.addLogLine("Command already running")
+					return m, nil
 				}
+				
+				// Initialize NextTask modal state
+				m.appState.StartNextTaskModal()
+				
+				// Create and show the dialog
+				nextTaskContent := dialog.NewNextTaskOutputContent()
+				dlg := dialog.NewModalDialog(
+					"Next Task",
+					80,
+					20,
+					nextTaskContent,
+				)
+				
+				// Add dialog with callback to handle closure
+				m.appState.AddDialog(dlg, func(value interface{}, err error) tea.Cmd {
+					// Reset the next task modal state when dialog closes
+					if m.appState.IsNextTaskModalActive() {
+						m.appState.CloseNextTaskModal()
+						m.addLogLine("Next task modal closed")
+					}
+					// Restore focus to task list
+					m.focusedPanel = PanelTaskList
+					return nil
+				})
+				
+				// Execute task-master next command via executor
+				m.addLogLine("Executing: task-master next")
+				if err := m.execService.Execute("next"); err != nil {
+					m.addLogLine(fmt.Sprintf("Error: %v", err))
+					nextTaskContent.SetError(err)
+				} else {
+					// Start listening for executor output
+					cmds = append(cmds, WaitForExecutorOutput(m.execService))
+				}
+				
 				return m, tea.Batch(cmds...)
 
 			case key.Matches(msg, m.keyMap.JumpToID):

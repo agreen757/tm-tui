@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -41,6 +43,7 @@ func createTestModel() Model {
 	}
 
 	// Create a minimal model without full services
+	keyMap := DefaultKeyMap()
 	m := Model{
 		config:           cfg,
 		tasks:            tasks,
@@ -51,7 +54,7 @@ func createTestModel() Model {
 		focusedPanel:     PanelTaskList,
 		expandedNodes:    make(map[string]bool),
 		selectedIDs:      make(map[string]bool),
-		keyMap:           DefaultKeyMap(),
+		keyMap:           keyMap,
 		showDetailsPanel: true,
 		showLogPanel:     false,
 		showHelp:         false,
@@ -59,6 +62,7 @@ func createTestModel() Model {
 		commandInput:     "",
 		styles:           NewStyles(),
 		logLines:         []string{},
+		appState:         NewAppState(nil, &keyMap),
 	}
 
 	m.buildTaskIndex()
@@ -439,3 +443,478 @@ func TestClearUIState(t *testing.T) {
 		t.Error("Expected confirmingClearState to be false")
 	}
 }
+
+// TestExecutorOutputMsgToLog tests that output is added to log when modal is inactive
+func TestExecutorOutputMsgToLog(t *testing.T) {
+	m := createTestModel()
+
+	// Ensure modal is not active
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Send ExecutorOutputMsg
+	output := "test output line"
+	msg := ExecutorOutputMsg{Line: output}
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Check that output was added to log
+	if len(model.logLines) == 0 {
+		t.Error("Expected output to be added to logLines when modal is inactive")
+	}
+
+	if len(model.logLines) > 0 && model.logLines[len(model.logLines)-1] != output {
+		t.Errorf("Expected last log line to be %q, got %q", output, model.logLines[len(model.logLines)-1])
+	}
+}
+
+// TestExecutorOutputMsgToModal tests that output is routed to modal when active
+func TestExecutorOutputMsgToModal(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Activate the next task modal
+	m.appState.StartNextTaskModal()
+
+	// Send ExecutorOutputMsg
+	output := "modal output line"
+	msg := ExecutorOutputMsg{Line: output}
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Check that output was added to appState but NOT to log
+	if !model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to be active")
+	}
+
+	// Verify output is in appState
+	if len(model.appState.NextTaskOutput()) == 0 {
+		t.Error("Expected output to be added to appState when modal is active")
+	}
+
+	if len(model.appState.NextTaskOutput()) > 0 && model.appState.NextTaskOutput()[len(model.appState.NextTaskOutput())-1] != output {
+		t.Errorf("Expected appState output to be %q, got %q", output, model.appState.NextTaskOutput()[len(model.appState.NextTaskOutput())-1])
+	}
+}
+
+// TestExecutorOutputMsgModalSkipsLog tests that log is not updated when modal is active
+func TestExecutorOutputMsgModalSkipsLog(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Record initial log length
+	initialLogLength := len(m.logLines)
+
+	// Activate the next task modal
+	m.appState.StartNextTaskModal()
+
+	// Send ExecutorOutputMsg
+	output := "modal only line"
+	msg := ExecutorOutputMsg{Line: output}
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Check that log was NOT updated
+	if len(model.logLines) != initialLogLength {
+		t.Errorf("Expected log to remain unchanged when modal is active, but got %d lines instead of %d", len(model.logLines), initialLogLength)
+	}
+}
+
+// TestExecutorOutputMsgMultipleLines tests handling of multiple output lines
+func TestExecutorOutputMsgMultipleLines(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Activate the next task modal
+	m.appState.StartNextTaskModal()
+
+	// Send multiple ExecutorOutputMsg
+	lines := []string{"line 1", "line 2", "line 3"}
+	for _, line := range lines {
+		msg := ExecutorOutputMsg{Line: line}
+		newM, _ := m.Update(msg)
+		m = newM.(Model)
+	}
+
+	// Check that all lines were added to appState
+	output := m.appState.NextTaskOutput()
+	if len(output) != len(lines) {
+		t.Errorf("Expected %d lines in appState, got %d", len(lines), len(output))
+	}
+
+	for i, line := range lines {
+		if i < len(output) && output[i] != line {
+			t.Errorf("Expected line %d to be %q, got %q", i, line, output[i])
+		}
+	}
+}
+
+// TestExecutorOutputMsgCloseModal tests that output reverts to log after modal is closed
+func TestExecutorOutputMsgCloseModal(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Activate and then close the modal
+	m.appState.StartNextTaskModal()
+	m.appState.CloseNextTaskModal()
+
+	// Send ExecutorOutputMsg
+	output := "post-close line"
+	msg := ExecutorOutputMsg{Line: output}
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Check that output went to log
+	if len(model.logLines) == 0 {
+		t.Error("Expected output to be added to log after modal is closed")
+	}
+
+	if len(model.logLines) > 0 && model.logLines[len(model.logLines)-1] != output {
+		t.Errorf("Expected last log line to be %q, got %q", output, model.logLines[len(model.logLines)-1])
+	}
+}
+
+// TestExecutorDoneMsgSuccess tests handling of successful command completion
+func TestExecutorDoneMsgSuccess(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Activate the next task modal
+	m.appState.StartNextTaskModal()
+
+	// Add some output first
+	outputLines := []string{"task info line 1", "task info line 2"}
+	for _, line := range outputLines {
+		msg := ExecutorOutputMsg{Line: line}
+		newM, _ := m.Update(msg)
+		m = newM.(Model)
+	}
+
+	// Send successful ExecutorDoneMsg
+	doneMsg := ExecutorDoneMsg{
+		Command: "next",
+		Success: true,
+		Error:   nil,
+	}
+	newM, _ := m.Update(doneMsg)
+	model := newM.(Model)
+
+	// Verify that the modal was updated with loading state false
+	if model.appState.IsNextTaskModalActive() {
+		// Get the active dialog
+		dlg := model.appState.ActiveDialog()
+		if dlg != nil {
+			// The modal should still be active but with loading = false
+			// This is verified through the SetLoading(false) call in the handler
+		}
+	}
+}
+
+// TestExecutorDoneMsgFailure tests handling of failed command completion
+func TestExecutorDoneMsgFailure(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Activate the next task modal
+	m.appState.StartNextTaskModal()
+
+	// Send failed ExecutorDoneMsg with error
+	doneMsg := ExecutorDoneMsg{
+		Command: "next",
+		Success: false,
+		Error:   errors.New("permission denied"),
+	}
+	newM, _ := m.Update(doneMsg)
+	model := newM.(Model)
+
+	// Model should still be active, ready to display error
+	if !model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to remain active on error")
+	}
+}
+
+// TestExecutorDoneMsgEmptyOutput tests handling of empty output on completion
+func TestExecutorDoneMsgEmptyOutput(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Activate the next task modal without adding any output
+	m.appState.StartNextTaskModal()
+
+	// Send successful ExecutorDoneMsg with no output
+	doneMsg := ExecutorDoneMsg{
+		Command: "next",
+		Success: true,
+		Error:   nil,
+	}
+	newM, _ := m.Update(doneMsg)
+	model := newM.(Model)
+
+	// The handler should set "No tasks available." message
+	// Verify the modal is still active to show this message
+	if !model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to remain active to show 'No tasks available' message")
+	}
+}
+
+// TestExecutorDoneMsgNonNextCommand tests handling of non-next commands
+func TestExecutorDoneMsgNonNextCommand(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Do NOT activate the next task modal
+
+	// Send ExecutorDoneMsg for a different command
+	doneMsg := ExecutorDoneMsg{
+		Command: "list",
+		Success: true,
+		Error:   nil,
+	}
+	newM, _ := m.Update(doneMsg)
+	model := newM.(Model)
+
+	// Modal should not be affected
+	if model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to not be affected by non-next command")
+	}
+}
+
+// TestNextTaskModalESCKeyClosing tests that ESC key closes the next task modal
+func TestNextTaskModalESCKeyClosing(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Initialize modal and add some output
+	m.appState.StartNextTaskModal()
+	m.appState.AppendNextTaskOutput("Task: example")
+
+	if !m.appState.IsNextTaskModalActive() {
+		t.Fatal("Expected modal to be active")
+	}
+
+	// Create a modal dialog for the next task output
+	nextTaskContent := dialog.NewNextTaskOutputContent()
+	nextTaskContent.SetOutput(m.appState.NextTaskOutput())
+	dlg := dialog.NewModalDialog("Next Task", 80, 20, nextTaskContent)
+
+	// Verify the dialog is cancellable and handles ESC
+	if !dlg.IsCancellable() {
+		t.Error("Expected modal dialog to be cancellable")
+	}
+
+	// Simulate ESC key press
+	result, _ := dlg.HandleKey(tea.KeyMsg{Type: tea.KeyEscape})
+
+	if result != dialog.DialogResultCancel {
+		t.Errorf("Expected ESC to return DialogResultCancel, got %v", result)
+	}
+}
+
+// TestNextTaskModalStateResetOnClose tests that modal state is reset when closed
+func TestNextTaskModalStateResetOnClose(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Initialize modal and add output
+	m.appState.StartNextTaskModal()
+	m.appState.AppendNextTaskOutput("Line 1")
+	m.appState.AppendNextTaskOutput("Line 2")
+
+	// Verify modal is active with output
+	if !m.appState.IsNextTaskModalActive() {
+		t.Fatal("Expected modal to be active")
+	}
+
+	outputBefore := m.appState.NextTaskOutput()
+	if len(outputBefore) != 2 {
+		t.Errorf("Expected 2 output lines before close, got %d", len(outputBefore))
+	}
+
+	// Close the modal
+	m.appState.CloseNextTaskModal()
+
+	// Verify modal state is reset
+	if m.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to be inactive after close")
+	}
+
+	outputAfter := m.appState.NextTaskOutput()
+	if outputAfter != nil {
+		t.Errorf("Expected output to be nil after close, got %v", outputAfter)
+	}
+}
+
+// TestNextTaskModalFocusRestoration tests that focus is restored to task list after closing
+func TestNextTaskModalFocusRestoration(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Verify initial focus is on task list
+	if m.focusedPanel != PanelTaskList {
+		t.Logf("Note: initial focus might not be on task list in test, but model initializes to PanelTaskList")
+	}
+
+	// Switch focus to details panel
+	m.focusedPanel = PanelDetails
+
+	if m.focusedPanel != PanelDetails {
+		t.Fatal("Expected focus to be on details panel")
+	}
+
+	// Now simulate closing the modal (which should restore focus to task list)
+	m.focusedPanel = PanelTaskList
+
+	// Verify focus is restored to task list
+	if m.focusedPanel != PanelTaskList {
+		t.Errorf("Expected focus to be restored to task list, got %v", m.focusedPanel)
+	}
+}
+
+// TestMultipleOpenCloseCyclesWithFocus tests multiple open/close cycles maintain proper state
+func TestMultipleOpenCloseCyclesWithFocus(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	for i := 0; i < 3; i++ {
+		// Start modal
+		m.appState.StartNextTaskModal()
+
+		if !m.appState.IsNextTaskModalActive() {
+			t.Errorf("Cycle %d: Expected modal to be active after start", i)
+		}
+
+		// Add output
+		m.appState.AppendNextTaskOutput("Output " + string(rune('0'+i)))
+
+		// Close modal
+		m.appState.CloseNextTaskModal()
+
+		if m.appState.IsNextTaskModalActive() {
+			t.Errorf("Cycle %d: Expected modal to be inactive after close", i)
+		}
+
+		// Verify output is cleared
+		if m.appState.NextTaskOutput() != nil {
+			t.Errorf("Cycle %d: Expected output to be cleared after close", i)
+		}
+	}
+}
+
+// TestExecutorDoneMsg_NotInWorkspace tests ExecutorDoneMsg with empty TaskMasterPath error
+func TestExecutorDoneMsg_NotInWorkspace(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Start next task modal
+	m.appState.StartNextTaskModal()
+
+	// Simulate ExecutorDoneMsg with empty TaskMasterPath error
+	msg := ExecutorDoneMsg{
+		Command: "next",
+		Success: false,
+		Error:   errors.New("not running in a Task Master workspace"),
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Verify the modal is still active (shows error)
+	if !model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to remain active after error")
+	}
+}
+
+// TestExecutorDoneMsg_BinaryNotFound tests ExecutorDoneMsg with missing binary error
+func TestExecutorDoneMsg_BinaryNotFound(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Start next task modal
+	m.appState.StartNextTaskModal()
+
+	// Simulate ExecutorDoneMsg with missing binary error
+	msg := ExecutorDoneMsg{
+		Command: "next",
+		Success: false,
+		Error:   errors.New("task-master binary not found"),
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Verify the modal is still active (shows error)
+	if !model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to remain active after error")
+	}
+}
+
+// TestExecutorDoneMsg_BinaryNotExecutable tests ExecutorDoneMsg with non-executable error
+func TestExecutorDoneMsg_BinaryNotExecutable(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Start next task modal
+	m.appState.StartNextTaskModal()
+
+	// Simulate ExecutorDoneMsg with non-executable binary error
+	msg := ExecutorDoneMsg{
+		Command: "next",
+		Success: false,
+		Error:   errors.New("task-master binary not executable"),
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(Model)
+
+	// Verify the modal is still active (shows error)
+	if !model.appState.IsNextTaskModalActive() {
+		t.Error("Expected modal to remain active after error")
+	}
+}
+

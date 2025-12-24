@@ -32,6 +32,13 @@ type ExecutorOutputMsg struct {
 	Line string
 }
 
+// ExecutorDoneMsg is sent when a command execution completes
+type ExecutorDoneMsg struct {
+	Command string
+	Success bool
+	Error   error
+}
+
 // CommandCompletedMsg is sent when a command execution completes
 type CommandCompletedMsg struct {
 	Command string
@@ -79,6 +86,20 @@ func WaitForExecutorOutput(service *executor.Service) tea.Cmd {
 		outputChan := service.GetOutput()
 		line := <-outputChan
 		return ExecutorOutputMsg{Line: line}
+	}
+}
+
+// WaitForExecutorDone returns a command that waits for command completion
+func WaitForExecutorDone(service *executor.Service) tea.Cmd {
+	return func() tea.Msg {
+		// Get the done channel and wait for completion
+		doneChan := service.GetDone()
+		result := <-doneChan
+		return ExecutorDoneMsg{
+			Command: result.Command,
+			Success: result.Success,
+			Error:   result.Error,
+		}
 	}
 }
 

@@ -7,8 +7,10 @@ import (
 
 // AppState centralizes references shared across the UI (dialogs, keymap, etc.).
 type AppState struct {
-	dialogManager *dialog.DialogManager
-	keyMap        *KeyMap
+	dialogManager        *dialog.DialogManager
+	keyMap               *KeyMap
+	nextTaskModalActive  bool
+	nextTaskOutput       []string
 }
 
 // NewAppState constructs an AppState helper.
@@ -101,4 +103,33 @@ func (s *AppState) ClearDialogs() {
 	for s.dialogManager.HasDialogs() {
 		s.dialogManager.PopDialog()
 	}
+}
+
+// StartNextTaskModal initializes the next task modal state.
+func (s *AppState) StartNextTaskModal() {
+	s.nextTaskModalActive = true
+	s.nextTaskOutput = []string{}
+}
+
+// AppendNextTaskOutput appends a line to the output only when modal is active.
+func (s *AppState) AppendNextTaskOutput(line string) {
+	if s.nextTaskModalActive {
+		s.nextTaskOutput = append(s.nextTaskOutput, line)
+	}
+}
+
+// CloseNextTaskModal resets the next task modal state.
+func (s *AppState) CloseNextTaskModal() {
+	s.nextTaskModalActive = false
+	s.nextTaskOutput = nil
+}
+
+// NextTaskOutput returns the current next task output lines.
+func (s *AppState) NextTaskOutput() []string {
+	return s.nextTaskOutput
+}
+
+// IsNextTaskModalActive returns whether the next task modal is active.
+func (s *AppState) IsNextTaskModalActive() bool {
+	return s.nextTaskModalActive
 }

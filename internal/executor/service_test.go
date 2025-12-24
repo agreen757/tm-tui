@@ -433,3 +433,297 @@ func TestClose(t *testing.T) {
 	// Cleanup
 	os.RemoveAll(tmpDir)
 }
+
+// TestGetDone tests done completion channel
+func TestGetDone(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	doneCh := service.GetDone()
+	if doneCh == nil {
+		t.Fatal("done channel should not be nil")
+	}
+
+	// Test sending to done channel
+	testResult := CommandResult{
+		Command: "test",
+		Success: true,
+		Error:   nil,
+	}
+
+	go func() {
+		service.doneCh <- testResult
+	}()
+
+	select {
+	case result := <-doneCh:
+		if result.Command != testResult.Command {
+			t.Errorf("expected command '%s', got '%s'", testResult.Command, result.Command)
+		}
+		if result.Success != testResult.Success {
+			t.Errorf("expected success %v, got %v", testResult.Success, result.Success)
+		}
+		if result.Error != testResult.Error {
+			t.Errorf("expected error nil, got %v", result.Error)
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("timeout waiting for done channel")
+	}
+}
+
+// TestExecutorDoneMsg_Success tests emitting success message
+func TestExecutorDoneMsg_Success(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	// Simulate successful command completion
+	go func() {
+		service.doneCh <- CommandResult{
+			Command: "next",
+			Success: true,
+			Error:   nil,
+		}
+	}()
+
+	timeout := time.After(2 * time.Second)
+	select {
+	case result := <-service.GetDone():
+		if result.Command != "next" {
+			t.Errorf("expected command 'next', got '%s'", result.Command)
+		}
+		if !result.Success {
+			t.Error("expected success true")
+		}
+		if result.Error != nil {
+			t.Errorf("expected no error, got %v", result.Error)
+		}
+	case <-timeout:
+		t.Fatal("timeout waiting for done message")
+	}
+}
+
+// TestExecutorDoneMsg_Failure tests emitting failure message
+func TestExecutorDoneMsg_Failure(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	testErr := fmt.Errorf("command failed")
+
+	// Simulate failed command completion
+	go func() {
+		service.doneCh <- CommandResult{
+			Command: "next",
+			Success: false,
+			Error:   testErr,
+		}
+	}()
+
+	timeout := time.After(2 * time.Second)
+	select {
+	case result := <-service.GetDone():
+		if result.Command != "next" {
+			t.Errorf("expected command 'next', got '%s'", result.Command)
+		}
+		if result.Success {
+			t.Error("expected success false")
+		}
+		if result.Error != testErr {
+			t.Errorf("expected error '%v', got %v", testErr, result.Error)
+		}
+	case <-timeout:
+		t.Fatal("timeout waiting for done message")
+	}
+}
+
+// TestCommandResult tests CommandResult struct
+func TestCommandResult(t *testing.T) {
+	result := CommandResult{
+		Command: "test-cmd",
+		Success: true,
+		Error:   nil,
+	}
+
+	if result.Command != "test-cmd" {
+		t.Errorf("expected command 'test-cmd', got '%s'", result.Command)
+	}
+
+	if !result.Success {
+		t.Error("expected success true")
+	}
+
+	if result.Error != nil {
+		t.Errorf("expected nil error, got %v", result.Error)
+	}
+
+	// Test with error
+	testErr := fmt.Errorf("test error")
+	resultWithErr := CommandResult{
+		Command: "test-cmd",
+		Success: false,
+		Error:   testErr,
+	}
+
+	if resultWithErr.Error != testErr {
+		t.Errorf("expected error '%v', got %v", testErr, resultWithErr.Error)
+	}
+}
+
+// TestExecuteNextWithEmptyTaskMasterPath tests that 'next' command fails with empty TaskMasterPath
+func TestExecuteNextWithEmptyTaskMasterPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmDir := filepath.Join(tmpDir, ".taskmaster")
+	if err := os.MkdirAll(tmDir, 0755); err != nil {
+		t.Fatalf("failed to create .taskmaster dir: %v", err)
+	}
+
+	// Create a temporary config with actual path for log file purposes
+	tempCfg := &config.Config{
+		TaskMasterPath: tmpDir,
+	}
+
+	service, err := NewService(tempCfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	defer service.Close()
+
+	// Now set the TaskMasterPath to empty to test the check
+	service.config.TaskMasterPath = ""
+
+	// Try to execute 'next' command
+	err = service.Execute("next")
+	if err == nil {
+		t.Error("expected error when TaskMasterPath is empty for 'next' command")
+	}
+
+	if !strings.Contains(err.Error(), "not running in a Task Master workspace") {
+		t.Errorf("expected 'not running in a Task Master workspace' error, got: %v", err)
+	}
+}
+
+// TestExecuteOtherCommandWithEmptyTaskMasterPath tests that other commands work even with empty TaskMasterPath
+func TestExecuteOtherCommandWithEmptyTaskMasterPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmDir := filepath.Join(tmpDir, ".taskmaster")
+	if err := os.MkdirAll(tmDir, 0755); err != nil {
+		t.Fatalf("failed to create .taskmaster dir: %v", err)
+	}
+
+	cfg := &config.Config{
+		TaskMasterPath: tmpDir,
+	}
+
+	service, err := NewService(cfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	defer service.Close()
+
+	// Set the TaskMasterPath to empty
+	service.config.TaskMasterPath = ""
+
+	// Try to execute a different command (not 'next')
+	// This should not fail due to empty TaskMasterPath
+	err = service.Execute("list")
+	// The error here would be due to task-master not being found in PATH, not TaskMasterPath being empty
+	if err != nil && strings.Contains(err.Error(), "not running in a Task Master workspace") {
+		t.Error("non-'next' commands should not fail due to empty TaskMasterPath")
+	}
+}
+
+// TestExecuteNextWithMissingBinary tests that 'next' command fails when binary doesn't exist
+func TestExecuteNextWithMissingBinary(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmDir := filepath.Join(tmpDir, ".taskmaster")
+	if err := os.MkdirAll(tmDir, 0755); err != nil {
+		t.Fatalf("failed to create .taskmaster dir: %v", err)
+	}
+
+	cfg := &config.Config{
+		TaskMasterPath: tmpDir,
+	}
+
+	service, err := NewService(cfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	defer service.Close()
+
+	// Try to execute 'next' command when binary doesn't exist
+	err = service.Execute("next")
+	if err == nil {
+		t.Error("expected error when task-master binary doesn't exist")
+	}
+
+	if !strings.Contains(err.Error(), "task-master binary not found") {
+		t.Errorf("expected 'task-master binary not found' error, got: %v", err)
+	}
+}
+
+// TestExecuteNextWithExistingBinary tests that 'next' command passes existence check
+func TestExecuteNextWithExistingBinary(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmDir := filepath.Join(tmpDir, ".taskmaster")
+	if err := os.MkdirAll(tmDir, 0755); err != nil {
+		t.Fatalf("failed to create .taskmaster dir: %v", err)
+	}
+
+	// Create a fake task-master binary
+	binPath := filepath.Join(tmpDir, "task-master")
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho 'test'\n"), 0755); err != nil {
+		t.Fatalf("failed to create fake binary: %v", err)
+	}
+
+	cfg := &config.Config{
+		TaskMasterPath: tmpDir,
+	}
+
+	service, err := NewService(cfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	defer service.Close()
+
+	// Try to execute 'next' command when binary exists
+	// It should not fail due to missing binary (it may fail due to execution, but that's expected)
+	err = service.Execute("next")
+	// We don't care about the execution error, we care that it didn't fail due to missing binary
+	if err != nil && strings.Contains(err.Error(), "task-master binary not found") {
+		t.Error("should not fail with 'binary not found' when binary exists")
+	}
+}
+
+// TestExecuteNextWithNonExecutableBinary tests that 'next' command fails when binary isn't executable
+func TestExecuteNextWithNonExecutableBinary(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmDir := filepath.Join(tmpDir, ".taskmaster")
+	if err := os.MkdirAll(tmDir, 0755); err != nil {
+		t.Fatalf("failed to create .taskmaster dir: %v", err)
+	}
+
+	// Create a binary without execute permissions
+	binPath := filepath.Join(tmpDir, "task-master")
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\necho 'test'\n"), 0644); err != nil {
+		t.Fatalf("failed to create binary: %v", err)
+	}
+
+	cfg := &config.Config{
+		TaskMasterPath: tmpDir,
+	}
+
+	service, err := NewService(cfg)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	defer service.Close()
+
+	// Try to execute 'next' command with non-executable binary
+	err = service.Execute("next")
+	if err == nil {
+		t.Error("expected error when task-master binary is not executable")
+	}
+
+	if !strings.Contains(err.Error(), "task-master binary not executable") {
+		t.Errorf("expected 'task-master binary not executable' error, got: %v", err)
+	}
+}
