@@ -92,18 +92,33 @@ func (s *Service) Execute(cmd string, args ...string) error {
 			return fmt.Errorf("not running in a Task Master workspace")
 		}
 
-		// Check if binary exists and is executable
-		binPath := filepath.Join(s.config.TaskMasterPath, "task-master")
-		fileInfo, err := os.Stat(binPath)
-		if os.IsNotExist(err) {
-			s.mu.Unlock()
-			return fmt.Errorf("task-master binary not found")
+		// Check if task-master binary is available in PATH and executable
+		pathEntries := filepath.SplitList(os.Getenv("PATH"))
+		var foundExecutable bool
+		var foundNonExecutable bool
+		for _, dir := range pathEntries {
+			if dir == "" {
+				continue
+			}
+			candidate := filepath.Join(dir, "task-master")
+			fileInfo, err := os.Stat(candidate)
+			if err != nil {
+				continue
+			}
+			if fileInfo.Mode()&0111 == 0 {
+				foundNonExecutable = true
+				continue
+			}
+			foundExecutable = true
+			break
 		}
 
-		// Check if binary has execute permissions
-		if fileInfo.Mode()&0111 == 0 {
+		if !foundExecutable {
 			s.mu.Unlock()
-			return fmt.Errorf("task-master binary not executable")
+			if foundNonExecutable {
+				return fmt.Errorf("task-master binary not executable")
+			}
+			return fmt.Errorf("task-master binary not found")
 		}
 	}
 

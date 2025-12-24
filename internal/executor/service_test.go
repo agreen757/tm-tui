@@ -634,6 +634,7 @@ func TestExecuteOtherCommandWithEmptyTaskMasterPath(t *testing.T) {
 // TestExecuteNextWithMissingBinary tests that 'next' command fails when binary doesn't exist
 func TestExecuteNextWithMissingBinary(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("PATH", tmpDir)
 	tmDir := filepath.Join(tmpDir, ".taskmaster")
 	if err := os.MkdirAll(tmDir, 0755); err != nil {
 		t.Fatalf("failed to create .taskmaster dir: %v", err)
@@ -663,6 +664,7 @@ func TestExecuteNextWithMissingBinary(t *testing.T) {
 // TestExecuteNextWithExistingBinary tests that 'next' command passes existence check
 func TestExecuteNextWithExistingBinary(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("PATH", tmpDir)
 	tmDir := filepath.Join(tmpDir, ".taskmaster")
 	if err := os.MkdirAll(tmDir, 0755); err != nil {
 		t.Fatalf("failed to create .taskmaster dir: %v", err)
@@ -696,6 +698,7 @@ func TestExecuteNextWithExistingBinary(t *testing.T) {
 // TestExecuteNextWithNonExecutableBinary tests that 'next' command fails when binary isn't executable
 func TestExecuteNextWithNonExecutableBinary(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("PATH", tmpDir)
 	tmDir := filepath.Join(tmpDir, ".taskmaster")
 	if err := os.MkdirAll(tmDir, 0755); err != nil {
 		t.Fatalf("failed to create .taskmaster dir: %v", err)
