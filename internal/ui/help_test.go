@@ -33,7 +33,7 @@ func TestHelpOverlay(t *testing.T) {
 	// Simulate pressing '?' key
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
 	updatedModel, _ := model.Update(msg)
-	m := updatedModel.(Model)
+	m := updatedModel.(*Model)
 	assert.True(t, m.showHelp, "Help should be shown after pressing '?'")
 
 	// Test help overlay content
@@ -57,14 +57,14 @@ func TestHelpOverlay(t *testing.T) {
 	// Test help toggle off with '?'
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
 	updatedModel, _ = m.Update(msg)
-	m2 := updatedModel.(Model)
+	m2 := updatedModel.(*Model)
 	assert.False(t, m2.showHelp, "Help should be hidden after pressing '?' again")
 
 	// Test help toggle off with Escape
 	m.showHelp = true
 	msg = tea.KeyMsg{Type: tea.KeyEsc}
 	updatedModel, _ = m.Update(msg)
-	m3 := updatedModel.(Model)
+	m3 := updatedModel.(*Model)
 	assert.False(t, m3.showHelp, "Help should be hidden after pressing Escape")
 }
 
@@ -132,7 +132,7 @@ func TestHelpOverlayInteraction(t *testing.T) {
 	// Try pressing 'q' (quit) - should be ignored
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
 	updatedModel, cmd := model.Update(msg)
-	m := updatedModel.(Model)
+	m := updatedModel.(*Model)
 
 	assert.True(t, m.showHelp, "Help should still be shown")
 	assert.Nil(t, cmd, "Should not quit when help is shown")
@@ -140,7 +140,7 @@ func TestHelpOverlayInteraction(t *testing.T) {
 	// Try pressing 'n' (next task) - should be ignored
 	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
 	updatedModel, _ = model.Update(msg)
-	m = updatedModel.(Model)
+	m = updatedModel.(*Model)
 
 	assert.True(t, m.showHelp, "Help should still be shown")
 	// Verify no command was executed by checking that execService is not running

@@ -97,6 +97,8 @@ func GenerateCrushPrompt(task *taskmaster.Task, model string) (string, error) {
 	if err != nil {
 		// Use default template if file doesn't exist
 		templateContent = defaultWorkflowGuide
+		//log this
+		fmt.Printf("Using default Crush prompt template; could not read %s: %v\n", workflowPath, err)
 	} else {
 		templateContent = string(content)
 	}

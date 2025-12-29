@@ -54,6 +54,14 @@ func (m *Model) dispatchCommand(id CommandID) tea.Cmd {
 		return m.openQuickProjectSwitchDialog()
 	case CommandProjectSearch:
 		return m.openProjectSearchDialog()
+	case CommandGitMenu:
+		m.openGitMenu()
+	case CommandGitSwitchBranch:
+		m.openBranchSwitchDialog()
+	case CommandGitCreateBranch:
+		m.openBranchCreateDialog()
+	case CommandGitRecentCommits:
+		m.openCommitsDialog()
 	default:
 		m.addLogLine(fmt.Sprintf("Command %s not implemented", id))
 	}

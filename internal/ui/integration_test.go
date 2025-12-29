@@ -28,7 +28,7 @@ func TestFileWatchingUpdatesDialogs(t *testing.T) {
 	// Simulate file reload notification
 	newModel, _ := m.Update(TasksReloadedMsg{})
 	if newModel != nil {
-		m = newModel.(Model)
+		m = newModel.(*Model)
 	}
 
 	// Model should still be functional after reload
@@ -129,7 +129,7 @@ func TestTerminalResizeHandling(t *testing.T) {
 	// Simulate terminal resize
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if newModel != nil {
-		m = newModel.(Model)
+		m = newModel.(*Model)
 	}
 
 	// Verify model is still in a valid state
