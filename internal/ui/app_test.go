@@ -11,7 +11,7 @@ import (
 )
 
 // createTestModel creates a model with test data
-func createTestModel() Model {
+func createTestModel() *Model {
 	cfg := &config.Config{
 		TaskMasterPath: "/tmp/test",
 	}
@@ -44,7 +44,7 @@ func createTestModel() Model {
 
 	// Create a minimal model without full services
 	keyMap := DefaultKeyMap()
-	m := Model{
+	m := &Model{
 		config:           cfg,
 		tasks:            tasks,
 		taskIndex:        make(map[string]*taskmaster.Task),
@@ -329,7 +329,7 @@ func TestKeyboardMessage(t *testing.T) {
 
 	// Test down key
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	m = newModel.(Model)
+	m = newModel.(*Model)
 
 	if m.selectedIndex != 1 {
 		t.Errorf("Expected selectedIndex to be 1 after 'j' key, got %d", m.selectedIndex)
@@ -337,7 +337,7 @@ func TestKeyboardMessage(t *testing.T) {
 
 	// Test up key
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
-	m = newModel.(Model)
+	m = newModel.(*Model)
 
 	if m.selectedIndex != 0 {
 		t.Errorf("Expected selectedIndex to be 0 after 'k' key, got %d", m.selectedIndex)

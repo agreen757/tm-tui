@@ -260,6 +260,52 @@ func (m Model) activeProjectStatus() string {
 	return fmt.Sprintf("Active: %s", name)
 }
 
+// formatGitInfo formats git status information for display in the status bar
+func (m Model) formatGitInfo() string {
+	if !m.gitAvailable {
+		return ""
+	}
+
+	if !m.gitRepoInfo.IsRepo {
+		// Show "No Git repo" in gray when git is available but not in a repo
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#4C566A")).
+			Render("[No Git repo]")
+	}
+
+	status := m.GitStatus()
+	if status.Branch == "" {
+		return ""
+	}
+
+	// Format branch name with dirty indicator
+	branchInfo := status.Branch
+	if status.IsDirty {
+		branchInfo += "*"
+	}
+
+	// Add ahead/behind counts if upstream exists
+	if status.HasUpstream {
+		aheadBehind := ""
+		if status.Behind > 0 {
+			aheadBehind += fmt.Sprintf("↓%d", status.Behind)
+		}
+		if status.Ahead > 0 {
+			aheadBehind += fmt.Sprintf("↑%d", status.Ahead)
+		}
+		if aheadBehind != "" {
+			branchInfo += " " + aheadBehind
+		}
+	} else {
+		branchInfo += " (no upstream)"
+	}
+
+	// Apply green styling for repo info
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#A3BE8C")).
+		Render(fmt.Sprintf("[%s]", branchInfo))
+}
+
 // renderStatusBar renders the bottom status bar with keyboard hints
 func (m Model) renderStatusBar() string {
 	// Show confirmation prompt if confirming clear state
@@ -288,6 +334,14 @@ func (m Model) renderStatusBar() string {
 	if active := m.activeProjectStatus(); active != "" {
 		helpText = fmt.Sprintf("%s | %s", helpText, active)
 	}
+
+	// Integrate git info into status bar
+	gitInfo := m.formatGitInfo()
+	if gitInfo != "" {
+		statusContent := lipgloss.JoinHorizontal(lipgloss.Left, gitInfo, " ", helpText)
+		return m.styles.StatusBar.Width(m.width).Render(statusContent)
+	}
+
 	return m.styles.StatusBar.Width(m.width).Render(helpText)
 }
 

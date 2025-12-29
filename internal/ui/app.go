@@ -10,6 +10,7 @@ import (
 
 	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/executor"
+	"github.com/agreen757/tm-tui/internal/git"
 	"github.com/agreen757/tm-tui/internal/projects"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
@@ -67,6 +68,11 @@ type Model struct {
 	execService   *executor.Service
 	appState      *AppState
 	lastPrdPath   string
+
+	// Git integration
+	gitAvailable bool
+	gitRepoInfo  git.RepoInfo
+	gitRefresher *git.StatusRefresher
 
 	// Task data
 	tasks        []taskmaster.Task
@@ -176,7 +182,7 @@ func (m *Model) dialogManager() *dialog.DialogManager {
 }
 
 // NewModel creates a new TUI model
-func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskService TaskService, execService *executor.Service) Model {
+func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskService TaskService, execService *executor.Service) *Model {
 	tasks, _ := taskService.GetTasks()
 
 	// Initialize viewports (sizes will be set on first WindowSizeMsg)
@@ -217,7 +223,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	// Initialize TaskRunnerModal (size will be set on first WindowSizeMsg)
 	taskRunner := dialog.NewTaskRunnerModal(0, 0, dialogStyle)
 
-	m := Model{
+	m := &Model{
 		config:            cfg,
 		configManager:     configManager,
 		taskService:       taskService,
@@ -312,6 +318,46 @@ func (m *Model) tryHandleCommandShortcut(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
+// InitGit initializes Git components during model initialization
+func (m *Model) InitGit() {
+	// Check if git is available
+	m.gitAvailable = git.IsGitAvailable()
+	if !m.gitAvailable {
+		return
+	}
+
+	// Detect repository - get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	// Detect repository
+	m.gitRepoInfo = git.DetectRepository(cwd)
+	if !m.gitRepoInfo.IsRepo {
+		return
+	}
+
+	// Start status refresher
+	m.gitRefresher = git.NewStatusRefresher(m.gitRepoInfo.RootPath)
+	m.gitRefresher.Start()
+}
+
+// CleanupGit cleans up Git resources when the application exits
+func (m *Model) CleanupGit() {
+	if m.gitRefresher != nil {
+		m.gitRefresher.Stop()
+	}
+}
+
+// GitStatus returns the current Git status
+func (m *Model) GitStatus() git.GitStatus {
+	if m.gitRefresher == nil {
+		return git.GitStatus{}
+	}
+	return m.gitRefresher.GetStatus()
+}
+
 // openCommandPalette displays the palette dialog listing all commands.
 func (m *Model) openCommandPalette() {
 	dm := m.dialogManager()
@@ -325,6 +371,116 @@ func (m *Model) openCommandPalette() {
 	palette := dialog.NewListDialog("Command Palette", 72, 18, items)
 	palette.SetShowDescription(true)
 	m.appState.AddDialog(palette, nil)
+}
+
+// openGitMenu opens the git menu dialog
+func (m *Model) openGitMenu() {
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	
+	// Only show git menu if we're in a git repository
+	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
+		errDialog := dialog.NewErrorDialog(
+			"Git Not Available",
+			"Not in a git repository or git is not installed.",
+		)
+		m.appState.PushDialog(errDialog)
+		return
+	}
+	
+	// Create git menu dialog
+	// Selections are handled via GitMenuSelectionMsg in the Update method
+	gitMenu := dialog.NewGitMenuDialog(nil)
+	
+	// Use AddDialog with nil callback since selections are handled via messages
+	m.appState.AddDialog(gitMenu, nil)
+}
+
+// openGitStatusDialog opens the git status dialog
+func (m *Model) openGitStatusDialog() {
+	dm := m.dialogManager()
+	if dm == nil {
+		return
+	}
+	
+	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
+		return
+	}
+	
+	statusDialog := dialog.NewGitStatusDialog(m.gitRepoInfo.RootPath)
+	m.appState.PushDialog(statusDialog)
+}
+
+// openBranchSwitchDialog opens the branch switching dialog
+func (m *Model) openBranchSwitchDialog() {
+	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
+		m.addLogLine("Error: Not in a Git repository")
+		return
+	}
+	
+	onSwitch := func(branch string, output string, err error) {
+		if err != nil {
+			m.addLogLine("Failed to switch branch: " + output)
+			return
+		}
+		
+		// Refresh git status
+		if m.gitRefresher != nil {
+			m.gitRefresher.Refresh()
+		}
+		
+		m.addLogLine("Switched to branch: " + branch)
+	}
+	
+	switchDialog, err := dialog.NewBranchSwitchDialog(m.gitRepoInfo.RootPath, onSwitch)
+	if err != nil {
+		m.addLogLine("Failed to list branches: " + err.Error())
+		return
+	}
+	
+	m.appState.PushDialog(switchDialog)
+}
+
+// openBranchCreateDialog opens the branch creation dialog
+func (m *Model) openBranchCreateDialog() {
+	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
+		m.addLogLine("Error: Not in a Git repository")
+		return
+	}
+	
+	onCreate := func(branch string, output string, err error) {
+		if err != nil {
+			m.addLogLine("Failed to create branch: " + output)
+			return
+		}
+		
+		// Refresh git status
+		if m.gitRefresher != nil {
+			m.gitRefresher.Refresh()
+		}
+		
+		m.addLogLine("Created and switched to branch: " + branch)
+	}
+	
+	createDialog := dialog.NewBranchCreateDialog(m.gitRepoInfo.RootPath, onCreate)
+	m.appState.PushDialog(createDialog)
+}
+
+// openCommitsDialog opens the recent commits dialog
+func (m *Model) openCommitsDialog() {
+	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
+		m.addLogLine("Error: Not in a Git repository")
+		return
+	}
+	
+	onSelect := func(commit git.Commit) {
+		m.addLogLine("Commit: " + commit.Hash + " - " + commit.Subject)
+	}
+	
+	commitsDialog := dialog.NewCommitsDialog(m.gitRepoInfo.RootPath, onSelect)
+	m.appState.PushDialog(commitsDialog)
 }
 
 func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
@@ -1787,7 +1943,10 @@ func (m *Model) setTaskStatus(status string) {
 }
 
 // Init initializes the model and starts watching for file changes
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
+	// Initialize Git components
+	m.InitGit()
+
 	// Return a batch of startup commands:
 	// 1. Load tasks from disk initially
 	// 2. Start watching for task file changes
@@ -1913,7 +2072,7 @@ func (m *Model) updateFilteredTasks() {
 }
 
 // Update handles messages and updates the model
-func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := incomingMsg.(type) {
@@ -2236,6 +2395,21 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
+	
+	case dialog.GitMenuSelectionMsg:
+		// Handle git menu selection
+		switch msg.SelectedIndex {
+		case 0: // Show Status
+			m.openGitStatusDialog()
+		case 1: // Switch Branch
+			m.openBranchSwitchDialog()
+		case 2: // Create Branch
+			m.openBranchCreateDialog()
+		case 3: // Recent Commits
+			m.openCommitsDialog()
+		}
+		return m, nil
+	
 	case dialog.ModelSelectionMsg:
 		if cmd := m.handleModelSelection(msg); cmd != nil {
 			return m, cmd
@@ -2766,6 +2940,10 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keyMap.CommandPalette):
 				m.openCommandPalette()
 				return m, nil
+				
+			case key.Matches(msg, m.keyMap.GitMenu):
+				m.openGitMenu()
+				return m, nil
 
 			case key.Matches(msg, m.keyMap.ViewTree):
 				// Switch to tree view
@@ -2874,7 +3052,7 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the TUI
-func (m Model) View() string {
+func (m *Model) View() string {
 	if !m.ready {
 		return m.styles.Info.Render("Initializing Task Master TUI...")
 	}

@@ -23,6 +23,10 @@ const (
 	CommandProjectQuickSwitch CommandID = "project_quick_switch"
 	CommandProjectSearch      CommandID = "project_search"
 	CommandRunTask            CommandID = "run_task"
+	CommandGitMenu            CommandID = "git.menu"
+	CommandGitSwitchBranch    CommandID = "git.switchBranch"
+	CommandGitCreateBranch    CommandID = "git.createBranch"
+	CommandGitRecentCommits   CommandID = "git.recentCommits"
 )
 
 // CommandSpec captures palette metadata for a command.
@@ -46,6 +50,10 @@ func defaultCommandSpecs() []CommandSpec {
 		{ID: CommandProjectTags, Label: "Project Tags", Description: "Browse project tags and switch", Shortcut: "Ctrl+T"},
 		{ID: CommandProjectQuickSwitch, Label: "Quick Project Switch", Description: "Switch between recent projects", Shortcut: "Ctrl+Q"},
 		{ID: CommandProjectSearch, Label: "Search Projects", Description: "Search tags or projects", Shortcut: "Ctrl+Shift+T"},
+		{ID: CommandGitMenu, Label: "Git: Open Menu", Description: "Open the Git menu to access Git operations", Shortcut: "g"},
+		{ID: CommandGitSwitchBranch, Label: "Git: Switch Branch", Description: "Checkout an existing Git branch", Shortcut: ""},
+		{ID: CommandGitCreateBranch, Label: "Git: Create Branch", Description: "Create and checkout a new Git branch", Shortcut: ""},
+		{ID: CommandGitRecentCommits, Label: "Git: Recent Commits", Description: "View recent commit history", Shortcut: ""},
 	}
 }
 

@@ -111,8 +111,10 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
+		m.CleanupGit()
 		return fmt.Errorf("failed to run TUI: %w", err)
 	}
 
+	m.CleanupGit()
 	return nil
 }
