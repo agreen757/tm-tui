@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,6 +16,7 @@ type FormFieldType int
 
 const (
 	FormFieldTypeText FormFieldType = iota
+	FormFieldTypeTextArea
 	FormFieldTypeCheckbox
 	FormFieldTypeRadio
 )
@@ -64,10 +66,13 @@ type FormField struct {
 	Placeholder     string
 	ConditionalShow string
 	Help            string
+	Rows            int  // Height for textarea fields
+	Border          bool // Show border for textarea fields
 
 	ValidationError string
 
-	input textinput.Model
+	input    textinput.Model
+	textarea textarea.Model
 }
 
 // Helper constructors retained for backwards compatibility.
@@ -196,6 +201,10 @@ func NewFormDialog(
 		ShortcutHint{Key: "Esc", Label: "Cancel"},
 	)
 
+	// Calculate textarea width based on dialog width
+	// Dialog width - dialog padding (4) - field padding (2) - border padding (2) = usable width
+	textareaWidth := width - 8
+
 	autoFocused := false
 	for i, field := range fields {
 		if field.Type == FormFieldTypeText {
@@ -211,6 +220,31 @@ func NewFormDialog(
 				autoFocused = true
 			}
 			field.input = input
+		}
+		if field.Type == FormFieldTypeTextArea {
+			ta := textarea.New()
+			ta.Placeholder = field.Placeholder
+			ta.CharLimit = 0
+			if field.Rows > 0 {
+				ta.SetHeight(field.Rows)
+			} else {
+				ta.SetHeight(4)
+			}
+			ta.SetWidth(textareaWidth) // Use calculated width
+			ta.ShowLineNumbers = false
+			ta.KeyMap.InsertNewline.SetEnabled(true)
+			ta.CharLimit = 0 // No character limit
+			ta.MaxHeight = 0 // No max height (allow scrolling)
+			ta.MaxWidth = 0  // No max width
+			// Note: Word wrap is enabled by default in textarea
+			if value, ok := field.Value.(string); ok {
+				ta.SetValue(value)
+			}
+			if !autoFocused {
+				ta.Focus()
+				autoFocused = true
+			}
+			field.textarea = ta
 		}
 		if field.Type == FormFieldTypeCheckbox {
 			field.Checked = field.Value == true
@@ -238,6 +272,65 @@ func (d *FormDialog) Init() tea.Cmd {
 		if d.fields[i].Type == FormFieldTypeText {
 			return d.fields[i].input.Focus()
 		}
+		if d.fields[i].Type == FormFieldTypeTextArea {
+			return d.fields[i].textarea.Focus()
+		}
+	}
+	return nil
+}
+
+// FocusNext overrides BaseFocusableDialog to handle focus/blur for input fields
+func (d *FormDialog) FocusNext() tea.Cmd {
+	// Blur current field
+	d.blurCurrentField()
+	
+	// Move to next element
+	d.BaseFocusableDialog.FocusNext()
+	
+	// Focus new field
+	return d.focusCurrentField()
+}
+
+// FocusPrev overrides BaseFocusableDialog to handle focus/blur for input fields
+func (d *FormDialog) FocusPrev() tea.Cmd {
+	// Blur current field
+	d.blurCurrentField()
+	
+	// Move to previous element
+	d.BaseFocusableDialog.FocusPrev()
+	
+	// Focus new field
+	return d.focusCurrentField()
+}
+
+func (d *FormDialog) blurCurrentField() {
+	focused := d.FocusedIndex()
+	if focused < len(d.fields) {
+		field := &d.fields[focused]
+		switch field.Type {
+		case FormFieldTypeText:
+			field.input.Blur()
+		case FormFieldTypeTextArea:
+			field.textarea.Blur()
+		}
+	}
+}
+
+func (d *FormDialog) focusCurrentField() tea.Cmd {
+	focused := d.FocusedIndex()
+	if focused < len(d.fields) {
+		field := &d.fields[focused]
+		_ = fmt.Sprintf("Focusing field %d, type: %d", focused, field.Type) // Debug
+		switch field.Type {
+		case FormFieldTypeText:
+			return field.input.Focus()
+		case FormFieldTypeTextArea:
+			// Force focus explicitly
+			field.textarea.Focus()
+			// Verify it's focused
+			_ = fmt.Sprintf("Textarea focused state after Focus(): %v", field.textarea.Focused())
+			return textarea.Blink
+		}
 	}
 	return nil
 }
@@ -256,11 +349,35 @@ func (d *FormDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 
 // HandleKey routes keyboard input to the focused element.
 func (d *FormDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
+	focused := d.FocusedIndex()
+	
+	// Special handling for textarea fields
+	if focused < len(d.fields) && d.fields[focused].Type == FormFieldTypeTextArea {
+		// Temporary debug
+		_ = fmt.Sprintf("Textarea focused, key: %v", msg.String())
+		
+		// Handle navigation keys first
+		switch msg.String() {
+		case "tab":
+			// Tab moves to next field for textarea
+			return DialogResultNone, d.FocusNext()
+		case "shift+tab":
+			// Shift+Tab moves to previous field
+			return DialogResultNone, d.FocusPrev()
+		case "esc":
+			// Esc closes dialog
+			return d.HandleBaseKey(msg)
+		default:
+			// All other keys go to textarea (including regular text input)
+			return d.handleFieldKey(focused, msg)
+		}
+	}
+	
+	// For non-textarea fields, use normal base handling (includes tab/shift+tab)
 	if result, cmd := d.HandleBaseFocusableKey(msg); result != DialogResultNone {
 		return result, cmd
 	}
 
-	focused := d.FocusedIndex()
 	if focused < len(d.fields) {
 		return d.handleFieldKey(focused, msg)
 	}
@@ -275,6 +392,25 @@ func (d *FormDialog) handleFieldKey(index int, msg tea.KeyMsg) (DialogResult, te
 		var cmd tea.Cmd
 		field.input, cmd = field.input.Update(msg)
 		d.emitValueChanged(field.ID, strings.TrimSpace(field.input.Value()))
+		return DialogResultNone, cmd
+	case FormFieldTypeTextArea:
+		var cmd tea.Cmd
+		
+		// Check if textarea is actually focused before update
+		wasFocused := field.textarea.Focused()
+		if !wasFocused {
+			// Force focus if not focused
+			field.textarea.Focus()
+		}
+		
+		oldValue := field.textarea.Value()
+		field.textarea, cmd = field.textarea.Update(msg)
+		newValue := field.textarea.Value()
+		
+		// Debug: Check if value actually changed
+		if oldValue != newValue {
+			d.emitValueChanged(field.ID, strings.TrimSpace(newValue))
+		}
 		return DialogResultNone, cmd
 	case FormFieldTypeCheckbox:
 		if key.Matches(msg, key.NewBinding(key.WithKeys(" ", "space", "enter"))) {
@@ -377,6 +513,8 @@ func (d *FormDialog) collectValues() map[string]interface{} {
 		switch field.Type {
 		case FormFieldTypeText:
 			values[key] = strings.TrimSpace(field.input.Value())
+		case FormFieldTypeTextArea:
+			values[key] = strings.TrimSpace(field.textarea.Value())
 		case FormFieldTypeCheckbox:
 			values[key] = field.Checked
 		case FormFieldTypeRadio:
@@ -397,6 +535,10 @@ func (d *FormDialog) applyValidators(values map[string]interface{}) error {
 		}
 		switch field.Type {
 		case FormFieldTypeText:
+			if val, _ := values[key].(string); strings.TrimSpace(val) == "" {
+				return ErrorFormValidation{FieldID: field.ID, Message: "This field is required"}
+			}
+		case FormFieldTypeTextArea:
 			if val, _ := values[key].(string); strings.TrimSpace(val) == "" {
 				return ErrorFormValidation{FieldID: field.ID, Message: "This field is required"}
 			}
@@ -459,12 +601,34 @@ func (d *FormDialog) View() string {
 
 func (d *FormDialog) renderField(index int) string {
 	field := d.fields[index]
-	label := lipgloss.NewStyle().Bold(true).Render(field.Label)
+	isFocused := d.FocusedIndex() == index
+	
+	// Style the label with focus indicator
+	labelStyle := lipgloss.NewStyle().Bold(true)
+	if isFocused {
+		labelStyle = labelStyle.Foreground(lipgloss.Color("#00BFFF")) // Bright blue for focused
+	}
+	label := labelStyle.Render(field.Label)
+	
 	value := ""
 
 	switch field.Type {
 	case FormFieldTypeText:
 		value = field.input.View()
+	case FormFieldTypeTextArea:
+		taView := field.textarea.View()
+		if field.Border {
+			borderColor := lipgloss.Color("#7d7d7d")
+			if isFocused {
+				borderColor = lipgloss.Color("#00BFFF") // Bright blue border when focused
+			}
+			borderStyle := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(borderColor)
+			value = borderStyle.Render(taView)
+		} else {
+			value = taView
+		}
 	case FormFieldTypeCheckbox:
 		marker := "[ ]"
 		if field.Value == true {
@@ -484,13 +648,34 @@ func (d *FormDialog) renderField(index int) string {
 		value = strings.Join(rendered, "  ")
 	}
 
+	// For textarea, render label above the field
+	if field.Type == FormFieldTypeTextArea {
+		body := lipgloss.JoinVertical(lipgloss.Left, label, value)
+		if field.Help != "" {
+			help := lipgloss.NewStyle().Foreground(lipgloss.Color("#7d7d7d")).Render(field.Help)
+			body = lipgloss.JoinVertical(lipgloss.Left, body, help)
+		}
+		
+		// Add subtle background highlight for focused field
+		bodyStyle := lipgloss.NewStyle().Padding(0, 1)
+		if isFocused {
+			bodyStyle = bodyStyle.Background(lipgloss.Color("#1a1a2e"))
+		}
+		return bodyStyle.Render(body)
+	}
+
 	body := lipgloss.JoinHorizontal(lipgloss.Left, label, " ", value)
 	if field.Help != "" {
 		help := lipgloss.NewStyle().Foreground(lipgloss.Color("#7d7d7d")).Render(field.Help)
 		body = lipgloss.JoinVertical(lipgloss.Left, body, help)
 	}
 
-	return lipgloss.NewStyle().Padding(0, 1).Render(body)
+	// Add subtle background highlight for focused field
+	bodyStyle := lipgloss.NewStyle().Padding(0, 1)
+	if isFocused {
+		bodyStyle = bodyStyle.Background(lipgloss.Color("#1a1a2e"))
+	}
+	return bodyStyle.Render(body)
 }
 
 func (d *FormDialog) renderButtons() string {
@@ -653,6 +838,8 @@ func (d *FormDialog) accessorValue(field *FormField) interface{} {
 	switch field.Type {
 	case FormFieldTypeText:
 		return strings.TrimSpace(field.input.Value())
+	case FormFieldTypeTextArea:
+		return strings.TrimSpace(field.textarea.Value())
 	case FormFieldTypeCheckbox:
 		return field.Checked
 	case FormFieldTypeRadio:
@@ -672,6 +859,10 @@ func (f *FormField) ValidateField() {
 	switch f.Type {
 	case FormFieldTypeText:
 		if strings.TrimSpace(f.input.Value()) == "" {
+			f.ValidationError = "This field is required"
+		}
+	case FormFieldTypeTextArea:
+		if strings.TrimSpace(f.textarea.Value()) == "" {
 			f.ValidationError = "This field is required"
 		}
 	case FormFieldTypeCheckbox:
