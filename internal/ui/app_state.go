@@ -7,8 +7,9 @@ import (
 
 // AppState centralizes references shared across the UI (dialogs, keymap, etc.).
 type AppState struct {
-	dialogManager *dialog.DialogManager
-	keyMap        *KeyMap
+	dialogManager    *dialog.DialogManager
+	keyMap           *KeyMap
+	PrdCreationState *PrdCreationState
 }
 
 // NewAppState constructs an AppState helper.
@@ -101,4 +102,31 @@ func (s *AppState) ClearDialogs() {
 	for s.dialogManager.HasDialogs() {
 		s.dialogManager.PopDialog()
 	}
+}
+
+// InitPrdCreationState initializes the PRD creation state if not already initialized.
+func (s *AppState) InitPrdCreationState() {
+	if s.PrdCreationState == nil {
+		s.PrdCreationState = NewPrdCreationState()
+	}
+}
+
+// UpdatePrdCreationInputs updates the PRD creation state with form input values.
+func (s *AppState) UpdatePrdCreationInputs(title, summary, scope, filename string) {
+	s.InitPrdCreationState()
+	s.PrdCreationState.Title = title
+	s.PrdCreationState.Summary = summary
+	s.PrdCreationState.Scope = scope
+	s.PrdCreationState.Filename = filename
+}
+
+// GetPrdCreationState returns the current PRD creation state, initializing if needed.
+func (s *AppState) GetPrdCreationState() *PrdCreationState {
+	s.InitPrdCreationState()
+	return s.PrdCreationState
+}
+
+// ClearPrdCreationState clears the PRD creation state.
+func (s *AppState) ClearPrdCreationState() {
+	s.PrdCreationState = nil
 }

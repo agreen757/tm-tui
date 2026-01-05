@@ -53,6 +53,7 @@ type CrushPromptContext struct {
 	TestStrategy string
 	Priority     string
 	Dependencies string
+	TagName      string // Active tag context for log directory structure
 }
 
 const defaultWorkflowGuide = `# Task Execution Guide
@@ -85,7 +86,8 @@ This task depends on: {{.Dependencies}}
 
 // GenerateCrushPrompt creates the prompt for Crush CLI execution
 // It reads CRUSH_RUN_INSTRUCTIONS.md if available, otherwise uses a default template
-func GenerateCrushPrompt(task *taskmaster.Task, model string) (string, error) {
+// tagName is the active tag context used for log directory naming
+func GenerateCrushPrompt(task *taskmaster.Task, model string, tagName string) (string, error) {
 	if task == nil {
 		return "", fmt.Errorf("task cannot be nil")
 	}
@@ -121,6 +123,7 @@ func GenerateCrushPrompt(task *taskmaster.Task, model string) (string, error) {
 		TestStrategy: task.TestStrategy,
 		Priority:     task.Priority,
 		Dependencies: depsStr,
+		TagName:      tagName,
 	}
 
 	// Execute template
@@ -184,15 +187,17 @@ func StartCrushExecution(taskID, taskTitle, model, prompt string, modal *TaskRun
 
 // ExecuteCrushSubprocess performs the actual subprocess execution with streaming
 // It immediately returns a subscription message, then spawns the subprocess in a goroutine
-func ExecuteCrushSubprocess(taskID, model, prompt string) tea.Cmd {
-	// Create a channel for streaming output messages
-	outCh := make(chan tea.Msg, 100)
+// tagName is used for organizing log files in tag-specific directories
+func ExecuteCrushSubprocess(taskID, model, prompt, tagName string) tea.Cmd {
+	// Create a larger buffered channel to handle bursts of output
+	// Increased from 100 to 1000 to better handle high-volume streaming
+	outCh := make(chan tea.Msg, 1000)
 	
 	// Create a cancellable context  
 	ctx, cancel := context.WithCancel(context.Background())
 	
 	// Start the subprocess in a goroutine
-	go runCrushProcess(ctx, taskID, model, prompt, outCh, cancel)
+	go runCrushProcess(ctx, taskID, model, prompt, tagName, outCh, cancel)
 	
 	// Return subscription message immediately
 	return func() tea.Msg {
@@ -204,12 +209,13 @@ func ExecuteCrushSubprocess(taskID, model, prompt string) tea.Cmd {
 }
 
 // runCrushProcess executes the Crush subprocess and streams output to the channel
-func runCrushProcess(ctx context.Context, taskID, model, prompt string, outCh chan tea.Msg, cancel context.CancelFunc) {
+// tagName determines the log directory structure (.taskmaster/<tagName>/<taskID>.log)
+func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string, outCh chan tea.Msg, cancel context.CancelFunc) {
 	defer close(outCh)
 	defer cancel()
 	
-	// Create log file for this run
-	logFile, logPath, err := createCrushLogFile(taskID)
+	// Create log file for this run using tag-based directory structure
+	logFile, logPath, err := createCrushLogFile(taskID, tagName)
 	var logWriter io.Writer
 	if err != nil {
 		// Log creation failed, but continue without logging to file
@@ -281,14 +287,19 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt string, outCh ch
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
+		// Increase scanner buffer size to handle long lines
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024) // 1MB max line size
+		
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Write to log file if available
+			// Write to log file if available (always write, even if channel is full)
 			if logWriter != nil {
 				fmt.Fprintf(logWriter, "[OUT] %s\n", line)
 			}
 			
+			// Non-blocking send with timeout to prevent goroutine from hanging
 			select {
 			case <-ctx.Done():
 				return
@@ -296,6 +307,13 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt string, outCh ch
 				TaskID: taskID,
 				Output: line,
 			}:
+				// Successfully sent
+			case <-time.After(100 * time.Millisecond):
+				// Channel is full and TUI is slow - drop message but continue
+				// Log file will still have the complete output
+				if logWriter != nil {
+					fmt.Fprintf(logWriter, "[WARN] Output channel full, message dropped from UI (logged): %s\n", line)
+				}
 			}
 		}
 	}()
@@ -304,14 +322,19 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt string, outCh ch
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
+		// Increase scanner buffer size to handle long lines
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024) // 1MB max line size
+		
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Write to log file if available
+			// Write to log file if available (always write, even if channel is full)
 			if logWriter != nil {
 				fmt.Fprintf(logWriter, "[ERR] %s\n", line)
 			}
 			
+			// Non-blocking send with timeout to prevent goroutine from hanging
 			select {
 			case <-ctx.Done():
 				return
@@ -319,6 +342,13 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt string, outCh ch
 				TaskID: taskID,
 				Output: "[ERR] " + line,
 			}:
+				// Successfully sent
+			case <-time.After(100 * time.Millisecond):
+				// Channel is full and TUI is slow - drop message but continue
+				// Error messages are critical, so we still log them
+				if logWriter != nil {
+					fmt.Fprintf(logWriter, "[WARN] Output channel full, error message dropped from UI (logged): %s\n", line)
+				}
 			}
 		}
 	}()
@@ -375,17 +405,30 @@ func WaitForCrushMsg(outCh chan tea.Msg) tea.Cmd {
 }
 
 // createCrushLogFile creates a log file for the Crush run
+// Uses tag-based directory structure: .taskmaster/<tagName>/<taskID>.log
+// Falls back to .taskmaster/logs/ if no tag is provided
 // Returns the file handle and path, or error if creation fails
-func createCrushLogFile(taskID string) (*os.File, string, error) {
-	// Create logs directory if it doesn't exist
-	logsDir := filepath.Join(".taskmaster", "logs")
+func createCrushLogFile(taskID string, tagName string) (*os.File, string, error) {
+	var logsDir string
+	var logFileName string
+	
+	if tagName != "" {
+		// Use tag-based directory structure per CRUSH_RUN_INSTRUCTIONS.md
+		// .taskmaster/<tag-name>/<task-id>.log
+		logsDir = filepath.Join(".taskmaster", tagName)
+		logFileName = fmt.Sprintf("%s.log", taskID)
+	} else {
+		// Fallback to generic logs directory with timestamp
+		logsDir = filepath.Join(".taskmaster", "logs")
+		timestamp := time.Now().Format("20060102-150405")
+		logFileName = fmt.Sprintf("crush-run-%s-%s.log", taskID, timestamp)
+	}
+	
+	// Create directory if it doesn't exist
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
 		return nil, "", fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
-	// Generate log file path with task ID and timestamp
-	timestamp := time.Now().Format("20060102-150405")
-	logFileName := fmt.Sprintf("crush-run-%s-%s.log", taskID, timestamp)
 	logPath := filepath.Join(logsDir, logFileName)
 
 	// Create the log file
@@ -397,6 +440,9 @@ func createCrushLogFile(taskID string) (*os.File, string, error) {
 	// Write header to log file
 	fmt.Fprintf(logFile, "=== Crush Run Log ===\n")
 	fmt.Fprintf(logFile, "Task ID: %s\n", taskID)
+	if tagName != "" {
+		fmt.Fprintf(logFile, "Tag Context: %s\n", tagName)
+	}
 	fmt.Fprintf(logFile, "Started: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Fprintf(logFile, "===================\n\n")
 

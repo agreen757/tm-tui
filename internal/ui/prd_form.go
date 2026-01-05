@@ -2,10 +2,10 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/agreen757/tm-tui/internal/config"
+	"github.com/agreen757/tm-tui/internal/pathutil"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -35,7 +35,7 @@ func NewPrdInputDialog(cfg *config.Config) *dialog.FormDialog {
 			Type:        dialog.FormFieldTypeTextArea,
 			Required:    true,
 			Placeholder: "Brief overview of the PRD",
-			Help:        "A concise summary of what this PRD covers",
+			//Help:        "A concise summary of what this PRD covers",
 			Rows:        6,
 			Border:      true,
 		},
@@ -52,7 +52,7 @@ func NewPrdInputDialog(cfg *config.Config) *dialog.FormDialog {
 			Label:    "Destination",
 			Type:     dialog.FormFieldTypeText,
 			Required: false,
-			Value:    getDestinationPath(cfg),
+			Value:    pathutil.ResolvePrdDirectoryPath(cfg, ""),
 			Help:     "Where the PRD file will be saved",
 		},
 	}
@@ -79,7 +79,7 @@ func NewPrdInputDialogWithState(cfg *config.Config, state *PrdCreationState) *di
 			Required:    true,
 			Placeholder: "Brief overview of the PRD",
 			Value:       state.Summary,
-			Help:        "A concise summary of what this PRD covers",
+			//Help:        "A concise summary of what this PRD covers",
 		},
 		{
 			ID:          "scope",
@@ -104,7 +104,7 @@ func NewPrdInputDialogWithState(cfg *config.Config, state *PrdCreationState) *di
 			Label:    "Destination",
 			Type:     dialog.FormFieldTypeText,
 			Required: false,
-			Value:    getDestinationPath(cfg),
+			Value:    pathutil.ResolvePrdDirectoryPath(cfg, ""),
 			Help:     "Where the PRD file will be saved",
 		},
 	}
@@ -221,13 +221,7 @@ func createPrdFormDialog(cfg *config.Config, fields []dialog.FormField, state *P
 	return form
 }
 
-// getDestinationPath returns the destination path for PRD files
-func getDestinationPath(cfg *config.Config) string {
-	if cfg == nil || cfg.TaskMasterPath == "" {
-		return ".taskmaster/docs"
-	}
-	return filepath.Join(cfg.TaskMasterPath, "docs")
-}
+
 
 // countSentences counts the approximate number of sentences in a text
 func countSentences(text string) int {

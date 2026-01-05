@@ -13,6 +13,7 @@ type CommandID string
 
 const (
 	CommandParsePRD           CommandID = "parse_prd"
+	CommandCreatePRD          CommandID = "create_prd"
 	CommandAnalyzeComplexity  CommandID = "analyze_complexity"
 	CommandExpandTask         CommandID = "expand_task"
 	CommandDeleteTask         CommandID = "delete_task"
@@ -36,6 +37,7 @@ type CommandSpec struct {
 func defaultCommandSpecs() []CommandSpec {
 	return []CommandSpec{
 		{ID: CommandParsePRD, Label: "Parse PRD", Description: "Parse a PRD file and generate tasks", Shortcut: "Alt+P"},
+		{ID: CommandCreatePRD, Label: "Create PRD", Description: "Create a new PRD document with AI assistance", Shortcut: "Alt+Shift+P"},
 		{ID: CommandAnalyzeComplexity, Label: "Analyze Complexity", Description: "Run complexity analysis via Task Master", Shortcut: "Alt+C"},
 		{ID: CommandExpandTask, Label: "Expand Task", Description: "Break down the selected task with AI", Shortcut: "Alt+E"},
 		{ID: CommandDeleteTask, Label: "Delete Task", Description: "Open the safe delete workflow for selected tasks", Shortcut: "Alt+D"},

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/agreen757/tm-tui/internal/pathutil"
 	"github.com/agreen757/tm-tui/internal/prd"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
@@ -52,7 +53,7 @@ func (m *Model) openParsePrdWorkflow() tea.Cmd {
 		return nil
 	}
 
-	startDir := m.defaultPrdDirectory()
+	startDir := pathutil.ResolvePrdDirectoryPath(m.config, m.lastPrdPath)
 	fileDialog := dialog.NewFileSelectionDialog("Select PRD File", startDir, 78, 20, []string{".md", ".txt"})
 	if dm.Style != nil {
 		dialog.ApplyStyleToDialog(fileDialog, dm.Style)
@@ -327,24 +328,6 @@ func safeSliceValue(values []string, index int) string {
 		return values[index]
 	}
 	return ""
-}
-
-func (m *Model) defaultPrdDirectory() string {
-	if m.lastPrdPath != "" {
-		return m.lastPrdPath
-	}
-	if m.config != nil && m.config.TaskMasterPath != "" {
-		docs := filepath.Join(m.config.TaskMasterPath, ".taskmaster", "docs")
-		if info, err := os.Stat(docs); err == nil && info.IsDir() {
-			return docs
-		}
-		return m.config.TaskMasterPath
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "."
-	}
-	return cwd
 }
 
 func (m *Model) clearParsePrdRuntimeState() {

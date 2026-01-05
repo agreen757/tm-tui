@@ -271,6 +271,10 @@ func (s *mockService) GetTaskFromCLI(taskID string) (*taskmaster.Task, error) {
 	return nil, nil
 }
 
+func (s *mockService) GetActiveTag() string {
+	return "tui-crush-prd-creation"
+}
+
 // TestComplexityAnalysisWorkflow tests the entire complexity analysis workflow
 func TestComplexityAnalysisWorkflow(t *testing.T) {
 	// Set up the model with mock services

@@ -18,6 +18,7 @@
 
 **Task ID**: {{.TaskID}}
 **Priority**: {{.Priority}}
+{{if .TagName}}**Tag Context**: {{.TagName}}{{end}}
 {{if .Dependencies}}**Dependencies**: {{.Dependencies}}{{end}}
 
 ### Description
@@ -42,7 +43,7 @@
 
 1. **Start Implementation**
    - Mark as in-progress: `task-master set-status --id={{.TaskID}} --status=in-progress`
-   - Create log file: `.taskmaster/<tag-name>/{{.TaskID}}.log`
+   - Create log file: `.taskmaster/{{if .TagName}}{{.TagName}}{{else}}logs{{end}}/{{.TaskID}}.log`
    - Follow the implementation details and test strategy provided above
 
 2. **Implement the Subtask**
@@ -98,7 +99,7 @@
 2. **Start Subtask**
 
    - Mark as in-progress: `task-master set-status --id={{.TaskID}}.X --status=in-progress`
-   - Create log file: `.taskmaster/<tag-name>/{{.TaskID}}.X.log`
+   - Create log file: `.taskmaster/{{if .TagName}}{{.TagName}}{{else}}logs{{end}}/{{.TaskID}}.X.log`
 
 3. **Implement Subtask**
 
@@ -168,7 +169,7 @@
      - [Any follow-up items or recommendations]"
      ```
    - Mark parent as done: `task-master set-status --id={{.TaskID}} --status=done`
-   - Create final summary log: `.taskmaster/<tag-name>/{{.TaskID}}.log`
+   - Create final summary log: `.taskmaster/{{if .TagName}}{{.TagName}}{{else}}logs{{end}}/{{.TaskID}}.log`
 
 ---
 
@@ -176,7 +177,7 @@
 
 When executing this task through Crush, please adhere to the following logging requirements:
 
-1. **Log File Location**: Write all logs to `.taskmaster/<tag-name>/<task-or-subtask-number>.log`
+1. **Log File Location**: Write all logs to `.taskmaster/{{if .TagName}}{{.TagName}}{{else}}logs{{end}}/<task-or-subtask-number>.log`
 
    - Create the directory structure if it doesn't exist
    - Example: `.taskmaster/feature-auth/1.2.1.log`

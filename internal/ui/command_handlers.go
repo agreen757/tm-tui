@@ -34,6 +34,8 @@ func (m *Model) dispatchCommand(id CommandID) tea.Cmd {
 	switch id {
 	case CommandParsePRD:
 		return m.openParsePrdWorkflow()
+	case CommandCreatePRD:
+		return m.openCreatePrdWorkflow()
 	case CommandAnalyzeComplexity:
 		m.showComplexityScopeDialog()
 	case CommandExpandTask:
@@ -576,6 +578,19 @@ func (m *Model) showAppError(appErr *AppError) {
 	errDialog := dialog.NewErrorDialogModel(appErr.Title, appErr.GetDisplayMessage())
 	errDialog.SetDetails(appErr.Details)
 	errDialog.SetRecoveryHints(appErr.GetRecoveryMessage())
+	m.appState.PushDialog(errDialog)
+}
+
+// showCrushDependencyError displays a Crush binary dependency error with recovery hints
+func (m *Model) showCrushDependencyError(message string) {
+	dm := m.dialogManager()
+	if dm == nil {
+		m.addLogLine(fmt.Sprintf("Crush Binary Error: %s", message))
+		return
+	}
+	recoveryHint := "Install Crush: go install github.com/crush-ai/crush@latest\nOr ensure crush is in your PATH"
+	errDialog := dialog.NewErrorDialogModel("Crush Binary Not Found", message)
+	errDialog.SetRecoveryHints(recoveryHint)
 	m.appState.PushDialog(errDialog)
 }
 

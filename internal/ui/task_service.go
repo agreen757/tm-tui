@@ -11,6 +11,7 @@ import (
 type TaskService interface {
 	GetTasks() ([]taskmaster.Task, []string)
 	GetTaskFromCLI(taskID string) (*taskmaster.Task, error)
+	GetActiveTag() string
 	LoadTasks(ctx context.Context) error
 	ReloadEvents() <-chan struct{}
 	AnalyzeComplexity(ctx context.Context, scope string, taskID string, tags []string) (*taskmaster.ComplexityReport, error)

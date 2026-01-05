@@ -87,6 +87,7 @@ type Model struct {
 	activeProject        *projects.Metadata
 	pendingProjectSwitch *projects.Metadata
 	pendingProjectTag    string
+	prdCreationState     *PrdCreationState
 
 	// Layout
 	width  int
@@ -250,6 +251,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		logLines:          []string{},
 		projectRegistry:   taskService.ProjectRegistry(),
 		activeProject:     taskService.ActiveProjectMetadata(),
+		prdCreationState:  NewPrdCreationState(),
 	}
 
 	m.commands = defaultCommandSpecs()
@@ -288,6 +290,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 func (m *Model) registerDefaultCommandShortcuts() {
 	m.commandShortcuts = []commandShortcut{
 		{binding: m.keyMap.ParsePRD, command: CommandParsePRD, help: "Parse PRD"},
+		{binding: m.keyMap.CreatePRD, command: CommandCreatePRD, help: "Create PRD"},
 		{binding: m.keyMap.AnalyzeComplexity, command: CommandAnalyzeComplexity, help: "Analyze Complexity"},
 		{binding: m.keyMap.ExpandTask, command: CommandExpandTask, help: "Expand Task"},
 		{binding: m.keyMap.DeleteTask, command: CommandDeleteTask, help: "Delete Task"},
@@ -918,8 +921,18 @@ func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, m
 		return nil
 	}
 
-	// Generate the prompt for Crush
-	prompt, err := dialog.GenerateCrushPrompt(task, modelID)
+	// Get active tag context for log directory structure
+	// Priority: activeProject.PrimaryTag() > taskService.GetActiveTag() > ""
+	tagName := ""
+	if m.activeProject != nil {
+		tagName = m.activeProject.PrimaryTag()
+	}
+	if tagName == "" && m.taskService != nil {
+		tagName = m.taskService.GetActiveTag()
+	}
+
+	// Generate the prompt for Crush with tag context
+	prompt, err := dialog.GenerateCrushPrompt(task, modelID, tagName)
 	if err != nil {
 		appErr := NewOperationError("Crush Run", "Failed to generate prompt", err).
 			WithRecoveryHints(
@@ -941,12 +954,12 @@ func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, m
 	m.taskRunnerVisible = true
 
 	// Send TaskStartedMsg to create a new tab
-	m.addLogLine(fmt.Sprintf("Starting Crush run for task %s with model %s", taskID, modelID))
+	m.addLogLine(fmt.Sprintf("Starting Crush run for task %s with model %s (tag: %s)", taskID, modelID, tagName))
 
 	// Return commands: first start the tab, then start execution with prompt
 	return tea.Sequence(
 		dialog.StartCrushExecution(taskID, taskTitle, modelID, prompt, m.taskRunner),
-		dialog.ExecuteCrushSubprocess(taskID, modelID, prompt),
+		dialog.ExecuteCrushSubprocess(taskID, modelID, prompt, tagName),
 	)
 }
 
@@ -2343,13 +2356,47 @@ func (m Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		m.addLogLine(fmt.Sprintf("Task %s cancelled", msg.TaskID))
 		return m, tea.Batch(cmds...)
 
-	case TickMsg:
-		// Handle periodic UI updates (for elapsed time, etc.)
-		// Continue ticking only if there are running tasks
-		if m.taskRunner != nil && m.taskRunner.HasRunningTasks() {
-			return m, TickCmd()
+	case dialog.TaskRunnerAutoCloseMsg:
+		// Auto-close timer expired - close the modal
+		if m.taskRunner != nil {
+			updatedDialog, cmd := m.taskRunner.Update(msg)
+			if updatedDialog == nil {
+				// Modal closed itself
+				m.taskRunnerVisible = false
+				m.taskRunner = nil
+				m.addLogLine("Task runner closed (all tasks complete)")
+			} else {
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+			}
+			return m, cmd
 		}
 		return m, nil
+
+	case TickMsg:
+		// Handle periodic UI updates (for elapsed time, countdown timers, etc.)
+		// Continue ticking if there are running tasks OR if auto-close timer is active
+		if m.taskRunner != nil {
+			// Forward tick to task runner modal to update countdown display
+			if m.taskRunnerVisible {
+				updatedDialog, cmd := m.taskRunner.Update(msg)
+				if updatedDialog == nil {
+					// Modal requested close
+					m.taskRunnerVisible = false
+					m.taskRunner = nil
+					return m, nil
+				}
+				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+			
+			// Keep ticking if tasks are running or auto-close is pending
+			if m.taskRunner.HasRunningTasks() || m.taskRunner.GetCloseTimer() != nil {
+				cmds = append(cmds, TickCmd())
+			}
+		}
+		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		// Handle help overlay mode first - takes priority

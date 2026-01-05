@@ -35,7 +35,7 @@ func TestGenerateCrushPrompt(t *testing.T) {
 		Dependencies: []string{"1.1", "1.2"},
 	}
 
-	prompt, err := GenerateCrushPrompt(task, "claude-3-5-sonnet-20241022")
+	prompt, err := GenerateCrushPrompt(task, "claude-3-5-sonnet-20241022", "feature-auth")
 	if err != nil {
 		t.Fatalf("Failed to generate prompt: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestGenerateCrushPrompt(t *testing.T) {
 }
 
 func TestGenerateCrushPromptNilTask(t *testing.T) {
-	_, err := GenerateCrushPrompt(nil, "test-model")
+	_, err := GenerateCrushPrompt(nil, "test-model", "")
 	if err == nil {
 		t.Error("Expected error for nil task, got nil")
 	}
@@ -94,7 +94,7 @@ Custom field test
 		Title: "Test Task",
 	}
 
-	prompt, err := GenerateCrushPrompt(task, "test-model")
+	prompt, err := GenerateCrushPrompt(task, "test-model", "test-tag")
 	if err != nil {
 		t.Fatalf("Failed to generate prompt with custom guide: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestGenerateCrushPromptEmptyFields(t *testing.T) {
 		// Other fields empty
 	}
 
-	prompt, err := GenerateCrushPrompt(task, "test-model")
+	prompt, err := GenerateCrushPrompt(task, "test-model", "test-tag")
 	if err != nil {
 		t.Fatalf("Failed to generate prompt with minimal task: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestGenerateCrushPromptInvalidTemplate(t *testing.T) {
 		Title: "Test Task",
 	}
 
-	_, err = GenerateCrushPrompt(task, "test-model")
+	_, err = GenerateCrushPrompt(task, "test-model", "")
 	if err == nil {
 		t.Error("Expected error for invalid template syntax")
 	}
