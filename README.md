@@ -23,7 +23,55 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## Recent Improvements (v0.1.13)
+## Recent Improvements (v0.1.15)
+
+### Git Integration & PRD Creation Workflow
+
+**Git Repository Management** - Full Git integration directly in the TUI with dedicated dialogs for common Git operations.
+
+**Changes:**
+- **Git Menu Dialog** (`g` key): Access Git operations without leaving the TUI
+  - View repository status with file changes
+  - Switch between branches with visual indicators
+  - Create new branches with validation
+  - View commit history with details
+- **Git Status Dialog**: Real-time view of staged/unstaged changes, untracked files
+- **Branch Management**: List, switch, and create branches with confirmation prompts
+- **Commit History Viewer**: Browse commits with author, date, and message details
+- Improved Git repository detection and validation
+- Enhanced executor service with better binary existence checking
+
+**PRD Creation & Management** - Streamlined workflow for creating Product Requirements Documents directly in the TUI.
+
+**Changes:**
+- **Create PRD Dialog** (`Ctrl+N`): Interactive form for generating PRDs
+  - Multi-field input form with title, summary, and scope
+  - Textarea support for longer content
+  - Configurable output filename and location
+  - Real-time validation and feedback
+- **PRD Prompt Selection**: Choose between user-provided and AI-generated prompts
+- **State Preservation**: Form inputs preserved across dialog navigation
+- Enhanced form dialog system with textarea support
+- Path utilities for PRD file management
+
+**Next Task Output Modal** - Dedicated dialog for viewing `task-master next` command output.
+
+**Changes:**
+- Modal displays real-time output from `task-master next` command
+- Scrollable viewport for long output
+- Clean separation from log panel for better focus
+- Auto-shows when executing next task command
+- Keyboard shortcuts for navigation and closing
+
+**Benefits:**
+- Complete Git workflow without context switching to terminal
+- Faster branch management and status checking
+- Streamlined PRD creation process integrated into task workflow
+- Better organization of command output with dedicated modals
+- Improved user experience with state preservation across dialogs
+- Enhanced testing coverage with comprehensive test suites
+
+## Previous Improvements (v0.1.13)
 
 ### Dialog Layering & Help Modal
 
@@ -326,9 +374,19 @@ go run ./cmd/tm-tui/main.go
 - `d` - Mark task as done (quick status change)
 - `p` - Change task priority
 
+#### PRD & Document Management
+- `Ctrl+N` - Create new PRD (interactive form)
+- `Alt+P` - Parse PRD file (load tasks from document)
+
+#### Git Operations
+- `g` - Open Git menu
+  - View repository status
+  - Switch branches
+  - Create new branches
+  - View commit history
+
 #### Complexity & Analysis
 - `Alt+C` - Analyze task complexity (AI-powered scoring)
-- `Alt+P` - Parse PRD file (load tasks from document)
 
 #### Tags & Projects
 - `Alt+A` / `Ctrl+Shift+A` - Add or manage task tags
