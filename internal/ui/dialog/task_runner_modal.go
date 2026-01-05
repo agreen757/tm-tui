@@ -41,6 +41,9 @@ type TaskCancelledMsg struct {
 	TaskID string
 }
 
+// TaskRunnerAutoCloseMsg is sent when the auto-close timer expires
+type TaskRunnerAutoCloseMsg struct{}
+
 // ModalMinimizedMsg is sent when the modal is minimized/maximized
 type ModalMinimizedMsg struct {
 	Minimized bool
@@ -139,7 +142,10 @@ type TaskRunnerModal struct {
 	tabScrollPos              int // For handling tab bar overflow
 	cancellationConfirmDialog Dialog
 	pendingCancellationTabIdx int
-	longRunningThreshold      int // milliseconds to consider a task "long-running"
+	longRunningThreshold      int       // milliseconds to consider a task "long-running"
+	autoCloseOnFailure        bool      // automatically close modal when all tasks fail/complete
+	autoCloseDelay            time.Duration // delay before auto-closing
+	closeTimer                *time.Time // tracks when to auto-close
 }
 
 // NewTaskRunnerModal creates a new task runner modal
@@ -161,7 +167,10 @@ func NewTaskRunnerModal(width, height int, style *DialogStyle) *TaskRunnerModal 
 		tabScrollPos:             0,
 		cancellationConfirmDialog: nil,
 		pendingCancellationTabIdx: -1,
-		longRunningThreshold:     5000, // 5 seconds
+		longRunningThreshold:     5000,               // 5 seconds
+		autoCloseOnFailure:       true,               // auto-close when all tasks stop
+		autoCloseDelay:           3 * time.Second,    // wait 3 seconds before closing
+		closeTimer:               nil,
 	}
 	modal.Style = style
 	modal.SetFocused(true)
@@ -209,6 +218,8 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		return m, cmd
 	case TaskStartedMsg:
 		m.addTab(msg.TaskID, msg.TaskTitle, msg.Model)
+		// Cancel any pending auto-close when a new task starts
+		m.closeTimer = nil
 	case TaskOutputMsg:
 		// Route output to the correct tab by TaskID
 		for _, tab := range m.tabs {
@@ -219,10 +230,18 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		}
 	case TaskCompletedMsg:
 		m.setTabStatus(msg.TaskID, TaskCompleted)
+		return m, m.checkAutoClose()
 	case TaskFailedMsg:
 		m.setTabStatus(msg.TaskID, TaskFailed)
+		return m, m.checkAutoClose()
 	case TaskCancelledMsg:
 		m.setTabStatus(msg.TaskID, TaskCancelled)
+		return m, m.checkAutoClose()
+	case TaskRunnerAutoCloseMsg:
+		// Timer expired and no tasks are running - close the modal
+		if !m.hasRunningTasks() && m.closeTimer != nil && time.Now().After(*m.closeTimer) {
+			return nil, nil
+		}
 	}
 
 	return m, nil
@@ -435,6 +454,43 @@ func (m *TaskRunnerModal) HasRunningTasks() bool {
 	return m.hasRunningTasks()
 }
 
+// checkAutoClose schedules auto-close if enabled and no tasks are running
+func (m *TaskRunnerModal) checkAutoClose() tea.Cmd {
+	if !m.autoCloseOnFailure {
+		return nil
+	}
+
+	if m.hasRunningTasks() {
+		// Still have running tasks, cancel any pending close
+		m.closeTimer = nil
+		return nil
+	}
+
+	// No running tasks - start the auto-close timer
+	if m.closeTimer == nil {
+		closeTime := time.Now().Add(m.autoCloseDelay)
+		m.closeTimer = &closeTime
+	}
+
+	// Schedule the close message
+	return tea.Tick(m.autoCloseDelay, func(time.Time) tea.Msg {
+		return TaskRunnerAutoCloseMsg{}
+	})
+}
+
+// SetAutoCloseOnFailure enables or disables automatic closing when tasks stop
+func (m *TaskRunnerModal) SetAutoCloseOnFailure(enabled bool) {
+	m.autoCloseOnFailure = enabled
+	if !enabled {
+		m.closeTimer = nil
+	}
+}
+
+// SetAutoCloseDelay sets the delay before auto-closing
+func (m *TaskRunnerModal) SetAutoCloseDelay(delay time.Duration) {
+	m.autoCloseDelay = delay
+}
+
 // ensureTabVisible adjusts scroll position so active tab is visible
 func (m *TaskRunnerModal) ensureTabVisible() {
 	// For simplicity, adjust scroll position if tab bar would overflow
@@ -621,7 +677,17 @@ func (m *TaskRunnerModal) renderFooter() string {
 
 	// Only show close option if no running tasks
 	if !m.hasRunningTasks() {
-		shortcuts = append(shortcuts, "Esc: close")
+		// Show countdown if auto-close is pending
+		if m.closeTimer != nil && m.autoCloseOnFailure {
+			remaining := time.Until(*m.closeTimer)
+			if remaining > 0 {
+				shortcuts = append(shortcuts, fmt.Sprintf("Esc: close (auto in %ds)", int(remaining.Seconds())+1))
+			} else {
+				shortcuts = append(shortcuts, "Esc: close")
+			}
+		} else {
+			shortcuts = append(shortcuts, "Esc: close")
+		}
 	} else {
 		shortcuts = append(shortcuts, "Esc: (running)")
 	}
@@ -709,6 +775,11 @@ func (m *TaskRunnerModal) GetTaskOutput(taskID string) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// GetCloseTimer returns the close timer (for checking if auto-close is pending)
+func (m *TaskRunnerModal) GetCloseTimer() *time.Time {
+	return m.closeTimer
 }
 
 // GetTabByTaskID returns a pointer to the tab with the given task ID, or nil if not found

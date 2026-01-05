@@ -265,6 +265,18 @@ type ExpansionCompletedMsg struct {
 
 type expansionStreamClosedMsg struct{}
 
+// PrdExecutionErrorMsg is sent when PRD generation encounters an error
+type PrdExecutionErrorMsg struct {
+	Title   string
+	Message string
+}
+
+// PrdGenerationCompletedMsg is sent when PRD generation completes successfully
+type PrdGenerationCompletedMsg struct {
+	Content string
+	Error   error
+}
+
 // AnalyzeTaskComplexityCmd starts the complexity analysis process and returns an AnalyzeTaskComplexityMsg
 func AnalyzeTaskComplexityCmd() tea.Cmd {
 	return func() tea.Msg {

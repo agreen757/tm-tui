@@ -203,6 +203,19 @@ func (s *Service) GetTasks() ([]Task, []string) {
 	return s.Tasks, warningStrs
 }
 
+// GetActiveTag returns the currently active tag context name.
+// Returns empty string if no tag is active (defaults to "master" internally).
+// Thread-safe for concurrent access.
+func (s *Service) GetActiveTag() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	if s.config != nil {
+		return s.config.ActiveTag
+	}
+	return ""
+}
+
 // GetTaskByID returns a task by ID using the index for O(1) lookup.
 // Returns the task pointer and true if found, nil and false otherwise.
 // Thread-safe for concurrent access.

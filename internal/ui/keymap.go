@@ -48,6 +48,7 @@ type KeyMap struct {
 	// Global commands
 	CommandPalette     key.Binding
 	ParsePRD           key.Binding
+	CreatePRD          key.Binding
 	ExpandTask         key.Binding
 	DeleteTask         key.Binding
 	RunTask            key.Binding
@@ -220,6 +221,10 @@ func DefaultKeyMap() KeyMap {
 		ParsePRD: key.NewBinding(
 			key.WithKeys("alt+p"),
 			key.WithHelp("alt+p", "parse prd"),
+		),
+		CreatePRD: key.NewBinding(
+			key.WithKeys("alt+shift+p"),
+			key.WithHelp("alt+shift+p", "create prd"),
 		),
 		ExpandTask: key.NewBinding(
 			key.WithKeys("alt+e"),
@@ -397,6 +402,13 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		)
 	}
 
+	if createPrdKey := getKey("createPrd", "alt+shift+p"); createPrdKey != "" {
+		km.CreatePRD = key.NewBinding(
+			key.WithKeys(createPrdKey),
+			key.WithHelp(createPrdKey, "create prd"),
+		)
+	}
+
 	if expandKey := getKey("expandTask", "alt+e"); expandKey != "" {
 		km.ExpandTask = key.NewBinding(
 			key.WithKeys(expandKey),
@@ -487,7 +499,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.ToggleDetails, k.ToggleLog},
 		{k.Help, k.Quit, k.Cancel, k.ClearState},
 		{k.AnalyzeComplexity},
-		{k.CommandPalette, k.ParsePRD, k.ExpandTask, k.DeleteTask, k.RunTask},
+		{k.CommandPalette, k.ParsePRD, k.CreatePRD, k.ExpandTask, k.DeleteTask, k.RunTask},
 		{k.ManageTags, k.TagManagement, k.UseTag},
 		{k.ProjectTags, k.ProjectQuickSwitch, k.ProjectSearch},
 		{k.GitMenu},
