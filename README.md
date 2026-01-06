@@ -18,12 +18,43 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - 🏷️ **Task Tagging**: Organize tasks with custom tags and filter by tag groups
 - 📦 **Project Management**: Manage multiple project-specific task views with project tags
 - 🗑️ **Safe Deletion**: Delete tasks with confirmation dialogs to prevent accidents
-- 📄 **PRD Parsing**: Load tasks directly from Product Requirements Documents
+- 📄 **PRD Creation & Parsing**: Create PRDs with AI assistance and load tasks from documents
+- 🔴 **Live Output Streaming**: Real-time visual feedback for PRD generation and task execution
 - 💡 **Context-sensitive Help**: Dynamic help panels and status bar hints
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## Recent Improvements (v0.1.15)
+## Recent Improvements (v0.1.16)
+
+### PRD Generation Live Output Fix
+
+**Real-time Streaming Output** - Fixed PRD creation feature to display live output during generation in the Task Runner modal.
+
+**What Was Fixed:**
+- **Issue**: After completing the PRD creation form (`Ctrl+N`) and selecting a model, nothing appeared to happen. The generation was running in the background but users had no visual feedback.
+- **Solution**: Implemented proper channel-based message flow to stream Crush output in real-time to the Task Runner modal.
+
+**Changes:**
+- Task Runner modal now automatically appears when PRD generation starts
+- Real-time streaming of Crush AI output during PRD creation
+- Progress updates visible as the PRD is being generated
+- Clear completion status before file save dialog
+- Enhanced model selection workflow to properly trigger PRD generation
+- Added `prdCreationPending` flag for correct routing between model selection and PRD execution
+- Improved message ordering with `tea.Sequence` for guaranteed delivery
+- Special handling for prd-creation task completion and failure states
+
+**User Experience:**
+- **Before**: Blank screen after form submission, unclear if anything was happening
+- **After**: Immediate Task Runner modal with live streaming output showing generation progress
+
+**Technical Details:**
+- Channel-based messaging for streaming updates (1000 message buffer)
+- Automatic TaskRunnerModal creation on TaskStartedMsg
+- Separate handling for "prd-creation" task ID
+- Integration with existing Crush execution infrastructure
+
+## Previous Improvements (v0.1.15)
 
 ### Git Integration & PRD Creation Workflow
 
@@ -415,6 +446,21 @@ go run ./cmd/tm-tui/main.go
 - `q` - Quit TUI
 
 ## Common Workflows
+
+### Creating a PRD with AI
+1. Press `Ctrl+N` to open the "Create PRD" dialog
+2. Fill in the PRD details:
+   - **Title**: Short descriptive title for your project
+   - **Summary**: Brief overview of what you're building
+   - **Scope**: Detailed requirements, constraints, and technical details
+   - **Output Filename**: Where to save the generated PRD
+3. Select an AI model from the model selection dialog
+4. **Watch real-time generation**: Task Runner modal appears showing live Crush output
+5. Monitor as the AI generates your PRD with streaming feedback
+6. Review and save when complete - file save dialog appears automatically
+7. Use `Alt+P` to parse the generated PRD into tasks
+
+**New in v0.1.16:** The Task Runner modal now displays live streaming output during PRD generation, providing immediate visual feedback and progress updates.
 
 ### Creating Tasks from a PRD
 1. Press `Alt+P` to open the "Parse PRD" dialog
