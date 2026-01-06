@@ -485,7 +485,7 @@ func (m *Model) writeFileAndShowSuccess(filePath string) tea.Cmd {
 		
 		// Log success
 		m.addLogLine(fmt.Sprintf("✓ PRD saved successfully to %s", filePath))
-		m.lastPrdPath = filePath
+		m.lastPrdPath = filepath.Dir(filePath)
 		
 		// Show success dialog
 		dm := m.dialogManager()
