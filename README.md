@@ -31,7 +31,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Real-time Streaming Output** - Fixed PRD creation feature to display live output during generation in the Task Runner modal.
 
 **What Was Fixed:**
-- **Issue**: After completing the PRD creation form (`Ctrl+N`) and selecting a model, nothing appeared to happen. The generation was running in the background but users had no visual feedback.
+- **Issue**: After completing the PRD creation form (`Alt+Shift+P`) and selecting a model, nothing appeared to happen. The generation was running in the background but users had no visual feedback.
 - **Solution**: Implemented proper channel-based message flow to stream Crush output in real-time to the Task Runner modal.
 
 **Changes:**
@@ -75,7 +75,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **PRD Creation & Management** - Streamlined workflow for creating Product Requirements Documents directly in the TUI.
 
 **Changes:**
-- **Create PRD Dialog** (`Ctrl+N`): Interactive form for generating PRDs
+- **Create PRD Dialog** (`Alt+Shift+P`): Interactive form for generating PRDs
   - Multi-field input form with title, summary, and scope
   - Textarea support for longer content
   - Configurable output filename and location
@@ -406,7 +406,7 @@ go run ./cmd/tm-tui/main.go
 - `p` - Change task priority
 
 #### PRD & Document Management
-- `Ctrl+N` - Create new PRD (interactive form)
+- `Alt+Shift+P` - Create new PRD (interactive form)
 - `Alt+P` - Parse PRD file (load tasks from document)
 
 #### Git Operations
@@ -448,7 +448,7 @@ go run ./cmd/tm-tui/main.go
 ## Common Workflows
 
 ### Creating a PRD with AI
-1. Press `Ctrl+N` to open the "Create PRD" dialog
+1. Press `Alt+Shift+P` to open the "Create PRD" dialog
 2. Fill in the PRD details:
    - **Title**: Short descriptive title for your project
    - **Summary**: Brief overview of what you're building
