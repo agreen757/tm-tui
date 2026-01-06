@@ -164,6 +164,9 @@ type Model struct {
 	crushRunTaskTitle string
 	crushRunTask      *taskmaster.Task
 	crushRunChannels  map[string]chan tea.Msg // taskID -> output channel for active runs
+	
+	// PRD creation context (for tracking model selection -> PRD generation flow)
+	prdCreationPending bool
 
 	// Styles
 	styles *Styles
@@ -1017,6 +1020,14 @@ func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
 
 	// Close the dialog
 	m.appState.PopDialog()
+
+	// Check if this model selection is for PRD creation
+	if m.prdCreationPending {
+		m.addLogLine("PRD creation detected, starting PRD generation")
+		m.prdCreationPending = false
+		// Execute Crush for PRD creation with selected model
+		return m.executeCrushForPrd(msg.Provider, msg.ModelID)
+	}
 
 	// Check if this model selection is for a Crush run
 	if m.crushRunPending && m.crushRunTask != nil {
@@ -2478,21 +2489,27 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// TaskRunnerModal message handlers
 	case dialog.TaskStartedMsg:
+		m.addLogLine(fmt.Sprintf("Task started: %s (%s)", msg.TaskID, msg.TaskTitle))
 		m.taskRunnerVisible = true
-		if m.taskRunner != nil {
-			updatedDialog, cmd := m.taskRunner.Update(msg)
-			if updatedDialog != nil {
-				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
-			}
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
+		// Create task runner modal if it doesn't exist
+		if m.taskRunner == nil {
+			m.addLogLine("Creating new TaskRunnerModal")
+			m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
+		}
+		// Update the modal with the new task
+		updatedDialog, cmd := m.taskRunner.Update(msg)
+		if updatedDialog != nil {
+			m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
+		}
+		if cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 		// Start ticker for UI updates (elapsed time, etc.)
 		cmds = append(cmds, TickCmd())
 		return m, tea.Batch(cmds...)
 
 	case dialog.CrushExecutionSub:
+		m.addLogLine(fmt.Sprintf("Setting up channel subscription for task: %s", msg.TaskID))
 		// Store the output channel for this task
 		m.crushRunChannels[msg.TaskID] = msg.OutCh
 		// Start listening for messages from this channel
@@ -2546,6 +2563,21 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Clean up the channel for this task
 		delete(m.crushRunChannels, msg.TaskID)
+		
+		// Special handling for PRD creation completion
+		if msg.TaskID == "prd-creation" {
+			m.addLogLine("✓ PRD generation completed")
+			
+			// Validate PRD output content
+			if m.prdCreationState != nil && m.validatePrdOutput(m.prdCreationState) {
+				// Store the generated content in state
+				m.prdCreationState.GeneratedContent = m.prdCreationState.OutputBuffer.String()
+				
+				// Proceed to file save
+				cmds = append(cmds, m.savePrdToFile())
+			}
+		}
+		
 		return m, tea.Batch(cmds...)
 
 	case dialog.TaskFailedMsg:
@@ -2565,6 +2597,15 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clean up the channel for this task
 		delete(m.crushRunChannels, msg.TaskID)
 		m.addLogLine(fmt.Sprintf("Task %s failed: %s", msg.TaskID, msg.Error))
+		
+		// Special handling for PRD creation failure
+		if msg.TaskID == "prd-creation" {
+			if m.prdCreationState != nil {
+				m.prdCreationState.InProgress = false
+			}
+			m.showErrorDialog("PRD Generation Failed", fmt.Sprintf("%s\n\nPlease try again.", msg.Message))
+		}
+		
 		return m, tea.Batch(cmds...)
 
 	case dialog.TaskCancelledMsg:

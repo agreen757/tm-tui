@@ -2,15 +2,14 @@ package ui
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"sync"
 
-	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/pathutil"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
@@ -71,45 +70,16 @@ func (m *Model) showPrdInputDialog() tea.Cmd {
 
 // showModelSelectionForPrd displays the model selection dialog for PRD creation
 func (m *Model) showModelSelectionForPrd() tea.Cmd {
+	// Set flag to indicate PRD creation is pending model selection
+	m.prdCreationPending = true
+	
 	modelDialog := dialog.NewModelSelectionDialogSimple()
 	dm := m.dialogManager()
 	if dm != nil {
 		dialog.ApplyStyleToDialog(modelDialog, dm.Style)
 	}
 
-	m.appState.AddDialog(modelDialog, func(value interface{}, err error) tea.Cmd {
-		if err != nil {
-			m.showErrorDialog("Model Selection", err.Error())
-			return nil
-		}
-
-		// Check if model was selected
-		msg, ok := value.(dialog.ListSelectionMsg)
-		if !ok || msg.SelectedItem == nil {
-			// If cancelled, return to PRD input dialog with values preserved
-			return m.showPrdInputWithState()
-		}
-
-		// Extract selected model
-		if listItem, ok := msg.SelectedItem.(*dialog.ModelSelectionListItem); ok {
-			opt := listItem.GetOption()
-			m.addLogLine("Model selected: " + opt.DisplayName)
-
-			// Save model configuration
-			if err := config.SaveModelConfig(opt.Provider, opt.ModelID); err != nil {
-				m.showErrorDialog("Save Model Configuration", "Failed to save model selection: "+err.Error())
-				return nil
-			}
-
-			m.addLogLine("Model configuration saved")
-			
-			// Execute Crush for PRD creation with selected model
-			return m.executeCrushForPrd(opt.Provider, opt.ModelID)
-		}
-
-		return nil
-	})
-
+	m.appState.PushDialog(modelDialog)
 	return modelDialog.Init()
 }
 
@@ -154,178 +124,228 @@ func (m *Model) showPrdInputWithState() tea.Cmd {
 // executeCrushForPrd executes the Crush tool to generate PRD content
 // with the saved PRD state values and selected model
 func (m *Model) executeCrushForPrd(provider, modelID string) tea.Cmd {
-	return func() tea.Msg {
-		// Log PRD creation execution with preserved state
-		m.addLogLine(fmt.Sprintf("Preparing to generate PRD with %s model", modelID))
-		
-		if m.prdCreationState != nil {
-			m.addLogLine(fmt.Sprintf("PRD Title: %s", m.prdCreationState.Title))
-			m.addLogLine(fmt.Sprintf("PRD Summary: %s", m.prdCreationState.Summary))
-			m.addLogLine(fmt.Sprintf("Output file: %s", m.prdCreationState.Filename))
-		}
-		
-		// Validate the Crush binary
-		m.addLogLine("Validating Crush binary...")
-		if err := dialog.ValidateCrushBinary(); err != nil {
-			// Check if it's a Crush binary error and handle with specific messaging
-			if _, isCrushErr := err.(*dialog.CrushBinaryError); isCrushErr {
-				m.showCrushDependencyError(err.Error())
-				m.addLogLine("Returning to PRD input form due to Crush binary error")
-				// Return to PRD input with state preserved for recovery
-				return m.showPrdInputWithState()
-			}
-			// For other errors, show generic error message and return to form
-			m.showErrorDialog("Crush Execution Failed", fmt.Sprintf("Crush execution failed: %v\n\nPlease try again.", err))
-			m.addLogLine("Returning to PRD input form due to Crush execution error")
+	// Log PRD creation execution with preserved state
+	m.addLogLine(fmt.Sprintf("Preparing to generate PRD with %s model", modelID))
+	
+	if m.prdCreationState != nil {
+		m.addLogLine(fmt.Sprintf("PRD Title: %s", m.prdCreationState.Title))
+		m.addLogLine(fmt.Sprintf("PRD Summary: %s", m.prdCreationState.Summary))
+		m.addLogLine(fmt.Sprintf("Output file: %s", m.prdCreationState.Filename))
+	}
+	
+	// Validate the Crush binary
+	m.addLogLine("Validating Crush binary...")
+	if err := dialog.ValidateCrushBinary(); err != nil {
+		// Check if it's a Crush binary error and handle with specific messaging
+		if _, isCrushErr := err.(*dialog.CrushBinaryError); isCrushErr {
+			m.showCrushDependencyError(err.Error())
+			m.addLogLine("Returning to PRD input form due to Crush binary error")
+			// Return to PRD input with state preserved for recovery
 			return m.showPrdInputWithState()
 		}
-		m.addLogLine("✓ Crush binary validated")
-		
-		// Generate the PRD prompt from state
-		m.addLogLine("Building PRD prompt...")
-		state := m.prdCreationState
-		prompt := dialog.GenerateCrushPrdPrompt(state.Title, state.Summary, state.Scope)
-		m.addLogLine("✓ PRD prompt generated")
-		
-		// Create and show the modal for streaming output
-		// Calculate modal dimensions based on available space
-		modalWidth := m.width - 4
-		if modalWidth < 40 {
-			modalWidth = 40
-		}
-		if modalWidth > 120 {
-			modalWidth = 120
-		}
-		
-		modalHeight := m.height - 6
-		if modalHeight < 10 {
-			modalHeight = 10
-		}
-		if modalHeight > 30 {
-			modalHeight = 30
-		}
-		
-		dm := m.dialogManager()
-		modal := dialog.NewTaskRunnerModal(modalWidth, modalHeight, dm.Style)
-		if dm != nil {
-			dialog.ApplyStyleToDialog(modal, dm.Style)
-		}
-		
-		// Reset output buffer for this run
-		state.OutputBuffer.Reset()
-		state.InProgress = true
-		
-		// Add dialog with callback to handle completion
-		m.appState.AddDialog(modal, func(value interface{}, err error) tea.Cmd {
-			state.InProgress = false
-			
-			if err != nil {
-				m.showErrorDialog("PRD Generation", "Execution was cancelled or failed")
-				return nil
-			}
-			
-			// PRD generation completed successfully
-			m.addLogLine("✓ PRD generation completed")
-			
-			// Validate PRD output content
-			if !m.validatePrdOutput(state) {
-				return nil
-			}
-			
-			// Store the generated content in state
-			state.GeneratedContent = state.OutputBuffer.String()
-			
-			// Proceed to file save
-			return m.savePrdToFile()
-		})
-		
-		// Start Crush execution in background
-		go func() {
-			// Execute Crush with streaming output to buffer and modal
-			execErr := m.executeCrushSubprocessWithOutput(modelID, prompt, modal, state.OutputBuffer)
-			
-			if execErr != nil {
-				m.addLogLine(fmt.Sprintf("✗ Crush execution failed: %v", execErr))
-				state.InProgress = false
-			}
-		}()
-		
-		return modal.Init()
+		// For other errors, show generic error message and return to form
+		m.showErrorDialog("Crush Execution Failed", fmt.Sprintf("Crush execution failed: %v\n\nPlease try again.", err))
+		m.addLogLine("Returning to PRD input form due to Crush execution error")
+		return m.showPrdInputWithState()
 	}
+	m.addLogLine("✓ Crush binary validated")
+	
+	// Generate the PRD prompt from state
+	m.addLogLine("Building PRD prompt...")
+	state := m.prdCreationState
+	prompt := dialog.GenerateCrushPrdPrompt(state.Title, state.Summary, state.Scope)
+	m.addLogLine("✓ PRD prompt generated")
+	
+	// Use a unique task ID for PRD generation
+	taskID := "prd-creation"
+	taskTitle := fmt.Sprintf("Generate PRD: %s", state.Title)
+	
+	// Reset output buffer for this run
+	state.OutputBuffer.Reset()
+	state.InProgress = true
+	
+	// Start the Crush execution subprocess which will send messages through a channel
+	// The subprocess will send TaskStartedMsg, TaskOutputMsg, and TaskCompletedMsg/TaskFailedMsg
+	return m.executeCrushSubprocessForPrd(taskID, taskTitle, modelID, prompt, state)
 }
 
-// executeCrushSubprocessWithOutput runs the Crush subprocess and streams output to the modal and buffer
-func (m *Model) executeCrushSubprocessWithOutput(model, prompt string, modal *dialog.TaskRunnerModal, outputBuffer *bytes.Buffer) error {
-	// Use existing Crush runner implementation
-	// The ExecuteCrushSubprocess function in the dialog package handles the actual subprocess execution
-	// and streams output through BubbleTea messages
-	// For PRD generation, we'll call the Crush tool and capture output
+// executeCrushSubprocessForPrd runs the Crush subprocess and streams output via Bubble Tea messages
+// This follows the same pattern as ExecuteCrushSubprocess in dialog/crush_runner.go
+func (m *Model) executeCrushSubprocessForPrd(taskID, taskTitle, model, prompt string, state *PrdCreationState) tea.Cmd {
+	// Create a buffered channel for streaming messages
+	outCh := make(chan tea.Msg, 1000)
 	
-	ctx := context.Background()
+	// Create a cancellable context  
+	ctx, cancel := context.WithCancel(context.Background())
+	
+	// Start the subprocess in a goroutine
+	go m.runCrushProcessForPrd(ctx, taskID, model, prompt, state, outCh, cancel)
+	
+	// Return a sequence of commands (executed in order):
+	// 1. Send TaskStartedMsg to create the tab
+	// 2. Send CrushExecutionSub so app can subscribe to the channel
+	return tea.Sequence(
+		func() tea.Msg {
+			return dialog.TaskStartedMsg{
+				TaskID:    taskID,
+				TaskTitle: taskTitle,
+				Model:     model,
+			}
+		},
+		func() tea.Msg {
+			return dialog.CrushExecutionSub{
+				TaskID: taskID,
+				OutCh:  outCh,
+			}
+		},
+	)
+}
+
+// runCrushProcessForPrd executes the Crush subprocess and streams output to the channel
+func (m *Model) runCrushProcessForPrd(ctx context.Context, taskID, model, prompt string, state *PrdCreationState, outCh chan tea.Msg, cancel context.CancelFunc) {
+	defer close(outCh)
+	defer cancel()
+	
+	m.addLogLine(fmt.Sprintf("[PRD] Starting subprocess for task: %s", taskID))
 	
 	// Create the command - crush run takes the prompt as argument
 	cmd := exec.CommandContext(ctx, "crush", "run", prompt)
 	
 	// Log the exact command being executed
-	m.addLogLine(fmt.Sprintf("Executing: crush run %q", prompt))
+	m.addLogLine(fmt.Sprintf("[PRD] Executing: crush run <prompt %d chars>", len(prompt)))
 	
 	// Set up stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		m.addLogLine(fmt.Sprintf("Failed to create stdout pipe: %v", err))
-		m.showErrorDialog("Crush Execution Error", fmt.Sprintf("Failed to set up output stream: %v\n\nPlease try again.", err))
-		return err
+		outCh <- dialog.TaskFailedMsg{
+			TaskID:  taskID,
+			Error:   fmt.Sprintf("Failed to create stdout pipe: %v", err),
+			Message: "Could not set up subprocess output",
+		}
+		return
 	}
 	
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		m.addLogLine(fmt.Sprintf("Failed to create stderr pipe: %v", err))
-		m.showErrorDialog("Crush Execution Error", fmt.Sprintf("Failed to set up error stream: %v\n\nPlease try again.", err))
-		return err
+		outCh <- dialog.TaskFailedMsg{
+			TaskID:  taskID,
+			Error:   fmt.Sprintf("Failed to create stderr pipe: %v", err),
+			Message: "Could not set up subprocess error output",
+		}
+		return
 	}
 	
 	// Start the command
 	if err := cmd.Start(); err != nil {
-		m.addLogLine(fmt.Sprintf("Failed to start Crush: %v", err))
-		m.showErrorDialog("Crush Execution Error", fmt.Sprintf("Failed to start Crush process: %v\n\nVerify Crush is installed and accessible in your PATH.", err))
-		return err
+		m.addLogLine(fmt.Sprintf("[PRD] Failed to start Crush: %v", err))
+		outCh <- dialog.TaskFailedMsg{
+			TaskID:  taskID,
+			Error:   fmt.Sprintf("Failed to start crush: %v", err),
+			Message: "Could not start Crush subprocess",
+		}
+		return
 	}
 	
-	// Stream stdout to both modal and buffer
+	m.addLogLine(fmt.Sprintf("[PRD] Crush process started, PID: %d", cmd.Process.Pid))
+	
+	// Send execution context for cancellation support
+	outCh <- dialog.CrushExecutionContextMsg{
+		TaskID:     taskID,
+		Cmd:        cmd,
+		CancelFunc: cancel,
+	}
+	
+	m.addLogLine("[PRD] Sent CrushExecutionContextMsg")
+	
+	// Use WaitGroup to coordinate output streaming
+	var wg sync.WaitGroup
+	wg.Add(2)
+	
+	// Stream stdout
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
+		// Increase scanner buffer size to handle long lines
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024) // 1MB max line size
+		
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Write to buffer
-			outputBuffer.WriteString(line + "\n")
+			// Write to output buffer for later file save
+			state.OutputBuffer.WriteString(line + "\n")
+			
+			// Send output message to update the modal
+			select {
+			case outCh <- dialog.TaskOutputMsg{TaskID: taskID, Output: line}:
+			case <-ctx.Done():
+				return
+			}
 			
 			// Log output for debugging
 			m.addLogLine(line)
 		}
+		
+		if err := scanner.Err(); err != nil {
+			m.addLogLine(fmt.Sprintf("Error reading stdout: %v", err))
+		}
 	}()
 	
-	// Stream stderr to log
+	// Stream stderr
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024)
+		
 		for scanner.Scan() {
 			line := scanner.Text()
 			
 			// Write to buffer with error prefix
-			outputBuffer.WriteString("[ERR] " + line + "\n")
+			state.OutputBuffer.WriteString("[ERR] " + line + "\n")
+			
+			// Send error output to modal
+			select {
+			case outCh <- dialog.TaskOutputMsg{TaskID: taskID, Output: "[ERR] " + line}:
+			case <-ctx.Done():
+				return
+			}
 			
 			// Log error for debugging
 			m.addLogLine("[ERR] " + line)
 		}
+		
+		if err := scanner.Err(); err != nil {
+			m.addLogLine(fmt.Sprintf("Error reading stderr: %v", err))
+		}
 	}()
 	
+	// Wait for all output to be read
+	wg.Wait()
+	
 	// Wait for process to complete
-	if err := cmd.Wait(); err != nil {
+	err = cmd.Wait()
+	
+	// Mark as no longer in progress
+	state.InProgress = false
+	
+	if err != nil {
 		m.addLogLine(fmt.Sprintf("Crush execution error: %v", err))
-		// Don't return error - the process may have completed despite exit code
+		outCh <- dialog.TaskFailedMsg{
+			TaskID:  taskID,
+			Error:   err.Error(),
+			Message: "Crush process exited with error",
+		}
+		return
 	}
 	
-	return nil
+	// Success - send completion message
+	m.addLogLine("✓ PRD generation completed")
+	outCh <- dialog.TaskCompletedMsg{
+		TaskID: taskID,
+	}
 }
 
 // stripAnsiCodes removes ANSI escape codes from text
