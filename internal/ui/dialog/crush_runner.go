@@ -32,7 +32,7 @@ func ValidateCrushBinary() error {
 	path, err := exec.LookPath("crush")
 	if err != nil {
 		return &CrushBinaryError{
-			Message: "crush binary not found. Install via: go install github.com/crush-ai/crush@latest",
+			Message: "crush binary not found. Install via: go install github.com/charmbracelet/crush@latest",
 		}
 	}
 	// Verify it's executable
@@ -150,6 +150,139 @@ func GetCrushCommand(prompt string, model string) []string {
 	// For now, we'll prepare it to be passed via stdin in the actual execution
 	
 	return args
+}
+
+// RunCommand executes an ad-hoc Crush command with streaming output.
+// commandID should be a unique identifier for logging correlation.
+// prompt is the command/prompt to send to Crush.
+// model is optional (pass "" for default model).
+// Returns a channel of tea.Msg (TaskOutputMsg, TaskCompletedMsg, TaskFailedMsg) and an error if startup fails.
+// The channel is closed when the command completes.
+func RunCommand(commandID, prompt, model string) (chan tea.Msg, error) {
+	if commandID == "" {
+		return nil, fmt.Errorf("command ID cannot be empty")
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return nil, fmt.Errorf("prompt cannot be empty")
+	}
+
+	// Validate that crush binary exists
+	if err := ValidateCrushBinary(); err != nil {
+		return nil, err
+	}
+
+	// Prepare command arguments
+	args := []string{"run"}
+	if model != "" {
+		args = append(args, "--model", model)
+	}
+	args = append(args, prompt)
+
+	// Create command with background context (no inherent timeout)
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "crush", args...)
+
+	// Set up stdout/stderr pipes
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start command
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start crush command: %w", err)
+	}
+
+	// Create output channel with large buffer to handle bursts
+	outputChan := make(chan tea.Msg, 1000)
+
+	// Create log file
+	logPath := filepath.Join(".taskmaster", "logs", fmt.Sprintf("crush-command-%s-%d.log", commandID, time.Now().Unix()))
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		// Continue without logging if directory creation fails
+		// Just send a warning but don't fail the entire run
+	}
+
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		// Continue without logging if file creation fails
+		logFile = nil
+	}
+
+	// Write header to log file
+	if logFile != nil {
+		fmt.Fprintf(logFile, "=== Crush Command Log ===\n")
+		fmt.Fprintf(logFile, "Command ID: %s\n", commandID)
+		fmt.Fprintf(logFile, "Model: %s\n", model)
+		fmt.Fprintf(logFile, "Started: %s\n", time.Now().Format(time.RFC3339))
+		fmt.Fprintf(logFile, "Command: crush run %s\n", strings.Join(args[1:], " "))
+		fmt.Fprintf(logFile, "===================\n\n")
+	}
+
+	// Stream output in goroutine
+	go func() {
+		defer close(outputChan)
+		if logFile != nil {
+			defer logFile.Close()
+		}
+
+		// Merge stdout and stderr
+		merged := io.MultiReader(stdout, stderr)
+		scanner := bufio.NewScanner(merged)
+
+		// Increase scanner buffer size to handle long lines
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024) // 1MB max line size
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// Write to log file if available
+			if logFile != nil {
+				fmt.Fprintf(logFile, "%s\n", line)
+			}
+
+			// Send to output channel as TaskOutputMsg
+			outputChan <- TaskOutputMsg{
+				TaskID: commandID,
+				Output: line,
+			}
+		}
+
+		// Wait for command to finish
+		err := cmd.Wait()
+
+		// Write completion status to log file
+		if logFile != nil {
+			fmt.Fprintf(logFile, "\n===================\n")
+			fmt.Fprintf(logFile, "Completed: %s\n", time.Now().Format(time.RFC3339))
+			if err != nil {
+				fmt.Fprintf(logFile, "Status: Failed - %v\n", err)
+			} else {
+				fmt.Fprintf(logFile, "Status: Success\n")
+			}
+			fmt.Fprintf(logFile, "===================\n")
+		}
+
+		// Send completion or failure message
+		if err != nil {
+			outputChan <- TaskFailedMsg{
+				TaskID:  commandID,
+				Error:   fmt.Sprintf("Command failed: %v", err),
+				Message: "Crush command execution failed",
+			}
+		} else {
+			outputChan <- TaskCompletedMsg{
+				TaskID: commandID,
+			}
+		}
+	}()
+
+	return outputChan, nil
 }
 
 // CrushExecutionSub is a subscription message that indicates a new Crush execution channel is ready
@@ -406,11 +539,23 @@ func WaitForCrushMsg(outCh chan tea.Msg) tea.Cmd {
 	}
 }
 
+// SanitizeTaskIDForFilename converts task IDs (including command IDs) into safe filenames.
+// Command IDs in the format "command-<timestamp>" are already safe.
+// Regular task IDs (1, 1.2, 2.1.1) remain unchanged.
+func SanitizeTaskIDForFilename(taskID string) string {
+	// Both command IDs (command-<number>) and regular task IDs (1, 1.2, 2.1.1) are valid filenames
+	// No sanitization needed - hyphens, digits, and dots are all safe in filenames
+	return taskID
+}
+
 // createCrushLogFile creates a log file for the Crush run
 // Uses tag-based directory structure: .taskmaster/<tagName>/<taskID>.log
 // Falls back to .taskmaster/logs/ if no tag is provided
 // Returns the file handle and path, or error if creation fails
 func createCrushLogFile(taskID string, tagName string) (*os.File, string, error) {
+	// Sanitize taskID to ensure valid filename (handles both task IDs and command IDs)
+	sanitizedID := SanitizeTaskIDForFilename(taskID)
+	
 	var logsDir string
 	var logFileName string
 	
@@ -418,12 +563,12 @@ func createCrushLogFile(taskID string, tagName string) (*os.File, string, error)
 		// Use tag-based directory structure per CRUSH_RUN_INSTRUCTIONS.md
 		// .taskmaster/<tag-name>/<task-id>.log
 		logsDir = filepath.Join(".taskmaster", tagName)
-		logFileName = fmt.Sprintf("%s.log", taskID)
+		logFileName = fmt.Sprintf("%s.log", sanitizedID)
 	} else {
 		// Fallback to generic logs directory with timestamp
 		logsDir = filepath.Join(".taskmaster", "logs")
 		timestamp := time.Now().Format("20060102-150405")
-		logFileName = fmt.Sprintf("crush-run-%s-%s.log", taskID, timestamp)
+		logFileName = fmt.Sprintf("crush-run-%s-%s.log", sanitizedID, timestamp)
 	}
 	
 	// Create directory if it doesn't exist

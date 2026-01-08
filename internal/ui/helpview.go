@@ -37,6 +37,17 @@ func (m Model) renderCompactHelp() string {
 	b.WriteString(formatTableRow("pgup", "Page up", "pgdown", "Page down", helpWidth))
 	b.WriteString("\n")
 
+	// Features section
+	featureTitle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorHighlight)).
+		Bold(true)
+	b.WriteString(featureTitle.Render("Key Features"))
+	b.WriteString("\n")
+	b.WriteString(formatCompactKey("⚙", "Command Runner (Ctrl+B) - Run commands with Crush AI", helpWidth))
+	b.WriteString(formatCompactKey("🔄", "Auto-sync - Real-time updates when task files change", helpWidth))
+	b.WriteString(formatCompactKey("🏷", "Tag Management - Organize tasks with custom tags and filters", helpWidth))
+	b.WriteString("\n")
+
 	// Action keys - use one column for longer descriptions
 	b.WriteString(formatCompactKey("e", "Toggle expand/collapse", helpWidth))
 	b.WriteString(formatCompactKey("space", "Select/deselect for bulk operations", helpWidth))
@@ -44,6 +55,7 @@ func (m Model) renderCompactHelp() string {
 	b.WriteString(formatCompactKey("r", "Refresh tasks from disk", helpWidth))
 	b.WriteString(formatCompactKey(":", "Jump to task by ID", helpWidth))
 	b.WriteString(formatCompactKey("alt+c", "Analyze task complexity workflow", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+b", "Run command with Crush AI", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+p", "Open Command Palette (pick any action)", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+shift+a", "Add a new tag context", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+shift+m", "Open tag context manager", helpWidth))

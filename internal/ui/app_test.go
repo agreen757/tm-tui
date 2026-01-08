@@ -457,7 +457,7 @@ func TestExecutorOutputMsgToLog(t *testing.T) {
 	output := "test output line"
 	msg := ExecutorOutputMsg{Line: output}
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Check that output was added to log
 	if len(model.logLines) == 0 {
@@ -484,7 +484,7 @@ func TestExecutorOutputMsgToModal(t *testing.T) {
 	output := "modal output line"
 	msg := ExecutorOutputMsg{Line: output}
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Check that output was added to appState but NOT to log
 	if !model.appState.IsNextTaskModalActive() {
@@ -519,7 +519,7 @@ func TestExecutorOutputMsgModalSkipsLog(t *testing.T) {
 	output := "modal only line"
 	msg := ExecutorOutputMsg{Line: output}
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Check that log was NOT updated
 	if len(model.logLines) != initialLogLength {
@@ -543,7 +543,7 @@ func TestExecutorOutputMsgMultipleLines(t *testing.T) {
 	for _, line := range lines {
 		msg := ExecutorOutputMsg{Line: line}
 		newM, _ := m.Update(msg)
-		m = newM.(Model)
+		m = newM.(*Model)
 	}
 
 	// Check that all lines were added to appState
@@ -575,7 +575,7 @@ func TestExecutorOutputMsgCloseModal(t *testing.T) {
 	output := "post-close line"
 	msg := ExecutorOutputMsg{Line: output}
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Check that output went to log
 	if len(model.logLines) == 0 {
@@ -603,7 +603,7 @@ func TestExecutorDoneMsgSuccess(t *testing.T) {
 	for _, line := range outputLines {
 		msg := ExecutorOutputMsg{Line: line}
 		newM, _ := m.Update(msg)
-		m = newM.(Model)
+		m = newM.(*Model)
 	}
 
 	// Send successful ExecutorDoneMsg
@@ -613,7 +613,7 @@ func TestExecutorDoneMsgSuccess(t *testing.T) {
 		Error:   nil,
 	}
 	newM, _ := m.Update(doneMsg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Verify that the modal was updated with loading state false
 	if model.appState.IsNextTaskModalActive() {
@@ -644,7 +644,7 @@ func TestExecutorDoneMsgFailure(t *testing.T) {
 		Error:   errors.New("permission denied"),
 	}
 	newM, _ := m.Update(doneMsg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Model should still be active, ready to display error
 	if !model.appState.IsNextTaskModalActive() {
@@ -670,7 +670,7 @@ func TestExecutorDoneMsgEmptyOutput(t *testing.T) {
 		Error:   nil,
 	}
 	newM, _ := m.Update(doneMsg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// The handler should set "No tasks available." message
 	// Verify the modal is still active to show this message
@@ -696,7 +696,7 @@ func TestExecutorDoneMsgNonNextCommand(t *testing.T) {
 		Error:   nil,
 	}
 	newM, _ := m.Update(doneMsg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Modal should not be affected
 	if model.appState.IsNextTaskModalActive() {
@@ -856,7 +856,7 @@ func TestExecutorDoneMsg_NotInWorkspace(t *testing.T) {
 	}
 
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Verify the modal is still active (shows error)
 	if !model.appState.IsNextTaskModalActive() {
@@ -883,7 +883,7 @@ func TestExecutorDoneMsg_BinaryNotFound(t *testing.T) {
 	}
 
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Verify the modal is still active (shows error)
 	if !model.appState.IsNextTaskModalActive() {
@@ -910,7 +910,7 @@ func TestExecutorDoneMsg_BinaryNotExecutable(t *testing.T) {
 	}
 
 	newM, _ := m.Update(msg)
-	model := newM.(Model)
+	model := newM.(*Model)
 
 	// Verify the modal is still active (shows error)
 	if !model.appState.IsNextTaskModalActive() {

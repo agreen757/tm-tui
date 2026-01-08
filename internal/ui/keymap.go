@@ -77,6 +77,9 @@ type KeyMap struct {
 	
 	// Git integration
 	GitMenu key.Binding
+
+	// Command runner
+	CommandRunner key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings
@@ -153,6 +156,12 @@ func DefaultKeyMap() KeyMap {
 		GitMenu: key.NewBinding(
 			key.WithKeys("g"),
 			key.WithHelp("g", "git menu"),
+		),
+
+		// Command runner
+		CommandRunner: key.NewBinding(
+			key.WithKeys("ctrl+b"),
+			key.WithHelp("ctrl+b", "run command with Crush AI"),
 		),
 
 		// Status changes
@@ -499,7 +508,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.ToggleDetails, k.ToggleLog},
 		{k.Help, k.Quit, k.Cancel, k.ClearState},
 		{k.AnalyzeComplexity},
-		{k.CommandPalette, k.ParsePRD, k.CreatePRD, k.ExpandTask, k.DeleteTask, k.RunTask},
+		{k.CommandPalette, k.ParsePRD, k.CreatePRD, k.ExpandTask, k.DeleteTask, k.RunTask, k.CommandRunner},
 		{k.ManageTags, k.TagManagement, k.UseTag},
 		{k.ProjectTags, k.ProjectQuickSwitch, k.ProjectSearch},
 		{k.GitMenu},

@@ -632,7 +632,7 @@ func (m *TaskRunnerModal) renderTabBar() string {
 	for i := 0; i < len(m.tabs); i++ {
 		tab := m.tabs[i]
 		indicator := tab.getStatusIcon()
-		label := fmt.Sprintf("%s %s", indicator, tab.GetTaskID())
+		label := fmt.Sprintf("%s %s", indicator, tab.GetTabLabel())
 
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#999999")).

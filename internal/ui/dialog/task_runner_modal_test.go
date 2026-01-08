@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -769,3 +770,450 @@ func TestCancellationMessageOutput(t *testing.T) {
 	}
 }
 
+// TestGetTabLabelForCommands tests GetTabLabel with command IDs
+func TestGetTabLabelForCommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		taskID   string
+		taskTitle string
+		expected string
+	}{
+		{
+			name:      "command with title",
+			taskID:    "command-1234567890",
+			taskTitle: "Generate Documentation",
+			expected:  "Generate Documentation",
+		},
+		{
+			name:      "command without title",
+			taskID:    "command-1234567890",
+			taskTitle: "",
+			expected:  "Command",
+		},
+		{
+			name:      "regular task with title",
+			taskID:    "1.2",
+			taskTitle: "Implement Auth",
+			expected:  "1.2 - Implement Auth",
+		},
+		{
+			name:      "regular task without title",
+			taskID:    "1.2",
+			taskTitle: "",
+			expected:  "1.2",
+		},
+		{
+			name:      "single digit task with title",
+			taskID:    "1",
+			taskTitle: "Setup Project",
+			expected:  "1 - Setup Project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tab := NewTaskExecutionTab(tt.taskID, tt.taskTitle, "model", 80, 30, nil)
+			label := tab.GetTabLabel()
+			if label != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, label)
+			}
+		})
+	}
+}
+
+// TestGetTabLabelInTabBar tests that tab bar uses GetTabLabel
+func TestGetTabLabelInTabBar(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Add regular task
+	modal.addTab("1.2", "Implement Feature", "model")
+	// Add command
+	modal.addTab("command-1234567890", "Generate Code", "model")
+	// Add command without title
+	modal.addTab("command-9876543210", "", "model")
+
+	tabBar := modal.renderTabBar()
+
+	if tabBar == "" {
+		t.Error("Expected non-empty tab bar")
+	}
+
+	// Verify task label includes task ID and title
+	if !stringContains(tabBar, "1.2") {
+		t.Error("Expected task ID in tab bar")
+	}
+	if !stringContains(tabBar, "Implement Feature") {
+		t.Error("Expected task title in tab bar")
+	}
+
+	// Verify command label uses title directly (not command ID)
+	if !stringContains(tabBar, "Generate Code") {
+		t.Error("Expected command title in tab bar")
+	}
+	if stringContains(tabBar, "command-1234567890") {
+		t.Error("Did not expect command ID to be shown in tab bar")
+	}
+
+	// Verify command without title shows "Command"
+	if !stringContains(tabBar, "Command") {
+		t.Error("Expected 'Command' label for command without title")
+	}
+}
+
+// TestMessageHandlingWithCommandIDs tests that Task Runner message handling works with command IDs
+func TestMessageHandlingWithCommandIDs(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Test TaskStartedMsg with command ID
+	startMsg := TaskStartedMsg{
+		TaskID:    "command-1234567890",
+		TaskTitle: "Generate Documentation",
+		Model:     "claude-3.5-sonnet",
+	}
+	modal.Update(startMsg)
+
+	// Verify tab was created with command ID
+	if len(modal.tabs) != 1 {
+		t.Errorf("Expected 1 tab after TaskStartedMsg, got %d", len(modal.tabs))
+	}
+	if modal.tabs[0].GetTaskID() != "command-1234567890" {
+		t.Errorf("Expected taskID 'command-1234567890', got %q", modal.tabs[0].GetTaskID())
+	}
+	if modal.tabs[0].GetTaskTitle() != "Generate Documentation" {
+		t.Errorf("Expected title 'Generate Documentation', got %q", modal.tabs[0].GetTaskTitle())
+	}
+
+	// Test TaskOutputMsg with command ID
+	outputMsg := TaskOutputMsg{
+		TaskID: "command-1234567890",
+		Output: "Generating documentation...",
+	}
+	modal.Update(outputMsg)
+
+	output := modal.tabs[0].GetOutput()
+	if len(output) != 1 {
+		t.Errorf("Expected 1 line of output, got %d", len(output))
+	}
+	if output[0] != "Generating documentation..." {
+		t.Errorf("Expected output line to match, got %q", output[0])
+	}
+
+	// Test multiple output lines
+	outputMsg2 := TaskOutputMsg{
+		TaskID: "command-1234567890",
+		Output: "Documentation complete!",
+	}
+	modal.Update(outputMsg2)
+
+	output = modal.tabs[0].GetOutput()
+	if len(output) != 2 {
+		t.Errorf("Expected 2 lines of output, got %d", len(output))
+	}
+
+	// Test TaskCompletedMsg with command ID
+	completedMsg := TaskCompletedMsg{
+		TaskID: "command-1234567890",
+	}
+	modal.Update(completedMsg)
+
+	if modal.tabs[0].GetStatus() != TaskCompleted {
+		t.Errorf("Expected status TaskCompleted, got %v", modal.tabs[0].GetStatus())
+	}
+}
+
+// TestConcurrentCommandAndTaskExecution tests running both tasks and commands simultaneously
+func TestConcurrentCommandAndTaskExecution(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Start a regular task
+	taskMsg := TaskStartedMsg{
+		TaskID:    "1.2",
+		TaskTitle: "Implement Feature",
+		Model:     "claude-3.5-sonnet",
+	}
+	modal.Update(taskMsg)
+
+	// Start a command concurrently
+	cmdMsg := TaskStartedMsg{
+		TaskID:    "command-9876543210",
+		TaskTitle: "Generate Code",
+		Model:     "claude-3.5-sonnet",
+	}
+	modal.Update(cmdMsg)
+
+	// Verify both tabs exist
+	if len(modal.tabs) != 2 {
+		t.Errorf("Expected 2 tabs, got %d", len(modal.tabs))
+	}
+
+	// Send output to task
+	taskOutput := TaskOutputMsg{
+		TaskID: "1.2",
+		Output: "Task output line 1",
+	}
+	modal.Update(taskOutput)
+
+	// Send output to command
+	cmdOutput := TaskOutputMsg{
+		TaskID: "command-9876543210",
+		Output: "Command output line 1",
+	}
+	modal.Update(cmdOutput)
+
+	// Verify output went to correct tabs
+	taskTab := modal.GetTabByTaskID("1.2")
+	if taskTab == nil {
+		t.Error("Expected task tab to exist")
+	}
+	if len(taskTab.GetOutput()) != 1 || taskTab.GetOutput()[0] != "Task output line 1" {
+		t.Errorf("Task output incorrect: %v", taskTab.GetOutput())
+	}
+
+	cmdTab := modal.GetTabByTaskID("command-9876543210")
+	if cmdTab == nil {
+		t.Error("Expected command tab to exist")
+	}
+	if len(cmdTab.GetOutput()) != 1 || cmdTab.GetOutput()[0] != "Command output line 1" {
+		t.Errorf("Command output incorrect: %v", cmdTab.GetOutput())
+	}
+
+	// Complete the command
+	cmdComplete := TaskCompletedMsg{
+		TaskID: "command-9876543210",
+	}
+	modal.Update(cmdComplete)
+
+	// Verify only command tab is completed, task still running
+	if cmdTab.GetStatus() != TaskCompleted {
+		t.Errorf("Expected command tab to be completed")
+	}
+	if taskTab.GetStatus() != TaskRunning {
+		t.Errorf("Expected task tab to still be running")
+	}
+}
+
+// TestMessageRoutingAccuracy tests that messages are routed to correct tabs
+func TestMessageRoutingAccuracy(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Create multiple tabs with various ID formats
+	ids := []string{"1", "1.2", "2.1.1", "command-111", "command-222"}
+	for _, id := range ids {
+		modal.addTab(id, "Title for "+id, "model")
+	}
+
+	if len(modal.tabs) != 5 {
+		t.Errorf("Expected 5 tabs, got %d", len(modal.tabs))
+	}
+
+	// Send output to each tab and verify routing
+	for _, id := range ids {
+		msg := TaskOutputMsg{
+			TaskID: id,
+			Output: fmt.Sprintf("Output for %s", id),
+		}
+		modal.Update(msg)
+
+		// Verify output went to correct tab
+		for _, tab := range modal.tabs {
+			if tab.GetTaskID() == id {
+				output := tab.GetOutput()
+				if len(output) != 1 || output[0] != fmt.Sprintf("Output for %s", id) {
+					t.Errorf("Output routing failed for %s: got %v", id, output)
+				}
+			}
+		}
+	}
+
+	// Verify no cross-contamination
+	for _, tab := range modal.tabs {
+		output := tab.GetOutput()
+		if len(output) != 1 {
+			t.Errorf("Expected 1 line of output for %s, got %d", tab.GetTaskID(), len(output))
+		}
+	}
+}
+
+// TestConcurrentHeavyLoad tests Task Runner under heavy concurrent load
+// This test verifies that the modal can handle multiple simultaneous messages
+// without race conditions or data corruption
+func TestConcurrentHeavyLoad(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Create 10 concurrent executions (mix of tasks and commands)
+	tabIDs := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		if i%2 == 0 {
+			// Regular task
+			tabIDs[i] = fmt.Sprintf("%d.%d", i+1, i+10)
+		} else {
+			// Command
+			tabIDs[i] = fmt.Sprintf("command-%d", 1000000000+i*111)
+		}
+	}
+
+	// Start all tasks/commands
+	for i, id := range tabIDs {
+		msg := TaskStartedMsg{
+			TaskID:    id,
+			TaskTitle: fmt.Sprintf("Execution %d", i),
+			Model:     "test-model",
+		}
+		modal.Update(msg)
+	}
+
+	if len(modal.tabs) != 10 {
+		t.Errorf("Expected 10 tabs, got %d", len(modal.tabs))
+	}
+
+	// Send multiple output lines to each tab in random order
+	for round := 0; round < 5; round++ {
+		for _, id := range tabIDs {
+			msg := TaskOutputMsg{
+				TaskID: id,
+				Output: fmt.Sprintf("Round %d output for %s", round, id),
+			}
+			modal.Update(msg)
+		}
+	}
+
+	// Verify all tabs have correct output
+	for _, id := range tabIDs {
+		tab := modal.GetTabByTaskID(id)
+		if tab == nil {
+			t.Errorf("Tab not found for %s", id)
+			continue
+		}
+		output := tab.GetOutput()
+		if len(output) != 5 {
+			t.Errorf("Tab %s expected 5 output lines, got %d", id, len(output))
+		}
+	}
+
+	// Complete first 5 tabs
+	for i := 0; i < 5; i++ {
+		msg := TaskCompletedMsg{
+			TaskID: tabIDs[i],
+		}
+		modal.Update(msg)
+		if modal.tabs[i].GetStatus() != TaskCompleted {
+			t.Errorf("Tab %d not marked completed", i)
+		}
+	}
+
+	// Fail next 3 tabs
+	for i := 5; i < 8; i++ {
+		msg := TaskFailedMsg{
+			TaskID: tabIDs[i],
+		}
+		modal.Update(msg)
+		if modal.tabs[i].GetStatus() != TaskFailed {
+			t.Errorf("Tab %d not marked failed", i)
+		}
+	}
+
+	// Cancel last 2 tabs
+	for i := 8; i < 10; i++ {
+		msg := TaskCancelledMsg{
+			TaskID: tabIDs[i],
+		}
+		modal.Update(msg)
+		if modal.tabs[i].GetStatus() != TaskCancelled {
+			t.Errorf("Tab %d not marked cancelled", i)
+		}
+	}
+
+	// Verify final states
+	expectedStates := []TaskExecutionStatus{
+		TaskCompleted, TaskCompleted, TaskCompleted, TaskCompleted, TaskCompleted,
+		TaskFailed, TaskFailed, TaskFailed,
+		TaskCancelled, TaskCancelled,
+	}
+
+	for i, expectedStatus := range expectedStates {
+		if modal.tabs[i].GetStatus() != expectedStatus {
+			t.Errorf("Tab %d: expected %v, got %v", i, expectedStatus, modal.tabs[i].GetStatus())
+		}
+	}
+}
+
+// TestTabLabelMixedIDFormats tests that tab labels render correctly with mixed ID formats
+func TestTabLabelMixedIDFormats(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Create tabs with various ID formats
+	testCases := []struct {
+		taskID    string
+		taskTitle string
+		expected  string
+	}{
+		{"1", "Setup", "1 - Setup"},
+		{"1.2", "Implementation", "1.2 - Implementation"},
+		{"2.1.1", "Deep Nested", "2.1.1 - Deep Nested"},
+		{"command-1234567890", "Generate Docs", "Generate Docs"},
+		{"command-9876543210", "", "Command"},
+	}
+
+	for _, tc := range testCases {
+		modal.addTab(tc.taskID, tc.taskTitle, "model")
+	}
+
+	tabBar := modal.renderTabBar()
+
+	// Verify all labels appear in tab bar
+	for _, tc := range testCases {
+		if !stringContains(tabBar, tc.expected) {
+			t.Errorf("Expected label %q in tab bar, not found. Tab bar: %s", tc.expected, tabBar)
+		}
+	}
+
+	// Verify command IDs are NOT shown directly
+	if stringContains(tabBar, "command-1234567890") {
+		t.Error("Command ID should not appear in tab bar")
+	}
+}
+
+// TestOutputIsolation verifies that output from one tab doesn't contaminate others
+func TestOutputIsolation(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Create 3 tabs
+	taskIDs := []string{"task-1", "command-1000", "task-2"}
+	for _, id := range taskIDs {
+		modal.addTab(id, "Title "+id, "model")
+	}
+
+	// Send specific output to each tab
+	expectedOutputs := map[string][]string{
+		"task-1":       {"Task 1 line 1", "Task 1 line 2"},
+		"command-1000": {"Command output A", "Command output B", "Command output C"},
+		"task-2":       {"Task 2 unique output"},
+	}
+
+	for id, lines := range expectedOutputs {
+		for _, line := range lines {
+			msg := TaskOutputMsg{
+				TaskID: id,
+				Output: line,
+			}
+			modal.Update(msg)
+		}
+	}
+
+	// Verify each tab has ONLY its own output
+	for id, expectedLines := range expectedOutputs {
+		tab := modal.GetTabByTaskID(id)
+		if tab == nil {
+			t.Fatalf("Tab %s not found", id)
+		}
+		output := tab.GetOutput()
+		if len(output) != len(expectedLines) {
+			t.Errorf("Tab %s: expected %d lines, got %d", id, len(expectedLines), len(output))
+		}
+		for i, expected := range expectedLines {
+			if i >= len(output) || output[i] != expected {
+				t.Errorf("Tab %s line %d: expected %q, got %q", id, i, expected, output[i])
+			}
+		}
+	}
+}

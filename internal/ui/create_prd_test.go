@@ -259,7 +259,7 @@ func TestCrushBinaryErrorMessage(t *testing.T) {
 	}{
 		{
 			name:     "crush_not_found",
-			message:  "crush binary not found. Install via: go install github.com/crush-ai/crush@latest",
+			message:  "crush binary not found. Install via: go install github.com/charmbracelet/crush@latest",
 			expected: "crush binary not found",
 		},
 		{

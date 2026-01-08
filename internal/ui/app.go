@@ -304,6 +304,7 @@ func (m *Model) registerDefaultCommandShortcuts() {
 		{binding: m.keyMap.ExpandTask, command: CommandExpandTask, help: "Expand Task"},
 		{binding: m.keyMap.DeleteTask, command: CommandDeleteTask, help: "Delete Task"},
 		{binding: m.keyMap.RunTask, command: CommandRunTask, help: "Run Task with Crush"},
+		{binding: m.keyMap.CommandRunner, command: CommandRunCommand, help: "Run Command with Crush"},
 		{binding: m.keyMap.ManageTags, command: CommandManageTags, help: "Add Tag Context"},
 		{binding: m.keyMap.TagManagement, command: CommandTagManagement, help: "Manage Tags"},
 		{binding: m.keyMap.UseTag, command: CommandUseTag, help: "Use Tag"},
@@ -1080,7 +1081,7 @@ func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, m
 	if err := dialog.ValidateCrushBinary(); err != nil {
 		appErr := NewDependencyError("Crush Run", err.Error(), err).
 			WithRecoveryHints(
-				"Install Crush: go install github.com/crush-ai/crush@latest",
+				"Install Crush: go install github.com/charmbracelet/crush@latest",
 				"Ensure Crush is in your PATH",
 				"Verify the installation with: crush --version",
 			)
@@ -3372,6 +3373,7 @@ func (m Model) renderHelpOverlay() string {
 		{m.renderBinding(m.keyMap.NextTask) + "  Get next available task"},
 		{m.renderBinding(m.keyMap.Refresh) + "  Refresh tasks from disk"},
 		{m.renderBinding(m.keyMap.JumpToID) + "  Jump to task by ID"},
+		{m.renderBinding(m.keyMap.CommandRunner) + "  Run command with Crush AI"},
 	}
 	taskSection := createSection(" TASK OPERATIONS", taskBindings)
 

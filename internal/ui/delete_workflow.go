@@ -328,6 +328,13 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 			return m.executeUndo("")
 		}
 		m.undoSession = nil
+	case commandRunnerDialogID:
+		if msg.Button == "Execute" {
+			if result, ok := msg.Value.(dialog.CommandPromptResult); ok {
+				return m.handleCommandRunnerSubmission(result)
+			}
+		}
+		// Cancel button or other action - just close the dialog
 	}
 	return nil
 }

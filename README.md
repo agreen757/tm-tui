@@ -24,7 +24,56 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## Recent Improvements (v0.1.16)
+## Recent Improvements (v0.1.17)
+
+### Command Runner Execution & Completion Detection
+
+**Direct Crush Command Execution** - Fixed the Command Runner (Ctrl+B) to properly execute commands and detect completion.
+
+**What Was Fixed:**
+- **Issue #1**: After submitting a command via the Command Runner dialog, the Task Runner modal appeared but nothing happened. The command was never actually executed.
+- **Issue #2**: When commands did execute (in previous versions), they would run to completion but the UI remained stuck showing "Running" status indefinitely.
+
+**Root Causes:**
+1. **Execution Not Triggered**: `handleCommandRunnerSubmission` only sent `TaskStartedMsg` to create the tab, but never called `continueAdHocCommand` to actually start the command execution.
+2. **No Completion Detection**: `RunCommand` function returned `chan string` for output lines but never sent completion messages (`TaskCompletedMsg`/`TaskFailedMsg`) when the command finished.
+
+**Changes:**
+- **Command Execution Flow** (internal/ui/command_handlers.go):
+  - Changed to use `tea.Sequence` to chain both tab creation and command execution
+  - Ensures `executeAdHocCommand` (creates tab) runs before `continueAdHocCommand` (starts execution)
+  - Matches the pattern used by regular task execution in `startCrushRun`
+
+- **Completion Message Support** (internal/ui/dialog/crush_runner.go):
+  - Changed `RunCommand` signature from `(<-chan string, error)` to `(chan tea.Msg, error)`
+  - Output lines now wrapped in `TaskOutputMsg` for proper routing
+  - Added completion detection after `cmd.Wait()`:
+    - Sends `TaskCompletedMsg` on successful completion (exit code 0)
+    - Sends `TaskFailedMsg` on error (non-zero exit code)
+  - Removed need for `convertOutputChannelToMsgChannel` helper
+
+**User Experience:**
+- **Before**: 
+  - Modal showed "Running" but command never executed
+  - If command did run, it would complete but stay in "Running" state forever
+- **After**: 
+  - Commands execute immediately when submitted
+  - Real-time output streaming shows progress
+  - Tab status updates to "Completed ✓" or "Failed ✗" when done
+  - Clear visual feedback throughout the entire lifecycle
+
+**Technical Details:**
+- Proper message sequencing with `tea.Sequence` for guaranteed execution order
+- Unified message types (`TaskOutputMsg`, `TaskCompletedMsg`, `TaskFailedMsg`) across all execution paths
+- Command exit status tracked via `cmd.Wait()` error return
+- Completion messages sent before channel close for proper UI updates
+
+**Testing:**
+- ✅ All unit tests pass (TestRunCommand*)
+- ✅ Build successful
+- ✅ Manual testing confirms proper execution and completion detection
+
+## Previous Improvements (v0.1.16)
 
 ### PRD Generation Live Output Fix
 

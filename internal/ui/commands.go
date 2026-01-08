@@ -24,6 +24,7 @@ const (
 	CommandProjectQuickSwitch CommandID = "project_quick_switch"
 	CommandProjectSearch      CommandID = "project_search"
 	CommandRunTask            CommandID = "run_task"
+	CommandRunCommand         CommandID = "run_command"
 	CommandGitMenu            CommandID = "git.menu"
 	CommandGitSwitchBranch    CommandID = "git.switchBranch"
 	CommandGitCreateBranch    CommandID = "git.createBranch"
@@ -46,6 +47,7 @@ func defaultCommandSpecs() []CommandSpec {
 		{ID: CommandExpandTask, Label: "Expand Task", Description: "Break down the selected task with AI", Shortcut: "Alt+E"},
 		{ID: CommandDeleteTask, Label: "Delete Task", Description: "Open the safe delete workflow for selected tasks", Shortcut: "Alt+D"},
 		{ID: CommandRunTask, Label: "Run Task with Crush", Description: "Execute the selected task via Crush AI agent", Shortcut: "Alt+R / Ctrl+R"},
+		{ID: CommandRunCommand, Label: "Run Command", Description: "Run a command with Crush AI", Shortcut: "Ctrl+B"},
 		{ID: CommandManageTags, Label: "Add Tag Context", Description: "Create a new tag context", Shortcut: "Ctrl+Shift+A"},
 		{ID: CommandTagManagement, Label: "Manage Tag Contexts", Description: "View and modify tag contexts", Shortcut: "Ctrl+Shift+M"},
 		{ID: CommandUseTag, Label: "Use Tag Context", Description: "Switch the active Task Master tag", Shortcut: "Ctrl+Shift+U"},

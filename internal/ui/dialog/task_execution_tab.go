@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -117,6 +118,25 @@ func (t *TaskExecutionTab) GetTaskID() string {
 // GetTaskTitle returns the task title
 func (t *TaskExecutionTab) GetTaskTitle() string {
 	return t.taskTitle
+}
+
+// GetTabLabel returns the display label for use in tab bars
+// For command execution tabs (taskID starts with "command-"), returns the truncated title
+// For regular task tabs, returns the formatted task ID and title
+func (t *TaskExecutionTab) GetTabLabel() string {
+	// Handle command execution tabs
+	if strings.HasPrefix(t.taskID, "command-") {
+		if t.taskTitle != "" {
+			return t.taskTitle
+		}
+		return "Command"
+	}
+
+	// Existing task label logic
+	if t.taskTitle != "" {
+		return fmt.Sprintf("%s - %s", t.taskID, t.taskTitle)
+	}
+	return t.taskID
 }
 
 // GetStatus returns the current status

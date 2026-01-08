@@ -13,6 +13,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	commandRunnerDialogID = "command_runner_dialog"
+)
+
 type addTagFormResult struct {
 	Name            string
 	CopyFromCurrent bool
@@ -44,6 +48,8 @@ func (m *Model) dispatchCommand(id CommandID) tea.Cmd {
 		m.handleDeleteTaskCommand()
 	case CommandRunTask:
 		return m.handleRunTaskCommand()
+	case CommandRunCommand:
+		return m.openCommandRunner()
 	case CommandManageTags:
 		m.openAddTagDialog()
 	case CommandTagManagement:
@@ -596,7 +602,7 @@ func (m *Model) showCrushDependencyError(message string) {
 		m.addLogLine(fmt.Sprintf("Crush Binary Error: %s", message))
 		return
 	}
-	recoveryHint := "Install Crush: go install github.com/crush-ai/crush@latest\nOr ensure crush is in your PATH"
+	recoveryHint := "Install Crush: go install github.com/charmbracelet/crush@latest\nOr ensure crush is in your PATH"
 	errDialog := dialog.NewErrorDialogModel("Crush Binary Not Found", message)
 	errDialog.SetRecoveryHints(recoveryHint)
 	m.appState.PushDialog(errDialog)
@@ -809,4 +815,210 @@ func (m *Model) cancelExpandTask() {
 func (m *Model) clearExpandTaskRuntimeState() {
 	m.cancelExpandTask()
 	m.expandTaskMsgCh = nil
+}
+
+// openCommandRunner opens the command runner dialog
+func (m *Model) openCommandRunner() tea.Cmd {
+	m.addLogLine("Ctrl+B pressed - Open Command Runner")
+	
+	// Validate Crush binary is available before opening dialog
+	if err := dialog.ValidateCrushBinary(); err != nil {
+		m.addLogLine(fmt.Sprintf("ERROR: Crush binary not available: %v", err))
+		appErr := NewDependencyError("Run Command", "Crush CLI is not available.", err).
+			WithRecoveryHints(
+				"Install Crush: go install github.com/charmbracelet/crush@latest",
+				"Ensure crush is in your PATH",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+	
+	// Create the command runner dialog
+	cmdDialog := dialog.NewCommandRunnerDialog(dialog.CreateDialogStyleFromAppStyles(
+		ColorBorder,    // border
+		ColorHighlight, // focused border
+		ColorText,      // title
+		"#333333",      // background
+		ColorText,      // text
+		ColorHighlight, // button
+		ColorBlocked,   // error
+		ColorDone,      // success
+		ColorPending,   // warning
+	))
+	
+	// Set the dialog ID so it can be identified in handleDialogResultMsg
+	cmdDialog.BaseDialog.ID = commandRunnerDialogID
+	
+	// Add dialog with callback to handle submission
+	m.appState.AddDialog(cmdDialog, func(value interface{}, err error) tea.Cmd {
+		if err != nil {
+			appErr := NewOperationError("Command Runner", "Failed to submit command", err).
+				WithRecoveryHints(
+					"Check your input and try again",
+					"Ensure the prompt is not empty",
+				)
+			m.showAppError(appErr)
+			return nil
+		}
+		
+		// Handle form cancellation
+		if value == nil {
+			return nil
+		}
+		
+		// Extract prompt from result
+		result, ok := value.(dialog.CommandPromptResult)
+		if !ok || result.Prompt == "" {
+			return nil
+		}
+		
+		// Execute command
+		return m.handleCommandRunnerSubmission(result)
+	})
+	
+	return cmdDialog.Init()
+}
+
+// handleCommandRunnerSubmission handles the result when user submits the command runner form
+func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult) tea.Cmd {
+	m.addLogLine(fmt.Sprintf("Command runner submitted with prompt (length=%d)", len(result.Prompt)))
+	
+	// Check if Crush binary is available
+	if err := dialog.ValidateCrushBinary(); err != nil {
+		m.addLogLine(fmt.Sprintf("ERROR: Crush binary not available: %v", err))
+		appErr := NewDependencyError("Run Command", "Crush CLI is not available.", err).
+			WithRecoveryHints(
+				"Install Crush: go install github.com/charmbracelet/crush@latest",
+				"Ensure crush is in your PATH",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+	
+	// Generate a unique command ID based on timestamp
+	commandID := fmt.Sprintf("cmd-%d", time.Now().UnixNano())
+	
+	// Create or show the task runner modal if not already present
+	if m.taskRunner == nil {
+		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-2, dialog.CreateDialogStyleFromAppStyles(
+			ColorBorder,    // border
+			ColorHighlight, // focused border
+			ColorText,      // title
+			"#333333",      // background
+			ColorText,      // text
+			ColorHighlight, // button
+			ColorBlocked,   // error
+			ColorDone,      // success
+			ColorPending,   // warning
+		))
+		m.dialogManager().PushDialog(m.taskRunner)
+	}
+	
+	// Execute the ad-hoc command using RunCommand (no specific model)
+	// Use tea.Sequence to ensure tab is created before execution starts
+	return tea.Sequence(
+		m.executeAdHocCommand(commandID, result.Prompt, ""),
+		m.continueAdHocCommand(commandID, result.Prompt, ""),
+	)
+}
+
+// executeAdHocCommand executes an ad-hoc command with Crush
+// Creates both the tab initialization and the command execution
+func (m *Model) executeAdHocCommand(commandID, prompt, model string) tea.Cmd {
+	return func() tea.Msg {
+		// First, send TaskStartedMsg to create the tab in the task runner modal
+		// This happens immediately
+		return dialog.TaskStartedMsg{
+			TaskID:    commandID,
+			TaskTitle: truncatePrompt(prompt, 30),
+			Model:     model,
+		}
+	}
+}
+
+// continueAdHocCommand handles the actual command execution after the tab is created
+// This is called after TaskStartedMsg is processed
+func (m *Model) continueAdHocCommand(commandID, prompt, model string) tea.Cmd {
+	return func() tea.Msg {
+		// Call RunCommand to start the execution
+		// RunCommand now returns chan tea.Msg directly (includes TaskOutputMsg, TaskCompletedMsg, TaskFailedMsg)
+		outputChan, err := dialog.RunCommand(commandID, prompt, model)
+		if err != nil {
+			m.addLogLine(fmt.Sprintf("ERROR: Failed to start command: %v", err))
+			return tea.Msg(dialog.TaskFailedMsg{
+				TaskID:  commandID,
+				Error:   err.Error(),
+				Message: "Failed to start command",
+			})
+		}
+		
+		m.addLogLine(fmt.Sprintf("Started ad-hoc command %s", commandID))
+		
+		// Return a message to set up the subscription to the output channel
+		// No conversion needed since RunCommand returns chan tea.Msg directly
+		return dialog.CrushExecutionSub{
+			TaskID: commandID,
+			OutCh:  outputChan,
+		}
+	}
+}
+
+// convertOutputChannelToMsgChannel converts a string channel to a tea.Msg channel
+func (m *Model) convertOutputChannelToMsgChannel(taskID string, outputChan <-chan string) chan tea.Msg {
+	msgChan := make(chan tea.Msg, 1000)
+	go func() {
+		defer close(msgChan)
+		for line := range outputChan {
+			msgChan <- dialog.TaskOutputMsg{
+				TaskID: taskID,
+				Output: line,
+			}
+		}
+	}()
+	return msgChan
+}
+
+// Helper methods for ad-hoc command execution
+
+// getCurrentCrushModel returns the Crush model from configuration or empty string for default
+func (m *Model) getCurrentCrushModel() string {
+	if m.config == nil {
+		return ""
+	}
+	// For now, return empty string to let Crush use its configured default
+	// In the future, this could read from config.CrushModel
+	return ""
+}
+
+// truncatePrompt truncates a prompt to a maximum length, adding "..." if truncated
+func truncatePrompt(prompt string, maxLen int) string {
+	if len(prompt) <= maxLen {
+		return prompt
+	}
+	if maxLen <= 3 {
+		return "..."
+	}
+	return prompt[:maxLen-3] + "..."
+}
+
+// ensureTaskRunnerModal ensures the Task Runner modal is created and visible
+// Creates a new modal if one doesn't exist, and sets the visible flag
+func (m *Model) ensureTaskRunnerModal() {
+	if m.taskRunner == nil {
+		// Create new TaskRunnerModal with current dimensions
+		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
+	}
+	m.taskRunnerVisible = true
+}
+
+// listenForCommandOutput creates a subscription command that streams output from a command
+// Takes a command ID and a channel of output strings, returns a tea.Cmd that:
+// - On first call, reads one line from the channel and emits TaskOutputMsg
+// - When the channel closes, emits TaskCompletedMsg
+// - Designed to be called repeatedly by Update handler to maintain subscription
+func (m *Model) listenForCommandOutput(commandID string, outputChan <-chan string) tea.Cmd {
+	// Convert string channel to tea.Msg channel for proper subscription
+	msgChan := m.convertOutputChannelToMsgChannel(commandID, outputChan)
+	// Subscribe to the channel using the built-in WaitForCrushMsg subscription
+	return dialog.WaitForCrushMsg(msgChan)
 }
