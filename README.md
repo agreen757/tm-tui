@@ -28,7 +28,41 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 
 **Note:** The Gemini integration approach implemented in v0.1.17 has been replaced with a new model selection strategy. The current branch (`gemini-integration`) contains the deprecated approach. Active development continues on the `crush-model-selection` branch, which implements a more flexible AI model selection system directly integrated with Crush's native model management.
 
-## Recent Improvements (v0.1.17)
+## Recent Improvements (v0.1.18)
+
+### Enhanced UI Header & Layout Improvements
+
+**Refined Visual Design** - Improved header styling and overall UI layout for better visual hierarchy and clarity.
+
+**What Was Improved:**
+- **Header Redesign**: Re-enabled and enhanced header component with modern styling
+- **Visual Hierarchy**: Improved spacing and alignment for better content organization
+- **Layout Consistency**: Refined layout.go with comprehensive test coverage (1366 new tests in layout_test.go)
+- **Model Selection Dialog**: Enhanced presentation of model selection options with better formatting
+- **Status Bar Integration**: Improved integration with status indicators
+
+**Key Changes:**
+- **internal/ui/layout.go**: Major refactoring with improved component rendering and spacing
+- **internal/ui/layout_test.go**: Comprehensive test suite added (1366+ test lines)
+- **internal/ui/app.go**: Enhanced app initialization and layout management
+- **internal/ui/styles.go**: Updated color and style definitions for better visual consistency
+- **internal/ui/dialog/model_selection.go**: Improved dialog presentation and formatting
+- **internal/config/model_config.go**: Refined configuration handling
+
+**User Experience:**
+- Cleaner, more professional UI appearance
+- Better visual feedback and navigation cues
+- Improved readability with refined spacing and alignment
+- More intuitive model selection interface
+- Enhanced overall aesthetic consistency
+
+**Testing:**
+- ✅ 1366+ new layout tests added for comprehensive coverage
+- ✅ All existing tests pass
+- ✅ Build successful
+- ✅ Manual testing confirms improved UI appearance
+
+## Previous Improvements (v0.1.17)
 
 ### Command Runner Execution & Completion Detection (Deprecated Approach)
 
