@@ -745,6 +745,67 @@ Example configuration:
 }
 ```
 
+## Crush Configuration
+
+Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush) for AI-powered task execution. The application automatically manages a `.crush.json` configuration file for you.
+
+### Automatic Initialization
+
+When you run tm-tui for the first time in a project, it automatically creates a `.crush.json` file with sensible defaults:
+
+- **Location**: Project root (detected via `.taskmaster`, `.git`, or `go.mod` markers)
+- **Default Content**: Schema reference, empty model field, skills paths
+- **Non-destructive**: Existing `.crush.json` files are never modified or overwritten
+- **Idempotent**: Multiple application starts won't modify your config
+
+The initialization happens during application startup and logs warnings (not errors) if it encounters issues.
+
+### Makefile Targets
+
+The project includes Makefile targets for managing Crush configuration:
+
+```bash
+# Check if .crush.json exists (useful for CI/scripts)
+make check-project-setup
+
+# Create .crush.json if missing (part of installation)
+make init-crush-config
+
+# Full installation (includes init-crush-config)
+make install
+```
+
+### Manual Configuration
+
+You can manually edit `.crush.json` to configure:
+
+- **model**: Your preferred AI model (e.g., `"gpt-4"`, `"claude-3-sonnet"`)
+- **context_paths**: Additional files to include in Crush context
+- **skills_paths**: Custom Crush skills directories
+
+Example `.crush.json`:
+
+```json
+{
+  "$schema": "https://charm.land/crush.json",
+  "model": "claude-3-5-sonnet-20241022",
+  "options": {
+    "context_paths": [],
+    "skills_paths": ["./.crush/skills"]
+  },
+  "version": "1.0"
+}
+```
+
+### Environment Variables
+
+Override default behavior with environment variables:
+
+- `CRUSH_CONFIG_PATH`: Explicit path to .crush.json
+- `CRUSH_PROJECT_ROOT`: Override project root detection
+
+These are useful for multi-project setups or non-standard directory structures.
+
 ## Requirements
 
 - Go 1.23+

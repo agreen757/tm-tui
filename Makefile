@@ -1,4 +1,4 @@
-.PHONY: build run test clean install help install-memory install-crush install-gemini check-gemini check-crush install-all
+.PHONY: build run test clean install help install-memory install-crush install-gemini check-gemini check-crush check-project-setup init-crush-config install-all test-init
 
 # Binary name
 BINARY_NAME=tm-tui
@@ -28,17 +28,46 @@ test: ## Run tests
 	@echo "Running tests..."
 	@go test -v ./...
 
+test-init: build ## Run startup initialization tests
+	@echo "Running startup initialization tests..."
+	@./scripts/test-startup-init.sh
+
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
 	@rm -rf bin/
 	@go clean
+
+check-project-setup: ## Verify .crush.json exists in project
+	@echo "Checking for .crush.json..."
+	@if [ -f .crush.json ]; then \
+		echo "✓ .crush.json found"; \
+		exit 0; \
+	else \
+		echo "✗ .crush.json not found"; \
+		echo "Run 'make init-crush-config' to create it"; \
+		exit 1; \
+	fi
+
+init-crush-config: build ## Initialize .crush.json if missing
+	@echo "Initializing Crush configuration..."
+	@if [ -f .crush.json ]; then \
+		echo "✓ .crush.json already exists (skipping)"; \
+	else \
+		echo "Creating default .crush.json..."; \
+		$(BINARY_PATH) --help > /dev/null 2>&1 || true; \
+		if [ -f .crush.json ]; then \
+			echo "✓ .crush.json created successfully"; \
+		else \
+			echo "⚠ Warning: Could not create .crush.json automatically"; \
+		fi; \
+	fi
 
 install-crush: ## Install the Crush CLI (required for task execution)
 	@echo "Installing Crush CLI..."
 	@go install $(CRUSH_REPO)@latest
 	@echo "Crush installed successfully. Verify with: crush --help"
 
-install: build install-crush ## Install tm-tui and dependencies to $GOPATH/bin
+install: build init-crush-config install-crush ## Install tm-tui and dependencies to $GOPATH/bin
 	@echo "Installing $(BINARY_NAME)..."
 	@go install ./cmd/tm-tui
 

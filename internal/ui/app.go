@@ -226,9 +226,6 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	keyMap := NewKeyMap(cfg)
 	appState := NewAppState(dialogManager, &keyMap)
 
-	// Initialize TaskRunnerModal (size will be set on first WindowSizeMsg)
-	taskRunner := dialog.NewTaskRunnerModal(0, 0, dialogStyle)
-
 	m := &Model{
 		config:            cfg,
 		configManager:     configManager,
@@ -249,7 +246,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		helpModel:         help.New(),
 		keyMap:            keyMap,
 		appState:          appState,
-		taskRunner:        taskRunner,
+		taskRunner:        nil, // TaskRunnerModal will be initialized on demand
 		taskRunnerVisible: false,
 		agentRunChannels:  make(map[string]chan tea.Msg), // Initialize agent run channels map
 		selectedAgentType: types.AgentTypeCrush,           // Default to Crush
@@ -1030,10 +1027,19 @@ func (m *Model) ShowModelSelectionDialog() {
 
 // handleModelSelection handles model selection from the dialog
 func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
-	// Save the selected model to config
+	// Save the selected model to TUI config
 	if err := config.SaveModelConfig(msg.Provider, msg.ModelName); err != nil {
 		m.addLogLine(fmt.Sprintf("Error saving model config: %v", err))
 		return nil
+	}
+
+	// Also update Crush config with the selected model
+	// Use "large" as the default model type for the primary model selection
+	if err := config.UpdateCrushModel(msg.ModelID, msg.Provider, "large"); err != nil {
+		// Log warning but don't fail - TUI config was saved successfully
+		m.addLogLine(fmt.Sprintf("Warning: failed to update Crush config: %v", err))
+	} else {
+		m.addLogLine(fmt.Sprintf("Updated Crush config with model: %s (provider: %s, type: large)", msg.ModelID, msg.Provider))
 	}
 
 	m.addLogLine(fmt.Sprintf("Model set to: %s (%s)", msg.ModelID, msg.Provider))
