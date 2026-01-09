@@ -44,8 +44,8 @@ func TestLoadAvailableModels(t *testing.T) {
 func TestModelSelectionListItem(t *testing.T) {
 	option := ModelOption{
 		Provider:      "anthropic",
-		ModelID:       "claude-3-5-sonnet-20241022",
-		DisplayName:   "Claude 3.5 Sonnet",
+		ModelID:       "claude-sonnet-4-5-20250929",
+		DisplayName:   "Claude Sonnet 4.5",
 		ContextWindow: 200000,
 		InputCost:     3.0,
 		OutputCost:    15.0,
@@ -53,8 +53,8 @@ func TestModelSelectionListItem(t *testing.T) {
 
 	item := &ModelSelectionListItem{option: option}
 
-	if item.Title() != "Claude 3.5 Sonnet" {
-		t.Errorf("Expected Title() to return 'Claude 3.5 Sonnet', got '%s'", item.Title())
+	if item.Title() != "Claude Sonnet 4.5" {
+		t.Errorf("Expected Title() to return 'Claude Sonnet 4.5', got '%s'", item.Title())
 	}
 
 	desc := item.Description()
@@ -71,7 +71,7 @@ func TestModelSelectionListItem(t *testing.T) {
 	}
 
 	filter := item.FilterValue()
-	if !containsString(filter, "Claude") || !containsString(filter, "claude-3-5-sonnet") || !containsString(filter, "anthropic") {
+	if !containsString(filter, "Claude") || !containsString(filter, "claude-sonnet") || !containsString(filter, "anthropic") {
 		t.Errorf("FilterValue() missing expected values: %s", filter)
 	}
 
@@ -161,7 +161,7 @@ func TestLoadLastSelection(t *testing.T) {
 	// Create a config with a pre-selected model
 	cfg := config.Config{
 		ModelProvider: "anthropic",
-		ModelName:     "claude-3-5-sonnet-20241022",
+		ModelName:     "claude-sonnet-4-5-20250929",
 	}
 	data, _ := json.Marshal(cfg)
 	os.WriteFile(configPath, data, 0644)
@@ -173,7 +173,7 @@ func TestLoadLastSelection(t *testing.T) {
 		t.Fatal("loadLastSelection did not load the saved selection")
 	}
 
-	if dialog.lastSelected.Provider != "anthropic" || dialog.lastSelected.ModelID != "claude-3-5-sonnet-20241022" {
+	if dialog.lastSelected.Provider != "anthropic" || dialog.lastSelected.ModelID != "claude-sonnet-4-5-20250929" {
 		t.Error("loadLastSelection loaded incorrect selection")
 	}
 
@@ -228,14 +228,14 @@ func TestModelSelectionDialogVariousTerminalSizes(t *testing.T) {
 func TestModelSelectionResultStructure(t *testing.T) {
 	result := &ModelSelectionResult{
 		Provider: "anthropic",
-		ModelID:  "claude-3-5-sonnet-20241022",
+		ModelID:  "claude-sonnet-4-5-20250929",
 	}
 
 	if result.Provider != "anthropic" {
 		t.Error("Provider field not working correctly")
 	}
 
-	if result.ModelID != "claude-3-5-sonnet-20241022" {
+	if result.ModelID != "claude-sonnet-4-5-20250929" {
 		t.Error("ModelID field not working correctly")
 	}
 }

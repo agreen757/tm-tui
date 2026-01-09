@@ -119,7 +119,7 @@ func getDefaultModelProvider() string {
 
 // GetDefaultModelName returns the default model name
 func getDefaultModelName() string {
-	return "claude-3-5-sonnet-20241022"
+	return "claude-sonnet-4-5-20250929"
 }
 
 // ListAvailableModels returns a list of available models by provider
@@ -127,12 +127,14 @@ func getDefaultModelName() string {
 func ListAvailableModels() map[string][]AvailableModel {
 	models := make(map[string][]AvailableModel)
 
-	// Anthropic models
+	// Anthropic Claude 4.x models (January 2026 - current generation)
 	models["anthropic"] = []AvailableModel{
-		{Provider: "anthropic", ModelName: "Claude 3.5 Sonnet", ModelID: "claude-3-5-sonnet-20241022"},
-		{Provider: "anthropic", ModelName: "Claude 3 Sonnet", ModelID: "claude-3-sonnet-20240229"},
-		{Provider: "anthropic", ModelName: "Claude 3 Opus", ModelID: "claude-3-opus-20240229"},
-		{Provider: "anthropic", ModelName: "Claude 3 Haiku", ModelID: "claude-3-haiku-20240307"},
+		{Provider: "anthropic", ModelName: "Claude Opus 4.5", ModelID: "claude-opus-4-5-20251101"},
+		{Provider: "anthropic", ModelName: "Claude Sonnet 4.5", ModelID: "claude-sonnet-4-5-20250929"},
+		{Provider: "anthropic", ModelName: "Claude Haiku 4.5", ModelID: "claude-haiku-4-5-20251001"},
+		{Provider: "anthropic", ModelName: "Claude Opus 4.1", ModelID: "claude-opus-4-1-20250805"},
+		{Provider: "anthropic", ModelName: "Claude Sonnet 4", ModelID: "claude-sonnet-4-20250514"},
+		{Provider: "anthropic", ModelName: "Claude Opus 4", ModelID: "claude-opus-4-20250514"},
 	}
 
 	// OpenAI models

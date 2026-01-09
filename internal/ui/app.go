@@ -160,13 +160,13 @@ type Model struct {
 	taskRunnerVisible bool
 
 	// Agent run context (for tracking agent selection -> model selection -> execution flow)
-	agentRunPending    bool
-	agentRunTaskID     string
-	agentRunTaskTitle  string
-	agentRunTask       *taskmaster.Task
-	selectedAgentType  types.AgentType
-	agentRunChannels   map[string]chan tea.Msg // taskID -> output channel for active runs
-	
+	agentRunPending   bool
+	agentRunTaskID    string
+	agentRunTaskTitle string
+	agentRunTask      *taskmaster.Task
+	selectedAgentType types.AgentType
+	agentRunChannels  map[string]chan tea.Msg // taskID -> output channel for active runs
+
 	// PRD creation context (for tracking model selection -> PRD generation flow)
 	prdCreationPending bool
 
@@ -249,7 +249,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		taskRunner:        nil, // TaskRunnerModal will be initialized on demand
 		taskRunnerVisible: false,
 		agentRunChannels:  make(map[string]chan tea.Msg), // Initialize agent run channels map
-		selectedAgentType: types.AgentTypeCrush,           // Default to Crush
+		selectedAgentType: types.AgentTypeCrush,          // Default to Crush
 		showDetailsPanel:  true,
 		showLogPanel:      false,
 		showHelp:          false,
@@ -394,7 +394,7 @@ func (m *Model) openGitMenu() {
 	if dm == nil {
 		return
 	}
-	
+
 	// Only show git menu if we're in a git repository
 	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
 		errDialog := dialog.NewErrorDialog(
@@ -404,11 +404,11 @@ func (m *Model) openGitMenu() {
 		m.appState.PushDialog(errDialog)
 		return
 	}
-	
+
 	// Create git menu dialog
 	// Selections are handled via GitMenuSelectionMsg in the Update method
 	gitMenu := dialog.NewGitMenuDialog(nil)
-	
+
 	// Use AddDialog with nil callback since selections are handled via messages
 	m.appState.AddDialog(gitMenu, nil)
 }
@@ -419,11 +419,11 @@ func (m *Model) openGitStatusDialog() {
 	if dm == nil {
 		return
 	}
-	
+
 	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
 		return
 	}
-	
+
 	statusDialog := dialog.NewGitStatusDialog(m.gitRepoInfo.RootPath)
 	m.appState.PushDialog(statusDialog)
 }
@@ -434,27 +434,27 @@ func (m *Model) openBranchSwitchDialog() {
 		m.addLogLine("Error: Not in a Git repository")
 		return
 	}
-	
+
 	onSwitch := func(branch string, output string, err error) {
 		if err != nil {
 			m.addLogLine("Failed to switch branch: " + output)
 			return
 		}
-		
+
 		// Refresh git status
 		if m.gitRefresher != nil {
 			m.gitRefresher.Refresh()
 		}
-		
+
 		m.addLogLine("Switched to branch: " + branch)
 	}
-	
+
 	switchDialog, err := dialog.NewBranchSwitchDialog(m.gitRepoInfo.RootPath, onSwitch)
 	if err != nil {
 		m.addLogLine("Failed to list branches: " + err.Error())
 		return
 	}
-	
+
 	m.appState.PushDialog(switchDialog)
 }
 
@@ -464,21 +464,21 @@ func (m *Model) openBranchCreateDialog() {
 		m.addLogLine("Error: Not in a Git repository")
 		return
 	}
-	
+
 	onCreate := func(branch string, output string, err error) {
 		if err != nil {
 			m.addLogLine("Failed to create branch: " + output)
 			return
 		}
-		
+
 		// Refresh git status
 		if m.gitRefresher != nil {
 			m.gitRefresher.Refresh()
 		}
-		
+
 		m.addLogLine("Created and switched to branch: " + branch)
 	}
-	
+
 	createDialog := dialog.NewBranchCreateDialog(m.gitRepoInfo.RootPath, onCreate)
 	m.appState.PushDialog(createDialog)
 }
@@ -489,11 +489,11 @@ func (m *Model) openCommitsDialog() {
 		m.addLogLine("Error: Not in a Git repository")
 		return
 	}
-	
+
 	onSelect := func(commit git.Commit) {
 		m.addLogLine("Commit: " + commit.Hash + " - " + commit.Subject)
 	}
-	
+
 	commitsDialog := dialog.NewCommitsDialog(m.gitRepoInfo.RootPath, onSelect)
 	m.appState.PushDialog(commitsDialog)
 }
@@ -1094,13 +1094,12 @@ func (m *Model) handleAgentSelection(msg dialog.AgentSelectionMsg) tea.Cmd {
 	if m.agentRunPending && m.agentRunTask != nil {
 		modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
 		m.appState.PushDialog(modelSelectionDialog)
-		m.addLogLine(fmt.Sprintf("Select AI model for %s agent to run task %s: %s", 
+		m.addLogLine(fmt.Sprintf("Select AI model for %s agent to run task %s: %s",
 			msg.AgentType.String(), m.agentRunTaskID, m.agentRunTaskTitle))
 	}
 
 	return nil
 }
-
 
 // openAgentSelectionForRun opens the agent selection dialog for running a task
 // The selected agent will determine which execution path to use (Crush or Gemini)
@@ -2503,7 +2502,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
-	
+
 	case dialog.GitMenuSelectionMsg:
 		// Handle git menu selection
 		switch msg.SelectedIndex {
@@ -2517,13 +2516,13 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openCommitsDialog()
 		}
 		return m, nil
-	
+
 	case dialog.AgentSelectionMsg:
 		if cmd := m.handleAgentSelection(msg); cmd != nil {
 			return m, cmd
 		}
 		return m, nil
-	
+
 	case dialog.ModelSelectionMsg:
 		if cmd := m.handleModelSelection(msg); cmd != nil {
 			return m, cmd
@@ -2653,21 +2652,21 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Clean up the channel for this task
 		delete(m.agentRunChannels, msg.TaskID)
-		
+
 		// Special handling for PRD creation completion
 		if msg.TaskID == "prd-creation" {
 			m.addLogLine("✓ PRD generation completed")
-			
+
 			// Validate PRD output content
 			if m.prdCreationState != nil && m.validatePrdOutput(m.prdCreationState) {
 				// Store the generated content in state
 				m.prdCreationState.GeneratedContent = m.prdCreationState.OutputBuffer.String()
-				
+
 				// Proceed to file save
 				cmds = append(cmds, m.savePrdToFile())
 			}
 		}
-		
+
 		return m, tea.Batch(cmds...)
 
 	case dialog.TaskFailedMsg:
@@ -2687,7 +2686,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clean up the channel for this task
 		delete(m.agentRunChannels, msg.TaskID)
 		m.addLogLine(fmt.Sprintf("Task %s failed: %s", msg.TaskID, msg.Error))
-		
+
 		// Special handling for PRD creation failure
 		if msg.TaskID == "prd-creation" {
 			if m.prdCreationState != nil {
@@ -2695,7 +2694,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.showErrorDialog("PRD Generation Failed", fmt.Sprintf("%s\n\nPlease try again.", msg.Message))
 		}
-		
+
 		return m, tea.Batch(cmds...)
 
 	case dialog.TaskCancelledMsg:
@@ -2751,7 +2750,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, cmd)
 				}
 			}
-			
+
 			// Keep ticking if tasks are running or auto-close is pending
 			if m.taskRunner.HasRunningTasks() || m.taskRunner.GetCloseTimer() != nil {
 				cmds = append(cmds, TickCmd())
@@ -2987,10 +2986,10 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					m.addLogLine("Command already running")
 					return m, nil
 				}
-				
+
 				// Initialize NextTask modal state
 				m.appState.StartNextTaskModal()
-				
+
 				// Create and show the dialog
 				nextTaskContent := dialog.NewNextTaskOutputContent()
 				dlg := dialog.NewModalDialog(
@@ -2999,7 +2998,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					20,
 					nextTaskContent,
 				)
-				
+
 				// Add dialog with callback to handle closure
 				m.appState.AddDialog(dlg, func(value interface{}, err error) tea.Cmd {
 					// Reset the next task modal state when dialog closes
@@ -3011,7 +3010,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focusedPanel = PanelTaskList
 					return nil
 				})
-				
+
 				// Execute task-master next command via executor
 				m.addLogLine("Executing: task-master next")
 				if err := m.execService.Execute("next"); err != nil {
@@ -3021,7 +3020,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					// Start listening for executor output
 					cmds = append(cmds, WaitForExecutorOutput(m.execService))
 				}
-				
+
 				return m, tea.Batch(cmds...)
 
 			case key.Matches(msg, m.keyMap.JumpToID):
@@ -3118,7 +3117,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keyMap.CommandPalette):
 				m.openCommandPalette()
 				return m, nil
-				
+
 			case key.Matches(msg, m.keyMap.GitMenu):
 				m.openGitMenu()
 				return m, nil
@@ -3249,8 +3248,8 @@ func (m *Model) View() string {
 
 		var sections []string
 
-		// 1. Header. REMOVING TEMPORARILY
-		//sections = append(sections, m.renderHeader())
+		// 1. Header with app name, tag, and progress
+		sections = append(sections, m.renderHeader())
 
 		// 2. Main content area (task list + details)
 		mainContent := m.renderMainContent(layout)
@@ -3617,6 +3616,34 @@ func (m *Model) showComplexityCompletionMessage(msg ComplexityAnalysisCompletedM
 	}
 	pd.SetProgress(1.0)
 	pd.SetLabel(label)
+}
+
+// calculateTaskProgress computes completion percentage across all tasks and subtasks
+func (m *Model) calculateTaskProgress() (done, total int, percentage float64) {
+	done = 0
+	total = 0
+
+	var countTasks func(tasks []taskmaster.Task)
+	countTasks = func(tasks []taskmaster.Task) {
+		for _, task := range tasks {
+			total++
+			if task.Status == taskmaster.StatusDone {
+				done++
+			}
+			if len(task.Subtasks) > 0 {
+				countTasks(task.Subtasks)
+			}
+		}
+	}
+
+	countTasks(m.tasks)
+
+	if total == 0 {
+		return 0, 0, 0.0
+	}
+
+	percentage = (float64(done) / float64(total)) * 100.0
+	return done, total, percentage
 }
 
 // truncateString truncates a string to the given length

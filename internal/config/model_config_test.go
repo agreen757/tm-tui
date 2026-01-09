@@ -129,7 +129,7 @@ func TestSaveModelConfig(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	t.Run("save creates new config file", func(t *testing.T) {
-		err := SaveModelConfig("anthropic", "claude-3-5-sonnet-20241022")
+		err := SaveModelConfig("anthropic", "claude-sonnet-4-5-20250929")
 		if err != nil {
 			t.Fatalf("Failed to save config: %v", err)
 		}
@@ -149,7 +149,7 @@ func TestSaveModelConfig(t *testing.T) {
 		if provider, ok := config["modelProvider"].(string); !ok || provider != "anthropic" {
 			t.Error("modelProvider not saved correctly")
 		}
-		if modelName, ok := config["modelName"].(string); !ok || modelName != "claude-3-5-sonnet-20241022" {
+		if modelName, ok := config["modelName"].(string); !ok || modelName != "claude-sonnet-4-5-20250929" {
 			t.Error("modelName not saved correctly")
 		}
 	})
@@ -212,7 +212,7 @@ func TestSaveModelConfig(t *testing.T) {
 	})
 
 	t.Run("save rejects empty provider", func(t *testing.T) {
-		err := SaveModelConfig("", "claude-3-5-sonnet-20241022")
+		err := SaveModelConfig("", "claude-sonnet-4-5-20250929")
 		if err == nil {
 			t.Error("Expected error for empty provider")
 		}
@@ -229,7 +229,7 @@ func TestSaveModelConfig(t *testing.T) {
 // TestValidateModelSelection tests model selection validation
 func TestValidateModelSelection(t *testing.T) {
 	t.Run("validate known model", func(t *testing.T) {
-		isValid := ValidateModelSelection("anthropic", "claude-3-5-sonnet-20241022")
+		isValid := ValidateModelSelection("anthropic", "claude-sonnet-4-5-20250929")
 		if !isValid {
 			t.Error("Expected valid model to return true")
 		}

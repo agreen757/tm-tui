@@ -52,14 +52,15 @@ type Styles struct {
 	HelpSep lipgloss.Style
 
 	// Text styles
-	Title    lipgloss.Style
-	Subtitle lipgloss.Style
-	Subtle   lipgloss.Style // For subtle/muted text
-	Error    lipgloss.Style
-	Warning  lipgloss.Style
-	Success  lipgloss.Style
-	Info     lipgloss.Style
-	Key      lipgloss.Style // For keyboard shortcuts
+	Title     lipgloss.Style
+	Subtitle  lipgloss.Style
+	Subtle    lipgloss.Style // For subtle/muted text
+	Highlight lipgloss.Style // For highlighted/emphasized text
+	Error     lipgloss.Style
+	Warning   lipgloss.Style
+	Success   lipgloss.Style
+	Info      lipgloss.Style
+	Key       lipgloss.Style // For keyboard shortcuts
 }
 
 // NewStyles creates a new Styles instance with default values
@@ -135,6 +136,9 @@ func NewStyles() *Styles {
 
 		Subtle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorSubtle)),
+
+		Highlight: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColorHighlight)),
 
 		Error: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColorBlocked)).

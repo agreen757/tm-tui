@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/agreen757/tm-tui/internal/taskmaster"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -14,6 +13,8 @@ const (
 	statusBarHeight = 1
 	panelPadding    = 2
 	minPanelWidth   = 20
+	tagMaxLength    = 12
+	tagEllipsis     = "..."
 )
 
 // LayoutDimensions holds the calculated dimensions for each panel
@@ -120,121 +121,153 @@ func (m Model) calculateLayout() LayoutDimensions {
 	return layout
 }
 
-// renderHeader renders the header with project name and task counts
+// abbreviateTag shortens long tags to fit narrow terminals
+// Tags longer than tagMaxLength characters are truncated with ellipsis
+func abbreviateTag(tag string, maxLength int) string {
+	if len(tag) <= maxLength {
+		return tag
+	}
+	// Calculate prefix length (leave room for ellipsis)
+	prefixLen := maxLength - len(tagEllipsis)
+	if prefixLen < 1 {
+		prefixLen = 1
+	}
+	return tag[:prefixLen] + tagEllipsis
+}
+
+// renderHeader renders the header with application name, tag, and progress.
+// It calculates task progress, resolves the active tag from configuration,
+// and selects an appropriate layout (wide, medium, or narrow) based on terminal width.
 func (m Model) renderHeader() string {
-	// Get project name from config or default
-	projectName := "Task Master"
-	if m.config != nil && m.config.TaskMasterPath != "" {
-		// Extract directory name from path
-		parts := strings.Split(strings.TrimSuffix(m.config.TaskMasterPath, "/"), "/")
-		if len(parts) > 0 {
-			projectName = parts[len(parts)-1]
-		}
+	// Calculate progress
+	done, total, percentage := m.calculateTaskProgress()
+	
+	// Get active tag or default
+	activeTag := "master" // Default
+	if m.config != nil && m.config.ActiveTag != "" {
+		activeTag = m.config.ActiveTag
 	}
-
-	// Count tasks by status
-	counts := make(map[string]int)
-	var countTasks func(tasks []taskmaster.Task)
-	countTasks = func(tasks []taskmaster.Task) {
-		for _, task := range tasks {
-			counts[task.Status]++
-			if len(task.Subtasks) > 0 {
-				countTasks(task.Subtasks)
-			}
-		}
+	
+	// Determine layout based on terminal width
+	if m.width >= 100 {
+		return m.renderWideHeader(activeTag, done, total, percentage)
+	} else if m.width >= 80 {
+		return m.renderMediumHeader(activeTag, done, total, percentage)
+	} else {
+		return m.renderNarrowHeader(activeTag, percentage)
 	}
-	countTasks(m.tasks)
+}
 
-	// Build status counts string with colors
-	var statusParts []string
+// renderWideHeader renders a full-featured header for wide terminals (≥100 columns)
+// Displays application name, tag, and detailed progress in a bordered layout
+func (m Model) renderWideHeader(tag string, done, total int, percentage float64) string {
+	// Application name in bold
+	appName := m.styles.Title.Render("Task Master TUI")
 
-	if count := counts[taskmaster.StatusPending]; count > 0 {
-		statusParts = append(statusParts, m.styles.Pending.Render(fmt.Sprintf("%d pending", count)))
-	}
-	if count := counts[taskmaster.StatusInProgress]; count > 0 {
-		statusParts = append(statusParts, m.styles.InProgress.Render(fmt.Sprintf("%d in-progress", count)))
-	}
-	if count := counts[taskmaster.StatusDone]; count > 0 {
-		statusParts = append(statusParts, m.styles.Done.Render(fmt.Sprintf("%d done", count)))
-	}
-	if count := counts[taskmaster.StatusBlocked]; count > 0 {
-		statusParts = append(statusParts, m.styles.Blocked.Render(fmt.Sprintf("%d blocked", count)))
-	}
-	if count := counts[taskmaster.StatusDeferred]; count > 0 {
-		statusParts = append(statusParts, m.styles.Deferred.Render(fmt.Sprintf("%d deferred", count)))
-	}
-	if count := counts[taskmaster.StatusCancelled]; count > 0 {
-		statusParts = append(statusParts, m.styles.Cancelled.Render(fmt.Sprintf("%d cancelled", count)))
-	}
+	// Tag with brackets and highlight color
+	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", tag))
+	tagInfo := lipgloss.JoinHorizontal(lipgloss.Left,
+		m.styles.Subtle.Render("Tag: "),
+		tagDisplay,
+	)
 
-	statusLine := strings.Join(statusParts, " | ")
+	// Progress text and bar
+	progressText := fmt.Sprintf("Progress: %d/%d (%.0f%%)", done, total, percentage)
+	progressBar := m.renderProgressBar(percentage, 10) // 10-character bar
+	progressDisplay := lipgloss.JoinHorizontal(lipgloss.Left,
+		m.styles.Info.Render(progressText),
+		" ",
+		progressBar,
+	)
 
-	// Build header
-	titleLine := m.styles.Header.Width(m.width).Render(m.styles.Title.Render(projectName))
-	countsLine := m.styles.StatusBar.Width(m.width).Render(statusLine)
+	// Combine all components with separators
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Left,
+		appName,
+		m.styles.Subtle.Render(" │ "),
+		tagInfo,
+		m.styles.Subtle.Render(" │ "),
+		progressDisplay,
+	)
 
-	// Add search input if in search mode
-	if m.searchMode {
-		searchLabel := m.styles.Info.Render("Search: ")
+	// Apply border style
+	headerStyle := lipgloss.NewStyle().
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color(ColorBorder)).
+		Bold(true).
+		Padding(0, 1).
+		Width(m.width - 2). // Account for border width
+		Align(lipgloss.Left)
 
-		// Apply styling to the search input for better visibility
-		searchBoxStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#00FFFF")). // ColorHighlight
-			Padding(0, 1).
-			Width(40)
+	return headerStyle.Render(headerContent)
+}
 
-		searchBoxView := m.searchInput.View()
-		styledSearchBox := searchBoxStyle.Render(searchBoxView)
+// renderMediumHeader renders compact header for medium terminals (80-99 columns)
+// Displays application name, tag, and simplified progress with a rounded border
+func (m Model) renderMediumHeader(tag string, done, total int, percentage float64) string {
+	// Application name in bold
+	appName := m.styles.Title.Bold(true).Render("Task Master TUI")
 
-		searchHelp := m.styles.Subtle.Render(" (Enter to search, Esc to cancel)")
-		searchLine := searchLabel + styledSearchBox + searchHelp
+	// Tag with brackets and highlight color (no "Tag:" prefix)
+	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", tag))
 
-		return titleLine + "\n" + countsLine + "\n" + searchLine + "\n"
-	}
+	// Shorter progress format - just percentage
+	progressText := fmt.Sprintf("%.0f%%", percentage)
+	progressBar := m.renderProgressBar(percentage, 5) // 5-character compact bar
 
-	// Build filter/search status line
-	var filterParts []string
+	// Combine all components with separators
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Left,
+		appName,
+		m.styles.Subtle.Render(" │ "),
+		tagDisplay,
+		m.styles.Subtle.Render(" │ "),
+		m.styles.Info.Render(progressText),
+		" ",
+		progressBar,
+	)
 
-	// Show status filter if active
-	if m.statusFilter != "" {
-		filterInfo := m.styles.Warning.Render(fmt.Sprintf("📌 Filter: %s", m.statusFilter))
-		filterParts = append(filterParts, filterInfo)
-	}
+	// Apply border style - rounded border for medium terminals
+	headerStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(ColorBorder)).
+		Bold(true).
+		Padding(0, 1).
+		Width(m.width - 2). // Account for border width
+		Align(lipgloss.Left)
 
-	// Show search query if active
-	if m.searchQuery != "" {
-		resultsCount := 0
-		if m.searchResults != nil {
-			resultsCount = len(m.searchResults)
-		}
+	return headerStyle.Render(headerContent)
+}
 
-		// Apply more visible styling to the search info
-		searchStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FFFF")). // ColorHighlight
-			Bold(true)
+// renderNarrowHeader renders minimal header for narrow terminals (<80 columns)
+// Displays abbreviated app name, abbreviated tag, and percentage only with normal border
+func (m Model) renderNarrowHeader(tag string, percentage float64) string {
+	// Abbreviated application name
+	appName := m.styles.Title.Bold(true).Render("TM-TUI")
 
-		resultStyle := lipgloss.NewStyle()
-		if resultsCount == 0 {
-			resultStyle = resultStyle.Foreground(lipgloss.Color("#DC143C")) // ColorBlocked
-		} else {
-			resultStyle = resultStyle.Foreground(lipgloss.Color("#32CD32")) // ColorDone
-		}
+	// Shorten tag if too long
+	shortTag := abbreviateTag(tag, tagMaxLength)
+	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", shortTag))
 
-		searchText := fmt.Sprintf("🔍 Search: '%s'", m.searchQuery)
-		resultsText := fmt.Sprintf(" (%d results)", resultsCount)
+	// Progress text - percentage only (no progress bar)
+	progressText := fmt.Sprintf("%.0f%%", percentage)
 
-		searchInfo := searchStyle.Render(searchText) + resultStyle.Render(resultsText)
-		filterParts = append(filterParts, searchInfo)
-	}
+	// Combine all components with minimal separators
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Left,
+		appName,
+		m.styles.Subtle.Render(" │ "),
+		tagDisplay,
+		m.styles.Subtle.Render(" │ "),
+		m.styles.Info.Render(progressText),
+	)
 
-	if len(filterParts) > 0 {
-		filterLine := strings.Join(filterParts, " | ")
-		clearHint := m.styles.Subtle.Render(" (F=filter, /=search, Esc=clear)")
-		return titleLine + "\n" + countsLine + "\n" + filterLine + clearHint + "\n"
-	}
+	// Apply border style - normal border for narrow terminals
+	headerStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(ColorBorder)).
+		Padding(0, 1).
+		Width(m.width - 2). // Account for border width
+		Align(lipgloss.Left)
 
-	return titleLine + "\n" + countsLine + "\n"
+	return headerStyle.Render(headerContent)
 }
 
 func (m Model) activeProjectStatus() string {
@@ -385,4 +418,28 @@ func (m *Model) updateViewportSizes() {
 
 	// Refresh task list viewport content after resize
 	m.updateTaskListViewport()
+}
+
+// renderProgressBar creates a visual progress indicator using block characters.
+// Returns empty string if width is too narrow (<5 characters) for a meaningful bar.
+func (m Model) renderProgressBar(percentage float64, width int) string {
+	// Too narrow for meaningful bar
+	if width < 5 {
+		return ""
+	}
+
+	// Calculate filled portion of the bar
+	filledWidth := int(float64(width) * percentage / 100.0)
+	if filledWidth < 0 {
+		filledWidth = 0
+	}
+	if filledWidth > width {
+		filledWidth = width
+	}
+
+	// Build progress bar with filled (▓) and empty (░) portions
+	empty := width - filledWidth
+	bar := strings.Repeat("▓", filledWidth) + strings.Repeat("░", empty)
+
+	return bar
 }
