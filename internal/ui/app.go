@@ -13,6 +13,7 @@ import (
 	"github.com/agreen757/tm-tui/internal/git"
 	"github.com/agreen757/tm-tui/internal/projects"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
+	"github.com/agreen757/tm-tui/internal/types"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -158,12 +159,13 @@ type Model struct {
 	taskRunner        *dialog.TaskRunnerModal
 	taskRunnerVisible bool
 
-	// Crush run context (for tracking model selection -> crush execution flow)
-	crushRunPending   bool
-	crushRunTaskID    string
-	crushRunTaskTitle string
-	crushRunTask      *taskmaster.Task
-	crushRunChannels  map[string]chan tea.Msg // taskID -> output channel for active runs
+	// Agent run context (for tracking agent selection -> model selection -> execution flow)
+	agentRunPending    bool
+	agentRunTaskID     string
+	agentRunTaskTitle  string
+	agentRunTask       *taskmaster.Task
+	selectedAgentType  types.AgentType
+	agentRunChannels   map[string]chan tea.Msg // taskID -> output channel for active runs
 	
 	// PRD creation context (for tracking model selection -> PRD generation flow)
 	prdCreationPending bool
@@ -224,9 +226,6 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	keyMap := NewKeyMap(cfg)
 	appState := NewAppState(dialogManager, &keyMap)
 
-	// Initialize TaskRunnerModal (size will be set on first WindowSizeMsg)
-	taskRunner := dialog.NewTaskRunnerModal(0, 0, dialogStyle)
-
 	m := &Model{
 		config:            cfg,
 		configManager:     configManager,
@@ -247,9 +246,10 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		helpModel:         help.New(),
 		keyMap:            keyMap,
 		appState:          appState,
-		taskRunner:        taskRunner,
+		taskRunner:        nil, // TaskRunnerModal will be initialized on demand
 		taskRunnerVisible: false,
-		crushRunChannels:  make(map[string]chan tea.Msg), // Initialize crush run channels map
+		agentRunChannels:  make(map[string]chan tea.Msg), // Initialize agent run channels map
+		selectedAgentType: types.AgentTypeCrush,           // Default to Crush
 		showDetailsPanel:  true,
 		showLogPanel:      false,
 		showHelp:          false,
@@ -290,6 +290,14 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 			m.selectedTask = m.visibleTasks[0]
 		}
 		m.selectedIndex = 0
+	}
+
+	// Load agent type from configuration
+	if loadedAgentType, err := config.LoadAgentType(); err == nil {
+		m.selectedAgentType = loadedAgentType
+		m.addLogLine(fmt.Sprintf("Loaded agent type from config: %s", loadedAgentType.String()))
+	} else {
+		m.addLogLine(fmt.Sprintf("Failed to load agent type, using default (Crush): %v", err))
 	}
 
 	return m
@@ -524,6 +532,14 @@ func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
 				Provider:  opt.Provider,
 				ModelName: opt.ModelID,
 				ModelID:   opt.ModelID,
+			}
+		}
+	}
+	// Handle agent selection from AgentSelectorDialog
+	if agentItem, ok := msg.SelectedItem.(dialog.AgentItem); ok {
+		return func() tea.Msg {
+			return dialog.AgentSelectionMsg{
+				AgentType: agentItem.GetAgentType(),
 			}
 		}
 	}
@@ -1011,10 +1027,19 @@ func (m *Model) ShowModelSelectionDialog() {
 
 // handleModelSelection handles model selection from the dialog
 func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
-	// Save the selected model to config
+	// Save the selected model to TUI config
 	if err := config.SaveModelConfig(msg.Provider, msg.ModelName); err != nil {
 		m.addLogLine(fmt.Sprintf("Error saving model config: %v", err))
 		return nil
+	}
+
+	// Also update Crush config with the selected model
+	// Use "large" as the default model type for the primary model selection
+	if err := config.UpdateCrushModel(msg.ModelID, msg.Provider, "large"); err != nil {
+		// Log warning but don't fail - TUI config was saved successfully
+		m.addLogLine(fmt.Sprintf("Warning: failed to update Crush config: %v", err))
+	} else {
+		m.addLogLine(fmt.Sprintf("Updated Crush config with model: %s (provider: %s, type: large)", msg.ModelID, msg.Provider))
 	}
 
 	m.addLogLine(fmt.Sprintf("Model set to: %s (%s)", msg.ModelID, msg.Provider))
@@ -1030,53 +1055,98 @@ func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
 		return m.executeCrushForPrd(msg.Provider, msg.ModelID)
 	}
 
-	// Check if this model selection is for a Crush run
-	if m.crushRunPending && m.crushRunTask != nil {
+	// Check if this model selection is for an agent run
+	if m.agentRunPending && m.agentRunTask != nil {
 		// Clear the pending state
-		m.crushRunPending = false
-		taskID := m.crushRunTaskID
-		taskTitle := m.crushRunTaskTitle
-		task := m.crushRunTask
+		m.agentRunPending = false
+		taskID := m.agentRunTaskID
+		taskTitle := m.agentRunTaskTitle
+		task := m.agentRunTask
 
 		// Clear context
-		m.crushRunTaskID = ""
-		m.crushRunTaskTitle = ""
-		m.crushRunTask = nil
+		m.agentRunTaskID = ""
+		m.agentRunTaskTitle = ""
+		m.agentRunTask = nil
 
-		// Start the Crush run
-		return m.startCrushRun(taskID, taskTitle, task, msg.ModelID)
+		// Start the agent run with selected agent type
+		return m.startAgentRun(taskID, taskTitle, task, m.selectedAgentType, msg.ModelID)
 	}
 
 	return nil
 }
 
-// openModelSelectionForCrushRun opens the model selection dialog specifically for Crush run
-// The selected model will be used to execute the task via Crush
-func (m *Model) openModelSelectionForCrushRun(task *taskmaster.Task) tea.Cmd {
+// handleAgentSelection handles agent selection and proceeds to model selection
+func (m *Model) handleAgentSelection(msg dialog.AgentSelectionMsg) tea.Cmd {
+	// Save the selected agent type to config
+	if err := config.SaveAgentType(msg.AgentType); err != nil {
+		m.addLogLine(fmt.Sprintf("Error saving agent type: %v", err))
+	} else {
+		m.addLogLine(fmt.Sprintf("Agent set to: %s", msg.AgentType.String()))
+	}
+
+	// Store selected agent type
+	m.selectedAgentType = msg.AgentType
+
+	// Close the agent selection dialog
+	m.appState.PopDialog()
+
+	// Open model selection dialog for the selected agent
+	if m.agentRunPending && m.agentRunTask != nil {
+		modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
+		m.appState.PushDialog(modelSelectionDialog)
+		m.addLogLine(fmt.Sprintf("Select AI model for %s agent to run task %s: %s", 
+			msg.AgentType.String(), m.agentRunTaskID, m.agentRunTaskTitle))
+	}
+
+	return nil
+}
+
+
+// openAgentSelectionForRun opens the agent selection dialog for running a task
+// The selected agent will determine which execution path to use (Crush or Gemini)
+func (m *Model) openAgentSelectionForRun(task *taskmaster.Task) tea.Cmd {
 	if m.dialogManager() == nil {
 		return nil
 	}
 
-	// Store task context for after model selection
-	// Use the exact task object that was selected to ensure consistency
-	m.crushRunPending = true
-	m.crushRunTaskID = task.ID
-	m.crushRunTaskTitle = task.Title
-	m.crushRunTask = task
+	// Store task context for after agent selection
+	m.agentRunPending = true
+	m.agentRunTaskID = task.ID
+	m.agentRunTaskTitle = task.Title
+	m.agentRunTask = task
 
-	m.addLogLine(fmt.Sprintf("Stored task for Crush run: ID=%s, Title='%s'", task.ID, task.Title))
-	// Debug: Log the actual task data we're using
-	m.addLogLine(fmt.Sprintf("DEBUG: Task ID=%s, Title='%s', Deps=%v", task.ID, task.Title, task.Dependencies))
+	m.addLogLine(fmt.Sprintf("Stored task for agent run: ID=%s, Title='%s'", task.ID, task.Title))
 
-	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
-	m.appState.PushDialog(modelSelectionDialog)
-	m.addLogLine(fmt.Sprintf("Select AI model to run task %s: %s", task.ID, task.Title))
+	// Open agent selection dialog
+	agentDialog := dialog.NewAgentSelectorDialogSimple()
+	agentDialog.SetDefaultSelection(m.selectedAgentType)
+	m.appState.PushDialog(agentDialog)
+	m.addLogLine(fmt.Sprintf("Select AI agent to run task %s: %s", task.ID, task.Title))
 
 	return nil
 }
 
-// startCrushRun initiates a Crush subprocess execution for the given task
-func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, modelID string) tea.Cmd {
+// startAgentRun initiates an agent subprocess execution for the given task
+func (m *Model) startAgentRun(taskID, taskTitle string, task *taskmaster.Task, agentType types.AgentType, modelID string) tea.Cmd {
+	// Route to appropriate agent execution path
+	switch agentType {
+	case types.AgentTypeCrush:
+		return m.executeCrushAgent(taskID, taskTitle, task, modelID)
+	case types.AgentTypeGemini:
+		return m.executeGeminiAgent(taskID, taskTitle, task, modelID)
+	default:
+		appErr := NewOperationError("Agent Run", fmt.Sprintf("Unknown agent type: %s", agentType.String()), nil).
+			WithRecoveryHints(
+				"Select a supported agent (Crush or Gemini)",
+				"Try again",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+}
+
+// executeCrushAgent executes a task using the Crush agent
+func (m *Model) executeCrushAgent(taskID, taskTitle string, task *taskmaster.Task, modelID string) tea.Cmd {
 	// Validate crush binary
 	if err := dialog.ValidateCrushBinary(); err != nil {
 		appErr := NewDependencyError("Crush Run", err.Error(), err).
@@ -1129,6 +1199,19 @@ func (m *Model) startCrushRun(taskID, taskTitle string, task *taskmaster.Task, m
 		dialog.StartCrushExecution(taskID, taskTitle, modelID, prompt, m.taskRunner),
 		dialog.ExecuteCrushSubprocess(taskID, modelID, prompt, tagName),
 	)
+}
+
+// executeGeminiAgent executes a task using the Gemini agent
+func (m *Model) executeGeminiAgent(taskID, taskTitle string, task *taskmaster.Task, modelID string) tea.Cmd {
+	// TODO: Implement Gemini agent execution
+	// For now, show a placeholder error
+	appErr := NewOperationError("Gemini Run", "Gemini agent execution not yet implemented", nil).
+		WithRecoveryHints(
+			"Use Crush agent for now",
+			"Gemini integration coming soon",
+		)
+	m.showAppError(appErr)
+	return nil
 }
 
 // renderTaskTree renders the task tree with proper indentation and expand/collapse
@@ -2435,6 +2518,12 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	
+	case dialog.AgentSelectionMsg:
+		if cmd := m.handleAgentSelection(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	
 	case dialog.ModelSelectionMsg:
 		if cmd := m.handleModelSelection(msg); cmd != nil {
 			return m, cmd
@@ -2512,7 +2601,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 	case dialog.CrushExecutionSub:
 		m.addLogLine(fmt.Sprintf("Setting up channel subscription for task: %s", msg.TaskID))
 		// Store the output channel for this task
-		m.crushRunChannels[msg.TaskID] = msg.OutCh
+		m.agentRunChannels[msg.TaskID] = msg.OutCh
 		// Start listening for messages from this channel
 		cmds = append(cmds, dialog.WaitForCrushMsg(msg.OutCh))
 		return m, tea.Batch(cmds...)
@@ -2526,7 +2615,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Continue listening for more messages from this task's channel
-		if ch, ok := m.crushRunChannels[msg.TaskID]; ok {
+		if ch, ok := m.agentRunChannels[msg.TaskID]; ok {
 			cmds = append(cmds, dialog.WaitForCrushMsg(ch))
 		}
 		return m, tea.Batch(cmds...)
@@ -2543,7 +2632,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Continue listening for more output from this task's channel
-		if ch, ok := m.crushRunChannels[msg.TaskID]; ok {
+		if ch, ok := m.agentRunChannels[msg.TaskID]; ok {
 			cmds = append(cmds, dialog.WaitForCrushMsg(ch))
 		}
 		return m, tea.Batch(cmds...)
@@ -2563,7 +2652,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Clean up the channel for this task
-		delete(m.crushRunChannels, msg.TaskID)
+		delete(m.agentRunChannels, msg.TaskID)
 		
 		// Special handling for PRD creation completion
 		if msg.TaskID == "prd-creation" {
@@ -2596,7 +2685,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Clean up the channel for this task
-		delete(m.crushRunChannels, msg.TaskID)
+		delete(m.agentRunChannels, msg.TaskID)
 		m.addLogLine(fmt.Sprintf("Task %s failed: %s", msg.TaskID, msg.Error))
 		
 		// Special handling for PRD creation failure
@@ -2624,7 +2713,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Clean up the channel for this task
-		delete(m.crushRunChannels, msg.TaskID)
+		delete(m.agentRunChannels, msg.TaskID)
 		m.addLogLine(fmt.Sprintf("Task %s cancelled", msg.TaskID))
 		return m, tea.Batch(cmds...)
 

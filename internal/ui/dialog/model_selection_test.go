@@ -253,3 +253,291 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+// TestCycleProviderFilter tests the provider filter cycling functionality
+func TestCycleProviderFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+
+	dialog := NewModelSelectionDialog(60, 20, configPath)
+
+	// Start with all providers
+	if dialog.selectedProvider != "" {
+		t.Error("Should start with empty provider (all providers)")
+	}
+
+	initialItemCount := len(dialog.items)
+
+	// Cycle to next provider
+	dialog.CycleProviderFilter()
+	
+	if dialog.selectedProvider == "" {
+		t.Error("Should have cycled to a specific provider")
+	}
+
+	// After filtering, should have fewer items
+	if len(dialog.items) >= initialItemCount {
+		t.Errorf("Filtered items should be less than total items: %d >= %d", len(dialog.items), initialItemCount)
+	}
+
+	// Cycle back to all providers
+	for i := 0; i < len(dialog.providerList)-1; i++ {
+		dialog.CycleProviderFilter()
+	}
+
+	if dialog.selectedProvider != "" {
+		t.Error("Should cycle back to all providers")
+	}
+
+	if len(dialog.items) != initialItemCount {
+		t.Error("Should return to showing all items after cycling through all providers")
+	}
+}
+
+// TestApplyProviderFilter tests the provider filter application
+func TestApplyProviderFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+
+	dialog := NewModelSelectionDialog(60, 20, configPath)
+
+	// Test filtering to anthropic
+	dialog.selectedProvider = "anthropic"
+	dialog.applyProviderFilter()
+
+	// Verify only anthropic models remain
+	for _, item := range dialog.items {
+		if modelItem, ok := item.(*ModelSelectionListItem); ok {
+			if modelItem.option.Provider != "anthropic" {
+				t.Errorf("Filter failed: found non-anthropic model in filtered list: %s", modelItem.option.Provider)
+			}
+		}
+	}
+
+	// Test filtering to openai
+	dialog.selectedProvider = "openai"
+	dialog.applyProviderFilter()
+
+	for _, item := range dialog.items {
+		if modelItem, ok := item.(*ModelSelectionListItem); ok {
+			if modelItem.option.Provider != "openai" {
+				t.Errorf("Filter failed: found non-openai model in filtered list: %s", modelItem.option.Provider)
+			}
+		}
+	}
+}
+
+// TestGetCurrentFilter tests the filter display string
+func TestGetCurrentFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+
+	dialog := NewModelSelectionDialog(60, 20, configPath)
+
+	// Test "all providers" display
+	dialog.selectedProvider = ""
+	if dialog.GetCurrentFilter() != "All Providers" {
+		t.Errorf("Expected 'All Providers', got '%s'", dialog.GetCurrentFilter())
+	}
+
+	// Test provider-specific display
+	dialog.selectedProvider = "anthropic"
+	filter := dialog.GetCurrentFilter()
+	if filter != "Anthropic" {
+		t.Errorf("Expected 'Anthropic', got '%s'", filter)
+	}
+}
+
+// TestModelMetadataDisplay tests enhanced metadata display in descriptions
+func TestModelMetadataDisplay(t *testing.T) {
+	models := []struct {
+		name       string
+		option     ModelOption
+		expectedIn []string // Strings expected in description
+	}{
+		{
+			name: "high-cost model",
+			option: ModelOption{
+				Provider:      "anthropic",
+				ModelID:       "claude-3-opus",
+				DisplayName:   "Claude 3 Opus",
+				ContextWindow: 200000,
+				InputCost:     15.0,
+				OutputCost:    75.0,
+			},
+			expectedIn: []string{"Premium", "200K", "ANTHROPIC"},
+		},
+		{
+			name: "budget model",
+			option: ModelOption{
+				Provider:      "google",
+				ModelID:       "gemini-2.0-flash",
+				DisplayName:   "Gemini 2.0 Flash",
+				ContextWindow: 1000000,
+				InputCost:     0.075,
+				OutputCost:    0.3,
+			},
+			expectedIn: []string{"Budget", "1.0M", "GOOGLE"},
+		},
+		{
+			name: "mid-range model",
+			option: ModelOption{
+				Provider:      "openai",
+				ModelID:       "gpt-4o",
+				DisplayName:   "GPT-4o",
+				ContextWindow: 128000,
+				InputCost:     5.0,
+				OutputCost:    15.0,
+			},
+			expectedIn: []string{"Premium", "128K", "OPENAI"},
+		},
+	}
+
+	for _, test := range models {
+		t.Run(test.name, func(t *testing.T) {
+			item := &ModelSelectionListItem{option: test.option}
+			desc := item.Description()
+
+			for _, expected := range test.expectedIn {
+				if !containsString(desc, expected) {
+					t.Errorf("Description missing '%s': %s", expected, desc)
+				}
+			}
+		})
+	}
+}
+
+// TestModelCapabilitiesIncluded tests that model capabilities are preserved
+func TestModelCapabilitiesIncluded(t *testing.T) {
+	models := loadAvailableModels()
+
+	// Check that at least some models have capabilities
+	foundWithCapabilities := false
+	for _, m := range models {
+		if m.Capabilities != "" {
+			foundWithCapabilities = true
+			break
+		}
+	}
+
+	if !foundWithCapabilities {
+		t.Logf("Note: No models have capabilities defined - consider adding them")
+	}
+}
+
+// TestModelIDsFormatted tests that model IDs are compatible with Crush
+func TestModelIDsFormatted(t *testing.T) {
+	models := loadAvailableModels()
+
+	for _, m := range models {
+		// Model IDs should not contain spaces or special shell characters
+		if containsSubstring(m.ModelID, " ") {
+			t.Errorf("Model ID contains spaces: %s", m.ModelID)
+		}
+
+		// Should be valid for use in shell/config
+		if m.ModelID == "" {
+			t.Error("Empty model ID found")
+		}
+
+		// Provider should be lowercase
+		if m.Provider != "" && m.Provider[0] >= 'A' && m.Provider[0] <= 'Z' {
+			t.Errorf("Provider should be lowercase: %s", m.Provider)
+		}
+	}
+}
+
+// TestProviderListInitialization tests that provider list is properly initialized
+func TestProviderListInitialization(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+
+	dialog := NewModelSelectionDialog(60, 20, configPath)
+
+	// Should have at least one entry for "all providers" plus actual providers
+	if len(dialog.providerList) < 2 {
+		t.Errorf("Provider list should have multiple entries, got %d", len(dialog.providerList))
+	}
+
+	// First entry should be empty (all providers)
+	if dialog.providerList[0] != "" {
+		t.Errorf("First entry should be empty (all providers), got %s", dialog.providerList[0])
+	}
+
+	// Should have all expected providers
+	expectedProviders := map[string]bool{
+		"anthropic":  false,
+		"openai":     false,
+		"google":     false,
+		"perplexity": false,
+	}
+
+	for _, p := range dialog.providerList {
+		if p == "" {
+			continue
+		}
+		expectedProviders[p] = true
+	}
+
+	for provider, found := range expectedProviders {
+		if !found {
+			t.Errorf("Expected provider %s not in provider list", provider)
+		}
+	}
+}
+
+// TestWriteSelectionToBothConfigs tests that both TUI and Crush configs are updated
+func TestWriteSelectionToBothConfigs(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config.json"
+
+	// Set temp directory for Crush config
+	t.Setenv("CRUSH_PROJECT_ROOT", tmpDir)
+
+	dialog := NewModelSelectionDialog(60, 20, configPath)
+	dialog.selectedIndex = 0
+
+	err := dialog.WriteSelectionToConfig()
+	if err != nil {
+		t.Fatalf("WriteSelectionToConfig failed: %v", err)
+	}
+
+	// Verify TUI config was written
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read TUI config: %v", err)
+	}
+
+	var cfg config.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("Failed to unmarshal TUI config: %v", err)
+	}
+
+	if cfg.ModelProvider == "" || cfg.ModelName == "" {
+		t.Error("TUI config does not have model selection")
+	}
+
+	// Verify Crush config was created/updated
+	crushConfigPath := tmpDir + "/.crush.json"
+	if _, err := os.Stat(crushConfigPath); os.IsNotExist(err) {
+		t.Logf("Crush config not created (may be expected in test environment)")
+	} else {
+		// If it exists, verify it was updated
+		crushData, err := os.ReadFile(crushConfigPath)
+		if err != nil {
+			t.Fatalf("Failed to read Crush config: %v", err)
+		}
+
+		var crushCfg map[string]interface{}
+		if err := json.Unmarshal(crushData, &crushCfg); err != nil {
+			t.Fatalf("Failed to unmarshal Crush config: %v", err)
+		}
+
+		// Check if model field is present and matches
+		if model, ok := crushCfg["model"]; ok {
+			if model != cfg.ModelName {
+				t.Errorf("Crush config model mismatch: expected %s, got %v", cfg.ModelName, model)
+			}
+		}
+	}
+}

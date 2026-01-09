@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
@@ -94,12 +95,12 @@ func (m *Model) handleExpandTaskCommand() tea.Cmd {
 
 func (m *Model) handleRunTaskCommand() tea.Cmd {
 	// Log that the command was triggered
-	m.addLogLine("Alt+R pressed - Run Task with Crush")
+	m.addLogLine("Alt+R pressed - Run Task with AI Agent")
 	
 	// Check if a task is selected
 	if m.selectedTask == nil {
 		m.addLogLine("ERROR: No task selected")
-		appErr := NewValidationError("Run Task", "No task selected. Please select a task to run with Crush.", nil).
+		appErr := NewValidationError("Run Task", "No task selected. Please select a task to run.", nil).
 			WithRecoveryHints(
 				"Use arrow keys to navigate and select a task",
 				"Press Alt+R again after selecting a task",
@@ -108,12 +109,32 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 		return nil
 	}
 
-	// Pass the entire selected task object to ensure consistency
-	m.addLogLine(fmt.Sprintf("Opening model selection for task %s: %s", m.selectedTask.ID, m.selectedTask.Title))
+	// Load configured agent type (defaults to Crush)
+	agentType, err := config.LoadAgentType()
+	if err != nil {
+		m.addLogLine(fmt.Sprintf("Error loading agent type, using default: %v", err))
+		agentType = config.GetDefaultAgentType()
+	}
+	
+	// Store the agent type
+	m.selectedAgentType = agentType
+	
+	// Store task context for model selection
+	m.agentRunPending = true
+	m.agentRunTaskID = m.selectedTask.ID
+	m.agentRunTaskTitle = m.selectedTask.Title
+	m.agentRunTask = m.selectedTask
 
-	// Open model selection dialog
-	// When model is selected, it will trigger the Crush run via the model selection callback
-	return m.openModelSelectionForCrushRun(m.selectedTask)
+	m.addLogLine(fmt.Sprintf("Running task %s with %s agent: %s", 
+		m.selectedTask.ID, agentType.String(), m.selectedTask.Title))
+
+	// Open model selection dialog directly
+	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
+	m.appState.PushDialog(modelSelectionDialog)
+	m.addLogLine(fmt.Sprintf("Select AI model for %s agent to run task %s: %s", 
+		agentType.String(), m.selectedTask.ID, m.selectedTask.Title))
+
+	return nil
 }
 
 // DEPRECATED: Replaced by ExpansionScopeDialog
