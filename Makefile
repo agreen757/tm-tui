@@ -1,4 +1,4 @@
-.PHONY: build run test clean install help install-memory install-crush install-all
+.PHONY: build run test clean install help install-memory install-crush install-gemini check-gemini check-crush install-all
 
 # Binary name
 BINARY_NAME=tm-tui
@@ -46,7 +46,7 @@ install-memory: ## Install the memory tool for LLM agents
 	@echo "Installing memory tool..."
 	@go build -o $(GOPATH)/bin/memory ./cmd/memory
 
-install-all: install install-memory ## Install all binaries (tm-tui, memory, crush)
+install-all: install install-memory install-gemini ## Install all binaries (tm-tui, memory, crush, gemini)
 	@echo "All tools installed successfully."
 
 fmt: ## Format code
@@ -71,5 +71,25 @@ update-deps: ## Update dependencies
 
 check-crush: ## Check if Crush CLI is installed
 	@which crush > /dev/null 2>&1 && echo "✓ Crush is installed at: $$(which crush)" || echo "✗ Crush not found. Run 'make install-crush' to install."
+
+install-gemini: ## Install the Gemini CLI
+	@echo "Installing Gemini CLI..."
+	@if command -v gemini >/dev/null 2>&1; then \
+		echo "Gemini CLI already installed"; \
+	else \
+		go install github.com/google-gemini/gemini-cli/cmd/gemini@latest; \
+		echo "Gemini CLI installed successfully"; \
+	fi
+
+check-gemini: ## Check if Gemini CLI is installed
+	@echo "Checking for Gemini CLI..."
+	@if command -v gemini >/dev/null 2>&1; then \
+		echo "✓ Gemini CLI is installed"; \
+		gemini --version; \
+	else \
+		echo "✗ Gemini CLI is not installed"; \
+		echo "Run 'make install-gemini' to install"; \
+		exit 1; \
+	fi
 
 .DEFAULT_GOAL := help

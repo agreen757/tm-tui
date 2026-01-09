@@ -94,12 +94,12 @@ func (m *Model) handleExpandTaskCommand() tea.Cmd {
 
 func (m *Model) handleRunTaskCommand() tea.Cmd {
 	// Log that the command was triggered
-	m.addLogLine("Alt+R pressed - Run Task with Crush")
+	m.addLogLine("Alt+R pressed - Run Task with AI Agent")
 	
 	// Check if a task is selected
 	if m.selectedTask == nil {
 		m.addLogLine("ERROR: No task selected")
-		appErr := NewValidationError("Run Task", "No task selected. Please select a task to run with Crush.", nil).
+		appErr := NewValidationError("Run Task", "No task selected. Please select a task to run.", nil).
 			WithRecoveryHints(
 				"Use arrow keys to navigate and select a task",
 				"Press Alt+R again after selecting a task",
@@ -109,11 +109,11 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 	}
 
 	// Pass the entire selected task object to ensure consistency
-	m.addLogLine(fmt.Sprintf("Opening model selection for task %s: %s", m.selectedTask.ID, m.selectedTask.Title))
+	m.addLogLine(fmt.Sprintf("Opening agent selection for task %s: %s", m.selectedTask.ID, m.selectedTask.Title))
 
-	// Open model selection dialog
-	// When model is selected, it will trigger the Crush run via the model selection callback
-	return m.openModelSelectionForCrushRun(m.selectedTask)
+	// Open agent selection dialog
+	// When agent is selected, it will open model selection, then trigger execution
+	return m.openAgentSelectionForRun(m.selectedTask)
 }
 
 // DEPRECATED: Replaced by ExpansionScopeDialog

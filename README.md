@@ -24,9 +24,13 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
+## ⚠️ Development Status
+
+**Note:** The Gemini integration approach implemented in v0.1.17 has been replaced with a new model selection strategy. The current branch (`gemini-integration`) contains the deprecated approach. Active development continues on the `crush-model-selection` branch, which implements a more flexible AI model selection system directly integrated with Crush's native model management.
+
 ## Recent Improvements (v0.1.17)
 
-### Command Runner Execution & Completion Detection
+### Command Runner Execution & Completion Detection (Deprecated Approach)
 
 **Direct Crush Command Execution** - Fixed the Command Runner (Ctrl+B) to properly execute commands and detect completion.
 
