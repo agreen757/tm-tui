@@ -512,13 +512,63 @@ func TestCalculateTaskProgress(t *testing.T) {
 			wantTotal:   3,
 			wantPercent: 66.666667,
 		},
+		{
+			name: "all non-done tasks",
+			tasks: []taskmaster.Task{
+				{
+					ID:     "1",
+					Title:  "Task 1",
+					Status: taskmaster.StatusPending,
+				},
+				{
+					ID:     "2",
+					Title:  "Task 2",
+					Status: taskmaster.StatusInProgress,
+				},
+				{
+					ID:     "3",
+					Title:  "Task 3",
+					Status: taskmaster.StatusBlocked,
+				},
+			},
+			wantDone:    0,
+			wantTotal:   3,
+			wantPercent: 0.0,
+		},
+		{
+			name: "large task list",
+			tasks: []taskmaster.Task{
+				{ID: "1", Title: "Task 1", Status: taskmaster.StatusDone},
+				{ID: "2", Title: "Task 2", Status: taskmaster.StatusDone},
+				{ID: "3", Title: "Task 3", Status: taskmaster.StatusDone},
+				{ID: "4", Title: "Task 4", Status: taskmaster.StatusDone},
+				{ID: "5", Title: "Task 5", Status: taskmaster.StatusPending},
+				{ID: "6", Title: "Task 6", Status: taskmaster.StatusPending},
+				{ID: "7", Title: "Task 7", Status: taskmaster.StatusPending},
+				{ID: "8", Title: "Task 8", Status: taskmaster.StatusPending},
+				{ID: "9", Title: "Task 9", Status: taskmaster.StatusPending},
+				{ID: "10", Title: "Task 10", Status: taskmaster.StatusPending},
+			},
+			wantDone:    4,
+			wantTotal:   10,
+			wantPercent: 40.0,
+		},
+		{
+			name: "one third completion",
+			tasks: []taskmaster.Task{
+				{ID: "1", Title: "Task 1", Status: taskmaster.StatusDone},
+				{ID: "2", Title: "Task 2", Status: taskmaster.StatusPending},
+				{ID: "3", Title: "Task 3", Status: taskmaster.StatusPending},
+			},
+			wantDone:    1,
+			wantTotal:   3,
+			wantPercent: 33.333333,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := Model{
-				tasks: tt.tasks,
-			}
+			m := createTestModelWithTasks(tt.tasks)
 
 			done, total, percent := m.calculateTaskProgress()
 
@@ -1596,4 +1646,397 @@ func TestRenderHeaderWidthBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRenderHeaderResponsive tests the responsive header rendering with different terminal widths
+// It verifies that the header properly switches between wide, medium, and narrow layouts
+// based on terminal width and includes expected text elements for each layout
+//
+// Test organization (grouped by scenario):
+// - Basic layouts: Standard cases for wide (≥100), medium (80-99), and narrow (<80) terminals
+// - Boundary conditions: Tests at exact breakpoint widths to verify correct layout selection
+// - Tag handling: Small, long, and very long tags to verify formatting and abbreviation
+// - Edge cases: Extreme widths and special tag values
+// - Regression tests: Verify specific features like progress bars and percentage displays
+//
+// All test cases use createTestModelWithWidth() to generate a Model with deterministic progress
+// (5/10 tasks done = 50%), allowing assertions on specific header elements.
+func TestRenderHeaderResponsive(t *testing.T) {
+	// Test cases are organized in logical groups with inline comments
+	tests := []struct {
+		name         string
+		width        int
+		tag          string
+		wantContains []string
+	}{
+		// Basic layout tests - verify primary layout switching behavior
+		{
+			name:  "Wide terminal",
+			width: 120,
+			tag:   "feature-auth",
+			wantContains: []string{
+				"Task Master TUI",
+				"[feature-auth]",
+				"Progress:",
+				"%",
+			},
+		},
+		{
+			name:  "Medium terminal",
+			width: 85,
+			tag:   "bugfix-123",
+			wantContains: []string{
+				"Task Master TUI",
+				"[bugfix-123]",
+				"%",
+			},
+		},
+		{
+			name:  "Narrow terminal",
+			width: 70,
+			tag:   "feature-authentication-system",
+			wantContains: []string{
+				"TM-TUI",
+				"[feature-a",
+				"%",
+			},
+		},
+		// Boundary width tests - verify exact breakpoint behavior (≥100 → wide, 80-99 → medium, <80 → narrow)
+		{
+			name:  "Border boundary wide",
+			width: 100,
+			tag:   "feature-x",
+			wantContains: []string{
+				"Task Master TUI",
+				"[feature-x]",
+			},
+		},
+		{
+			name:  "Border boundary medium",
+			width: 80,
+			tag:   "test-tag",
+			wantContains: []string{
+				"Task Master TUI",
+				"[test-tag]",
+			},
+		},
+		// Tag variation tests - verify tag display with different lengths
+		{
+			name:  "Small tag in wide layout",
+			width: 120,
+			tag:   "a",
+			wantContains: []string{
+				"Task Master TUI",
+				"[a]",
+			},
+		},
+		{
+			name:  "Small tag in narrow layout",
+			width: 70,
+			tag:   "x",
+			wantContains: []string{
+				"TM-TUI",
+				"[x]",
+			},
+		},
+		// Edge cases for boundary widths - ensure correct layout just inside/outside thresholds
+		{
+			name:  "Just below wide boundary (99 columns)",
+			width: 99,
+			tag:   "feature-test",
+			wantContains: []string{
+				"Task Master TUI",
+				"[feature-test]",
+			},
+		},
+		{
+			name:  "Just above medium boundary (81 columns)",
+			width: 81,
+			tag:   "bugfix-edge",
+			wantContains: []string{
+				"Task Master TUI",
+				"[bugfix-edge]",
+			},
+		},
+		{
+			name:  "Just below medium boundary (79 columns)",
+			width: 79,
+			tag:   "feature-edge",
+			wantContains: []string{
+				"TM-TUI",
+				"[feature",
+			},
+		},
+		// Very narrow edge case - extreme terminal width
+		{
+			name:  "Very narrow terminal (50 columns)",
+			width: 50,
+			tag:   "test",
+			wantContains: []string{
+				"TM-TUI",
+				"[test]",
+			},
+		},
+		// Very long tag abbreviation test - verify truncation with ellipsis (max 12 chars, 9 + "...")
+		{
+			name:  "Very long tag in wide layout",
+			width: 120,
+			tag:   "feature-very-long-name-here",
+			wantContains: []string{
+				"Task Master TUI",
+				"[feature-very-long-name-here]",
+			},
+		},
+		{
+			name:  "Very long tag in narrow layout",
+			width: 70,
+			tag:   "feature-very-long-name-here",
+			wantContains: []string{
+				"TM-TUI",
+				"[feature-v...",
+			},
+		},
+		// Empty/default tag regression - verify fallback behavior when tag is empty
+		{
+			name:  "Empty tag falls back to default",
+			width: 100,
+			tag:   "",
+			wantContains: []string{
+				"Task Master TUI",
+				"[master]", // Default tag should be "master"
+			},
+		},
+		// Regression tests - specific feature checks to prevent layout regressions
+		{
+			name:  "Wide layout includes progress bar",
+			width: 120,
+			tag:   "feature-x",
+			wantContains: []string{
+				"Task Master TUI",
+				"Progress:",
+				"5/10",
+			},
+		},
+		{
+			name:  "Medium layout includes percentage",
+			width: 85,
+			tag:   "feature-medium",
+			wantContains: []string{
+				"Task Master TUI",
+				"50", // 50% progress
+			},
+		},
+		{
+			name:  "Narrow layout minimal format",
+			width: 70,
+			tag:   "narrow-test",
+			wantContains: []string{
+				"TM-TUI",
+				"[narrow",
+				"50", // Still has percentage
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModelWithWidth(tt.width, tt.tag)
+			result := m.renderHeader()
+
+			// Verify all expected substrings are present
+			for _, want := range tt.wantContains {
+				if !strings.Contains(result, want) {
+					t.Errorf("header missing %q\nGot: %s", want, result)
+				}
+			}
+		})
+	}
+}
+
+// TestRenderHeaderLayoutExclusivity ensures that each layout renders mutually exclusive elements
+// to prevent regressions where incorrect layout functions might be called
+//
+// This test verifies that:
+// - Wide layout: Uses full "Task Master TUI" name and detailed "Progress:" label with border "═"
+// - Medium layout: Uses full "Task Master TUI" name but omits detailed progress label, uses "╭" border
+// - Narrow layout: Uses abbreviated "TM-TUI" name and omits progress label entirely, uses "┌" border
+//
+// By checking both presence and absence of specific elements, we ensure that:
+// 1. Each layout is correctly selected based on width threshold
+// 2. Layout functions don't bleed into each other
+// 3. Regressions in layout selection logic are caught immediately
+func TestRenderHeaderLayoutExclusivity(t *testing.T) {
+	// Test cases verify mutually exclusive elements to catch layout mix-ups
+	tests := []struct {
+		name         string
+		width        int
+		tag          string
+		shouldHave   []string
+		shouldNotHave []string
+	}{
+		// App name exclusivity tests
+		{
+			name:  "Wide layout has full app name, not abbreviated",
+			width: 120,
+			tag:   "feature-test",
+			shouldHave: []string{
+				"Task Master TUI",
+				"Progress:",
+			},
+			shouldNotHave: []string{
+				"TM-TUI",
+			},
+		},
+		{
+			name:  "Medium layout has full app name, not abbreviated",
+			width: 85,
+			tag:   "test-tag",
+			shouldHave: []string{
+				"Task Master TUI",
+			},
+			shouldNotHave: []string{
+				"TM-TUI",
+				"Progress:",
+			},
+		},
+		{
+			name:  "Narrow layout has abbreviated app name, not full",
+			width: 70,
+			tag:   "feature",
+			shouldHave: []string{
+				"TM-TUI",
+			},
+			shouldNotHave: []string{
+				"Task Master TUI",
+				"Progress:",
+			},
+		},
+		// Border style exclusivity tests - prevent wrong border rendering
+		{
+			name:  "Wide layout uses double border",
+			width: 120,
+			tag:   "test",
+			shouldHave: []string{
+				"═", // Double border character
+			},
+			shouldNotHave: []string{
+				// Nothing specific to exclude for wide
+			},
+		},
+		{
+			name:  "Medium layout uses rounded border",
+			width: 85,
+			tag:   "test",
+			shouldHave: []string{
+				"╭", // Rounded border character
+			},
+			shouldNotHave: []string{
+				"═", // Double border character
+			},
+		},
+		{
+			name:  "Narrow layout uses normal border",
+			width: 70,
+			tag:   "test",
+			shouldHave: []string{
+				"┌", // Normal border character
+			},
+			shouldNotHave: []string{
+				"═", // Double border character
+				"╭", // Rounded border character
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := createTestModelWithWidth(tt.width, tt.tag)
+			result := m.renderHeader()
+
+			// Check elements that should be present
+			for _, want := range tt.shouldHave {
+				if !strings.Contains(result, want) {
+					t.Errorf("header should contain %q but doesn't\nGot: %s", want, result)
+				}
+			}
+
+			// Check elements that should NOT be present
+			for _, notWant := range tt.shouldNotHave {
+				if strings.Contains(result, notWant) {
+					t.Errorf("header should NOT contain %q but does\nGot: %s", notWant, result)
+				}
+			}
+		})
+	}
+}
+
+// createTestModelWithTasks creates a Model instance with the provided tasks for testing
+func createTestModelWithTasks(tasks []taskmaster.Task) Model {
+	cfg := &config.Config{
+		TaskMasterPath: "/tmp/test",
+	}
+	return Model{
+		config:    cfg,
+		tasks:     tasks,
+		taskIndex: make(map[string]*taskmaster.Task),
+		styles:    NewStyles(),
+		helpModel: help.New(),
+		keyMap:    NewKeyMap(cfg),
+	}
+}
+
+// createTestModelWithWidth creates a Model instance with specified width and active tag for header testing
+//
+// Purpose: Provides a consistent, deterministic test fixture for header rendering tests
+//
+// Setup:
+// - Configures model with specified terminal width (in columns) and active tag
+// - Creates 10 sample tasks with fixed status (5 done, 5 pending) for 50% progress
+// - Initializes all required Model fields (styles, keymap, help model) to avoid panics
+// - Builds task index to support progress calculation (done/total/percentage)
+//
+// Deterministic progress: With 5/10 tasks done, calculateTaskProgress() returns:
+// - done: 5
+// - total: 10
+// - percentage: 50.0
+//
+// Use in tests: Call this helper to create a Model, then call renderHeader() to get
+// the rendered output for assertions about width-specific layout behavior
+func createTestModelWithWidth(width int, tag string) Model {
+	cfg := &config.Config{
+		TaskMasterPath: "/tmp/test",
+		ActiveTag:      tag,
+	}
+	
+	// Create some test tasks to provide deterministic progress (5 done, 5 pending = 50%)
+	tasks := []taskmaster.Task{
+		{ID: "1", Title: "Task 1", Status: "done"},
+		{ID: "2", Title: "Task 2", Status: "done"},
+		{ID: "3", Title: "Task 3", Status: "done"},
+		{ID: "4", Title: "Task 4", Status: "done"},
+		{ID: "5", Title: "Task 5", Status: "done"},
+		{ID: "6", Title: "Task 6", Status: "pending"},
+		{ID: "7", Title: "Task 7", Status: "pending"},
+		{ID: "8", Title: "Task 8", Status: "pending"},
+		{ID: "9", Title: "Task 9", Status: "pending"},
+		{ID: "10", Title: "Task 10", Status: "pending"},
+	}
+	
+	model := Model{
+		config:    cfg,
+		width:     width,
+		height:    24,
+		tasks:     tasks,
+		taskIndex: make(map[string]*taskmaster.Task),
+		styles:    NewStyles(),
+		helpModel: help.New(),
+		keyMap:    NewKeyMap(cfg),
+	}
+	
+	// Build task index for progress calculation
+	for i := range model.tasks {
+		model.taskIndex[model.tasks[i].ID] = &model.tasks[i]
+	}
+	
+	return model
 }
