@@ -172,7 +172,7 @@ func BuildAnalyzeComplexityArgs(scope string, taskID string, tags []string) []st
 	args := []string{"analyze-complexity"}
 	
 	if scope != "" {
-		args = append(args, "--scope", scope)
+		args = append(args, "--research")
 	}
 	
 	// Add task ID if analyzing a selected task
@@ -233,9 +233,32 @@ func ParseComplexityProgress(line string) ComplexityProgressState {
 	return state
 }
 
-// ParseComplexityReportJSON parses JSON output from the CLI into a ComplexityReport
-func ParseComplexityReportJSON(jsonStr string) (*ComplexityReport, error) {
-	var report ComplexityReport
+// parseComplexityReportFromFile parses a complexity report JSON file into a ComplexityReport
+// The task-master CLI writes reports in a different format than our internal struct,
+// so we need to transform the data.
+func parseComplexityReportFromFile(jsonStr string) (*ComplexityReport, error) {
+	// Define a struct that matches the file format
+	type FileComplexityReport struct {
+		Meta struct {
+			GeneratedAt    string `json:"generatedAt"`
+			TasksAnalyzed  int    `json:"tasksAnalyzed"`
+			TotalTasks     int    `json:"totalTasks"`
+			AnalysisCount  int    `json:"analysisCount"`
+			ThresholdScore int    `json:"thresholdScore"`
+			ProjectName    string `json:"projectName"`
+			UsedResearch   bool   `json:"usedResearch"`
+		} `json:"meta"`
+		ComplexityAnalysis []struct {
+			TaskId             interface{} `json:"taskId"` // Could be string or int
+			TaskTitle          string      `json:"taskTitle"`
+			ComplexityScore    int         `json:"complexityScore"`
+			RecommendedSubtasks int         `json:"recommendedSubtasks"`
+			ExpansionPrompt    string      `json:"expansionPrompt"`
+			Reasoning          string      `json:"reasoning"`
+		} `json:"complexityAnalysis"`
+	}
+
+	var fileReport FileComplexityReport
 	
 	// Trim any whitespace and quotes
 	jsonStr = strings.TrimSpace(jsonStr)
@@ -245,8 +268,50 @@ func ParseComplexityReportJSON(jsonStr string) (*ComplexityReport, error) {
 		jsonStr = strings.ReplaceAll(jsonStr, "\\\"", "\"")
 	}
 	
-	if err := json.Unmarshal([]byte(jsonStr), &report); err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &fileReport); err != nil {
 		return nil, fmt.Errorf("failed to parse complexity report JSON: %w", err)
+	}
+	
+	// Convert to our internal format
+	report := ComplexityReport{
+		Tasks:      make([]TaskComplexity, 0, len(fileReport.ComplexityAnalysis)),
+		AnalyzedAt: time.Now(), // Default to now, will try to parse from file
+	}
+	
+	// Try to parse the timestamp
+	if t, err := time.Parse(time.RFC3339, fileReport.Meta.GeneratedAt); err == nil {
+		report.AnalyzedAt = t
+	}
+	
+	// Convert each task complexity entry
+	for _, analysis := range fileReport.ComplexityAnalysis {
+		// Get complexity level based on score
+		thresholds := DefaultLevelThresholds()
+		level := GetLevelFromScore(analysis.ComplexityScore, &thresholds)
+		
+		// Convert TaskId to string (could be int or string in the file)
+		var taskId string
+		switch v := analysis.TaskId.(type) {
+		case string:
+			taskId = v
+		case float64:
+			taskId = fmt.Sprintf("%.0f", v)
+		case int:
+			taskId = fmt.Sprintf("%d", v)
+		default:
+			taskId = fmt.Sprintf("%v", analysis.TaskId)
+		}
+		
+		taskComplexity := TaskComplexity{
+			TaskID:      taskId,
+			Level:       level,
+			Score:       analysis.ComplexityScore,
+			Title:       analysis.TaskTitle,
+			Description: analysis.Reasoning,
+			AnalyzedAt:  report.AnalyzedAt,
+		}
+		
+		report.Tasks = append(report.Tasks, taskComplexity)
 	}
 	
 	return &report, nil

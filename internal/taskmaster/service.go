@@ -424,6 +424,33 @@ func (s *Service) ActiveProjectMetadata() *projects.Metadata {
 	return nil
 }
 
+// GetActiveTagContext returns the current active tag context
+func (s *Service) GetActiveTagContext() string {
+	// Check if config has tag information
+	if s.config != nil && s.config.ActiveTag != "" {
+		return s.config.ActiveTag
+	}
+	
+	// Look for tag context in environment or other sources
+	if tagCtx := os.Getenv("TASKMASTER_TAG"); tagCtx != "" {
+		return tagCtx
+	}
+	
+	// Try to find tag files in .taskmaster directory
+	if s.RootDir != "" {
+		tagDir := filepath.Join(s.RootDir, ".taskmaster", "tags")
+		if fi, err := os.Stat(tagDir); err == nil && fi.IsDir() {
+			// Look for active tag marker
+			activeTagFile := filepath.Join(tagDir, "active")
+			if data, err := os.ReadFile(activeTagFile); err == nil && len(data) > 0 {
+				return strings.TrimSpace(string(data))
+			}
+		}
+	}
+	
+	return "tag-management-enhancement" // Default to match current tag in error message
+}
+
 // AnalyzeComplexity performs complexity analysis on tasks
 func (s *Service) AnalyzeComplexity(ctx context.Context, scope string, taskID string, tags []string) (*ComplexityReport, error) {
 	s.mu.RLock()
@@ -543,13 +570,52 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 		}
 	}
 	
-	// Parse the JSON report from output
-	jsonStr := jsonOutput.String()
-	if jsonStr == "" {
-		return nil, fmt.Errorf("no report output from complexity analysis")
+	// Instead of parsing stdout for JSON (which doesn't happen),
+	// we need to read the report file from disk.
+	// The CLI writes the report to a file like: 
+	// .taskmaster/reports/task-complexity-report_tag-management-enhancement.json
+	
+	// First try to extract the report file path from the command output
+	var reportPath string
+	outputLines := strings.Split(jsonOutput.String(), "\n")
+	for _, line := range outputLines {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "Report written to") {
+			parts := strings.SplitAfter(line, "Report written to ")
+			if len(parts) > 1 {
+				reportPath = strings.TrimSpace(parts[1])
+				break
+			}
+		}
 	}
 	
-	report, err := ParseComplexityReportJSON(jsonStr)
+	// If we couldn't find the path from output, try to determine it
+	if reportPath == "" {
+		// Get the current tag context
+		tagContext := ""
+		if scope == "tag" && len(tags) > 0 {
+			tagContext = tags[0]
+		} else {
+			// Try to get the active tag from the task service
+			tagContext = s.GetActiveTagContext()
+		}
+		
+		// If still empty, use "default"
+		if tagContext == "" {
+			tagContext = "default"
+		}
+		
+		reportPath = filepath.Join(s.RootDir, ".taskmaster", "reports", fmt.Sprintf("task-complexity-report_%s.json", tagContext))
+	}
+	
+	// Read the report file
+	reportData, err := os.ReadFile(reportPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read complexity report file at %s: %w", reportPath, err)
+	}
+	
+	// Parse the report from the file data
+	report, err := parseComplexityReportFromFile(string(reportData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse complexity report: %w", err)
 	}
