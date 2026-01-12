@@ -504,7 +504,7 @@ go run ./cmd/tm-tui/main.go
   - View commit history
 
 #### Complexity & Analysis
-- `Alt+C` - Analyze task complexity (AI-powered scoring)
+- `Ctrl+Shift+C` - Analyze task complexity (AI-powered scoring)
 
 #### Tags & Projects
 - `Alt+A` / `Ctrl+Shift+A` - Add or manage task tags
@@ -557,7 +557,7 @@ go run ./cmd/tm-tui/main.go
 
 ### Analyzing Task Complexity
 1. Navigate to a task or select multiple tasks with `Space`
-2. Press `Alt+C` to open "Analyze Complexity" dialog
+2. Press `Ctrl+Shift+C` to open "Analyze Complexity" dialog
 3. Choose analysis scope: all tasks, selected task, or by tag
 4. View complexity scores (LOW, MEDIUM, HIGH, VERY HIGH)
 5. Filter and sort results for focused planning
@@ -643,6 +643,78 @@ You can customize the prompt template by creating a `CRUSH_RUN_INSTRUCTIONS.md` 
 2. Navigate to your desired project
 3. View tasks specific to that project context
 4. Use project tags to organize cross-project work
+
+### Git Operations with Task Runner
+
+Git operations in Task Master TUI are executed via the Task Runner, providing real-time streaming output and proper command lifecycle management.
+
+#### Starting a Git Operation
+
+1. Press `g` to open the Git Menu
+2. Choose your operation:
+   - **Status**: View repository status (files changed, untracked files, etc.)
+   - **Switch Branch**: Switch to a different branch
+   - **Create Branch**: Create a new branch
+   - **Recent Commits**: View recent commit history
+3. For branch operations, select from the list and press `Enter`
+4. The **Task Runner modal** opens automatically showing:
+   - Command being executed
+   - Real-time streaming output from git
+   - Status indicator (Running/Completed/Failed)
+
+#### Understanding the Task Runner Output
+
+When a git operation executes, you'll see:
+
+- **Header**: Shows the git command being executed (e.g., "git checkout main")
+- **Output**: Real-time streaming output from git, line by line
+- **Status**: Updates at the bottom showing completion status
+- **Logs**: All output is automatically saved to `.taskmaster/logs/git-command-<operation>-<timestamp>.log`
+
+#### Task Runner Controls During Git Operations
+
+- `↑/↓` - Scroll through output
+- `Home/End` - Jump to top/bottom of output
+- `PgUp/PgDn` - Page scroll through output
+- `M` - Minimize/maximize the modal (continue using TUI in background)
+- `Esc` - Close modal (when operation is complete)
+
+#### Handling Git Operation Results
+
+**Successful Operation:**
+- Output shows git's normal success message
+- Status bar displays "Completed ✓"
+- You can press `Esc` to close the modal
+- Changes are immediately reflected (branches refresh, status updates, etc.)
+
+**Failed Operation:**
+- Output shows git's error message
+- Status bar displays "Failed ✗"
+- Error details are logged for review
+- You can close the modal and try again
+
+#### Example Workflows
+
+**Switching Branches**
+```
+1. Press g → Switch Branch
+2. Highlight "feature/my-feature" in the list
+3. Press Enter
+4. Task Runner shows: git checkout feature/my-feature
+5. Output streams in real-time
+6. Branch switches, status updates
+7. Press Esc to close
+```
+
+**Creating a Branch**
+```
+1. Press g → Create Branch
+2. Enter branch name when prompted
+3. Task Runner shows: git checkout -b new-feature
+4. Output streams in real-time
+5. New branch created and checked out
+6. Press Esc to close
+```
 
 ## Development
 

@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -146,6 +147,8 @@ type TaskRunnerModal struct {
 	autoCloseOnFailure        bool      // automatically close modal when all tasks fail/complete
 	autoCloseDelay            time.Duration // delay before auto-closing
 	closeTimer                *time.Time // tracks when to auto-close
+	gitAutoCloseDelay         time.Duration // delay before auto-closing git operations (default 2s)
+	gitAutoCloseTimers       map[string]*time.Time // tracks git-specific auto-close timers by task ID
 }
 
 // NewTaskRunnerModal creates a new task runner modal
@@ -171,6 +174,8 @@ func NewTaskRunnerModal(width, height int, style *DialogStyle) *TaskRunnerModal 
 		autoCloseOnFailure:       true,               // auto-close when all tasks stop
 		autoCloseDelay:           3 * time.Second,    // wait 3 seconds before closing
 		closeTimer:               nil,
+		gitAutoCloseDelay:        2 * time.Second,    // git operations auto-close after 2 seconds
+		gitAutoCloseTimers:       make(map[string]*time.Time), // per-task timers for git operations
 	}
 	modal.Style = style
 	modal.SetFocused(true)
@@ -230,17 +235,41 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		}
 	case TaskCompletedMsg:
 		m.setTabStatus(msg.TaskID, TaskCompleted)
+		// For git tasks, use git-specific auto-close (2 seconds)
+		if m.isGitTask(msg.TaskID) {
+			return m, m.handleGitTaskCompletion(msg.TaskID)
+		}
+		// For other tasks, use normal auto-close logic
 		return m, m.checkAutoClose()
 	case TaskFailedMsg:
 		m.setTabStatus(msg.TaskID, TaskFailed)
+		// For git tasks, keep the modal open on failure
+		if m.isGitTask(msg.TaskID) {
+			m.handleGitTaskFailure(msg.TaskID)
+			return m, nil
+		}
+		// For other tasks, use normal auto-close logic
 		return m, m.checkAutoClose()
 	case TaskCancelledMsg:
 		m.setTabStatus(msg.TaskID, TaskCancelled)
+		// For git tasks, clean up any pending timers
+		if m.isGitTask(msg.TaskID) {
+			delete(m.gitAutoCloseTimers, msg.TaskID)
+		}
 		return m, m.checkAutoClose()
 	case TaskRunnerAutoCloseMsg:
 		// Timer expired and no tasks are running - close the modal
 		if !m.hasRunningTasks() && m.closeTimer != nil && time.Now().After(*m.closeTimer) {
 			return nil, nil
+		}
+	case TaskRunnerGitAutoCloseMsg:
+		// Git auto-close timer expired - close the modal only if no other tasks are running
+		if timer, exists := m.gitAutoCloseTimers[msg.TaskID]; exists && timer != nil && time.Now().After(*timer) {
+			delete(m.gitAutoCloseTimers, msg.TaskID)
+			// Only close if no tasks are running
+			if !m.hasRunningTasks() {
+				return nil, nil
+			}
 		}
 	}
 
@@ -249,6 +278,11 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 
 // HandleKey handles keyboard input
 func (m *TaskRunnerModal) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
+	// Cancel any pending git auto-close timers on any key press
+	if len(m.gitAutoCloseTimers) > 0 {
+		m.gitAutoCloseTimers = make(map[string]*time.Time)
+	}
+
 	// Pass key to active tab for scrolling control
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
 		m.tabs[m.activeTab].Update(msg)
@@ -449,6 +483,44 @@ func (m *TaskRunnerModal) hasRunningTasks() bool {
 	return false
 }
 
+// isGitTask checks if a task ID is a git operation (prefixed with "git-")
+func (m *TaskRunnerModal) isGitTask(taskID string) bool {
+	return strings.HasPrefix(taskID, "git-")
+}
+
+// handleGitTaskCompletion manages auto-close for successful git operations
+func (m *TaskRunnerModal) handleGitTaskCompletion(taskID string) tea.Cmd {
+	if !m.isGitTask(taskID) {
+		return nil
+	}
+
+	// For successful git operations, start a 2-second auto-close timer
+	closeTime := time.Now().Add(m.gitAutoCloseDelay)
+	m.gitAutoCloseTimers[taskID] = &closeTime
+
+	// Schedule the close message for this git task
+	return tea.Tick(m.gitAutoCloseDelay, func(time.Time) tea.Msg {
+		return TaskRunnerGitAutoCloseMsg{
+			TaskID: taskID,
+		}
+	})
+}
+
+// handleGitTaskFailure keeps git operations open on failure
+func (m *TaskRunnerModal) handleGitTaskFailure(taskID string) {
+	if !m.isGitTask(taskID) {
+		return
+	}
+
+	// Remove any pending auto-close timer for this git task
+	delete(m.gitAutoCloseTimers, taskID)
+}
+
+// TaskRunnerGitAutoCloseMsg is sent when a git auto-close timer expires
+type TaskRunnerGitAutoCloseMsg struct {
+	TaskID string
+}
+
 // HasRunningTasks is the public interface for checking if any tasks are running
 func (m *TaskRunnerModal) HasRunningTasks() bool {
 	return m.hasRunningTasks()
@@ -489,6 +561,11 @@ func (m *TaskRunnerModal) SetAutoCloseOnFailure(enabled bool) {
 // SetAutoCloseDelay sets the delay before auto-closing
 func (m *TaskRunnerModal) SetAutoCloseDelay(delay time.Duration) {
 	m.autoCloseDelay = delay
+}
+
+// SetGitAutoCloseDelay sets the delay before auto-closing git operations (default 2 seconds)
+func (m *TaskRunnerModal) SetGitAutoCloseDelay(delay time.Duration) {
+	m.gitAutoCloseDelay = delay
 }
 
 // ensureTabVisible adjusts scroll position so active tab is visible
@@ -558,6 +635,17 @@ func (m *TaskRunnerModal) renderModalContent() string {
 		content = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#999999")).
 			Render("No tasks running. Start a task to see output here.")
+	}
+
+	// Render git auto-close countdown if active
+	var countdownIndicator string
+	if gitAutoCloseActive, timeRemaining := m.getGitAutoCloseInfo(); gitAutoCloseActive {
+		countdownIndicator = m.renderGitAutoCloseCountdown(timeRemaining)
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			content,
+			countdownIndicator,
+		)
 	}
 
 	// Render footer
@@ -664,6 +752,57 @@ func (m *TaskRunnerModal) renderTabBar() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, tabStrings...)
 }
 
+// getGitAutoCloseInfo checks if any git auto-close timers are active and returns remaining time
+func (m *TaskRunnerModal) getGitAutoCloseInfo() (bool, time.Duration) {
+	for _, timer := range m.gitAutoCloseTimers {
+		if timer != nil {
+			remaining := time.Until(*timer)
+			if remaining > 0 {
+				return true, remaining
+			}
+		}
+	}
+	return false, 0
+}
+
+// renderGitAutoCloseCountdown renders a visual countdown indicator for git auto-close
+func (m *TaskRunnerModal) renderGitAutoCloseCountdown(timeRemaining time.Duration) string {
+	seconds := int(timeRemaining.Seconds())
+	if seconds < 0 {
+		seconds = 0
+	}
+
+	// Create a visual countdown bar
+	countdownText := fmt.Sprintf("⏱  Closing in %d second%s...", seconds, func() string {
+		if seconds == 1 {
+			return ""
+		}
+		return "s"
+	}())
+
+	// Style the countdown with an accent color
+	countdownStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFF99")). // Yellow accent
+		Bold(true).
+		Padding(0, 1)
+
+	// Add instruction text
+	instructionText := "Press any key to stay open"
+	instructionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#888888")).
+		Italic(true).
+		Padding(0, 1)
+
+	// Combine countdown and instruction
+	combined := lipgloss.JoinHorizontal(
+		lipgloss.Center,
+		countdownStyle.Render(countdownText),
+		instructionStyle.Render(instructionText),
+	)
+
+	return combined
+}
+
 // renderFooter renders the footer with helpful shortcuts
 func (m *TaskRunnerModal) renderFooter() string {
 	shortcuts := []string{
@@ -677,8 +816,25 @@ func (m *TaskRunnerModal) renderFooter() string {
 
 	// Only show close option if no running tasks
 	if !m.hasRunningTasks() {
-		// Show countdown if auto-close is pending
-		if m.closeTimer != nil && m.autoCloseOnFailure {
+		// Check if any git auto-close timers are active
+		gitAutoCloseActive := false
+		var gitTimeRemaining time.Duration
+		for _, timer := range m.gitAutoCloseTimers {
+			if timer != nil {
+				remaining := time.Until(*timer)
+				if remaining > 0 {
+					gitAutoCloseActive = true
+					gitTimeRemaining = remaining
+					break
+				}
+			}
+		}
+
+		// Show git countdown if active
+		if gitAutoCloseActive && gitTimeRemaining > 0 {
+			shortcuts = append(shortcuts, fmt.Sprintf("Any key to keep open, Esc to close (auto in %ds)", int(gitTimeRemaining.Seconds())+1))
+		} else if m.closeTimer != nil && m.autoCloseOnFailure {
+			// Show normal auto-close countdown
 			remaining := time.Until(*m.closeTimer)
 			if remaining > 0 {
 				shortcuts = append(shortcuts, fmt.Sprintf("Esc: close (auto in %ds)", int(remaining.Seconds())+1))

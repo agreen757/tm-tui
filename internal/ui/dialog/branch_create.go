@@ -1,44 +1,33 @@
 package dialog
 
 import (
-	"context"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/agreen757/tm-tui/internal/git"
 )
-
-// branchCreateMsg is sent when branch creation completes
-type branchCreateMsg struct {
-	branchName string
-	output     string
-	err        error
-}
 
 // BranchCreateDialog allows creating a new branch
 type BranchCreateDialog struct {
 	BaseDialog
-	input      textinput.Model
-	repoPath   string
-	loading    bool
-	errorMsg   string
-	onComplete func(branchName string, output string, err error)
+	input    textinput.Model
+	repoPath string
+	tagName  string
+	errorMsg string
 }
 
 // NewBranchCreateDialog creates a new branch creation dialog
-func NewBranchCreateDialog(repoPath string, onComplete func(branchName string, output string, err error)) *BranchCreateDialog {
+func NewBranchCreateDialog(repoPath string, tagName string) *BranchCreateDialog {
 	input := textinput.New()
 	input.Placeholder = "new-branch-name"
 	input.Focus()
 
 	dialog := &BranchCreateDialog{
-		BaseDialog:  NewBaseDialog("Create Branch", 60, 12, DialogKindForm),
-		input:       input,
-		repoPath:    repoPath,
-		loading:     false,
-		onComplete:  onComplete,
+		BaseDialog: NewBaseDialog("Create Branch", 60, 12, DialogKindForm),
+		input:      input,
+		repoPath:   repoPath,
+		tagName:    tagName,
 	}
 
 	// Set footer hints
@@ -58,40 +47,9 @@ func (d *BranchCreateDialog) Init() tea.Cmd {
 // Update processes messages and updates dialog state
 func (d *BranchCreateDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if d.loading {
-			// Don't process input while loading
-			return d, nil
-		}
-
-		switch msg.String() {
-		case "enter":
-			if !d.isValidBranchName() {
-				d.errorMsg = "Invalid branch name"
-				return d, nil
-			}
-
-			branchName := strings.TrimSpace(d.input.Value())
-			d.loading = true
-			d.errorMsg = ""
-			return d, d.createBranchCmd(branchName)
-
-		case "esc":
-			return nil, nil
-		}
-
-	case branchCreateMsg:
-		if msg.err != nil {
-			d.loading = false
-			d.errorMsg = "Error: " + msg.err.Error()
-			return d, nil
-		}
-
-		// Success - call callback and close dialog
-		if d.onComplete != nil {
-			d.onComplete(msg.branchName, msg.output, nil)
-		}
-		return nil, nil
+	case tea.WindowSizeMsg:
+		d.Center(msg.Width, msg.Height)
+		return d, nil
 	}
 
 	// Handle text input and validate in real-time
@@ -158,39 +116,37 @@ func (d *BranchCreateDialog) validateAndUpdateError() {
 	d.errorMsg = ""
 }
 
-// createBranchCmd creates a command that attempts to create the branch
-func (d *BranchCreateDialog) createBranchCmd(branchName string) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		output, err := git.CreateBranch(ctx, d.repoPath, branchName)
-		return branchCreateMsg{
-			branchName: branchName,
-			output:     output,
-			err:        err,
-		}
-	}
+// launchGitCreateBranch launches the git branch creation via Task Runner
+func (d *BranchCreateDialog) launchGitCreateBranch(branchName string) tea.Cmd {
+	return tea.Sequence(
+		// First, send TaskStartedMsg to open the Task Runner modal
+		func() tea.Msg {
+			return TaskStartedMsg{
+				TaskID:    "git-create-branch",
+				TaskTitle: "Create Branch: " + branchName,
+			}
+		},
+		// Then, execute the git command
+		ExecuteGitCommand("git-create-branch", []string{"checkout", "-b", branchName}, d.tagName),
+	)
 }
 
 // View renders the dialog
 func (d *BranchCreateDialog) View() string {
 	content := "Enter new branch name:\n\n"
 
-	if d.loading {
-		content += "Creating branch... \n\n"
-	} else {
-		// Show input with validation feedback
-		inputView := d.input.View()
-		if !d.isValidBranchName() && d.input.Value() != "" {
-			inputView = lipgloss.NewStyle().
-				Foreground(d.Style.ErrorColor).
-				Render(inputView)
-		} else if d.isValidBranchName() {
-			inputView = lipgloss.NewStyle().
-				Foreground(d.Style.SuccessColor).
-				Render(inputView)
-		}
-		content += inputView + "\n\n"
+	// Show input with validation feedback
+	inputView := d.input.View()
+	if !d.isValidBranchName() && d.input.Value() != "" {
+		inputView = lipgloss.NewStyle().
+			Foreground(d.Style.ErrorColor).
+			Render(inputView)
+	} else if d.isValidBranchName() {
+		inputView = lipgloss.NewStyle().
+			Foreground(d.Style.SuccessColor).
+			Render(inputView)
 	}
+	content += inputView + "\n\n"
 
 	// Show command hints
 	hintsText := "Press Enter to create, Esc to cancel"
@@ -201,7 +157,7 @@ func (d *BranchCreateDialog) View() string {
 	}
 	content += hintsText + "\n"
 
-	// Show error or success message
+	// Show error message
 	if d.errorMsg != "" {
 		content += "\n" + lipgloss.NewStyle().
 			Foreground(d.Style.ErrorColor).
@@ -222,19 +178,14 @@ func (d *BranchCreateDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 	// Handle dialog-specific keys
 	switch msg.String() {
 	case "enter":
-		if d.loading {
-			return DialogResultNone, nil
-		}
-
 		if !d.isValidBranchName() {
 			d.errorMsg = "Invalid branch name"
 			return DialogResultNone, nil
 		}
 
 		branchName := strings.TrimSpace(d.input.Value())
-		d.loading = true
-		d.errorMsg = ""
-		return DialogResultNone, d.createBranchCmd(branchName)
+		// Close dialog immediately and launch git command via Task Runner
+		return DialogResultClose, d.launchGitCreateBranch(branchName)
 	}
 
 	return DialogResultNone, nil

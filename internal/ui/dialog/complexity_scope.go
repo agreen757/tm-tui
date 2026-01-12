@@ -46,7 +46,7 @@ func NewComplexityScopeDialog(selectedTaskID string, style *DialogStyle) (*FormD
 	// Create the form dialog
 	form := NewFormDialog(
 		"Analyze Task Complexity",
-		"Select the scope of tasks to analyze (Alt+C).",
+		"Select the scope of tasks to analyze (Ctrl+Shift+C).",
 		fields,
 		[]string{"Analyze", "Cancel"},
 		style,

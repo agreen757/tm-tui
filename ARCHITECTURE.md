@@ -128,7 +128,7 @@ Keyboard handling in dialogs takes precedence over global shortcuts:
 The following keyboard shortcuts are reserved for dialog-driven features:
 
 - **Alt+P**: Project dialog
-- **Alt+C**: Complexity analysis dialog
+- **Ctrl+Shift+C**: Complexity analysis dialog
 - **Alt+E**: Execution dialog
 - **Alt+D**: Dependencies management dialog
 - **Ctrl+Shift+A**: Add tag context dialog

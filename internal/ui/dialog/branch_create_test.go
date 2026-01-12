@@ -9,8 +9,7 @@ import (
 
 // TestBranchCreateDialogCreation tests dialog initialization
 func TestBranchCreateDialogCreation(t *testing.T) {
-	onComplete := func(branchName, output string, err error) {}
-	dialog := NewBranchCreateDialog("/test/repo", onComplete)
+	dialog := NewBranchCreateDialog("/test/repo", "test-tag")
 
 	if dialog == nil {
 		t.Errorf("Expected non-nil dialog, got nil")
@@ -18,11 +17,11 @@ func TestBranchCreateDialogCreation(t *testing.T) {
 	if dialog.repoPath != "/test/repo" {
 		t.Errorf("Expected repoPath to be /test/repo, got %s", dialog.repoPath)
 	}
+	if dialog.tagName != "test-tag" {
+		t.Errorf("Expected tagName to be test-tag, got %s", dialog.tagName)
+	}
 	if dialog.TitleText != "Create Branch" {
 		t.Errorf("Expected title Create Branch, got %s", dialog.TitleText)
-	}
-	if dialog.loading {
-		t.Errorf("Expected loading to be false initially")
 	}
 }
 
@@ -49,7 +48,7 @@ func TestIsValidBranchName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dialog := NewBranchCreateDialog("/test/repo", nil)
+			dialog := NewBranchCreateDialog("/test/repo", "")
 			dialog.input.SetValue(tt.branchName)
 
 			if dialog.isValidBranchName() != tt.valid {
@@ -78,7 +77,7 @@ func TestValidateAndUpdateError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dialog := NewBranchCreateDialog("/test/repo", nil)
+			dialog := NewBranchCreateDialog("/test/repo", "")
 			dialog.input.SetValue(tt.branchName)
 			dialog.validateAndUpdateError()
 
@@ -91,7 +90,7 @@ func TestValidateAndUpdateError(t *testing.T) {
 
 // TestInit tests the Init method
 func TestBranchCreateDialogInit(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	cmd := dialog.Init()
 
 	// Verify Init returns a command (it should return textinput.Blink)
@@ -100,9 +99,10 @@ func TestBranchCreateDialogInit(t *testing.T) {
 	}
 }
 
-// TestUpdateWithEscapeKey tests that Escape closes the dialog
+// TestUpdateWithEscapeKey tests that Update does not handle Escape key
+// Escape key handling is delegated to HandleKey
 func TestUpdateWithEscapeKey(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("test-branch")
 
 	msg := tea.KeyMsg{
@@ -111,17 +111,17 @@ func TestUpdateWithEscapeKey(t *testing.T) {
 
 	result, _ := dialog.Update(msg)
 
-	if result != nil {
-		t.Errorf("Expected Update to return nil dialog for Escape key")
+	// Update should forward to textinput.Update, not handle Esc itself
+	// Dialog should remain open
+	if result == nil {
+		t.Errorf("Expected Update to return non-nil dialog (forwards to textinput)")
 	}
 }
 
-// TestUpdateWithValidInputAndEnter tests successful branch creation
+// TestUpdateWithValidInputAndEnter tests that Update does not handle Enter key
+// Enter key handling is delegated to HandleKey
 func TestUpdateWithValidInputAndEnter(t *testing.T) {
-	onComplete := func(branchName, output string, err error) {
-	}
-
-	dialog := NewBranchCreateDialog("/test/repo", onComplete)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("test-branch")
 
 	// Simulate enter key
@@ -129,23 +129,19 @@ func TestUpdateWithValidInputAndEnter(t *testing.T) {
 		Type: tea.KeyEnter,
 	}
 
-	result, cmd := dialog.Update(enterMsg)
+	result, _ := dialog.Update(enterMsg)
 
-	// After pressing enter with valid input, dialog should still be open with loading state
+	// Update should forward to textinput.Update, not handle Enter itself
+	// Dialog should remain open
 	if result == nil {
-		t.Errorf("Expected Update to return non-nil dialog during loading")
-	}
-	if !dialog.loading {
-		t.Errorf("Expected loading to be true after pressing Enter")
-	}
-	if cmd == nil {
-		t.Errorf("Expected Update to return a non-nil command")
+		t.Errorf("Expected Update to return non-nil dialog (forwards to textinput)")
 	}
 }
 
-// TestUpdateWithInvalidInputAndEnter tests validation on enter
+// TestUpdateWithInvalidInputAndEnter tests that Update does not handle Enter key
+// Enter key handling is delegated to HandleKey
 func TestUpdateWithInvalidInputAndEnter(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("")
 
 	enterMsg := tea.KeyMsg{
@@ -154,18 +150,21 @@ func TestUpdateWithInvalidInputAndEnter(t *testing.T) {
 
 	result, _ := dialog.Update(enterMsg)
 
-	// Dialog should remain open with error message
+	// Update should forward to textinput.Update, not validate
+	// Dialog should remain open without error message
 	if result == nil {
-		t.Errorf("Expected Update to return non-nil dialog for invalid input")
+		t.Errorf("Expected Update to return non-nil dialog (forwards to textinput)")
 	}
-	if !strings.Contains(dialog.errorMsg, "Invalid") {
-		t.Errorf("Expected error message to contain 'Invalid', got %q", dialog.errorMsg)
+	// errorMsg should be cleared by validateAndUpdateError
+	// since the input is empty
+	if dialog.errorMsg != "" {
+		t.Errorf("Expected error message to be empty for empty input, got %q", dialog.errorMsg)
 	}
 }
 
 // TestSetRect tests rectangle setting
 func TestBranchCreateDialogSetRect(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.SetRect(80, 24, 10, 5)
 
 	w, h, x, y := dialog.GetRect()
@@ -186,7 +185,7 @@ func TestBranchCreateDialogSetRect(t *testing.T) {
 
 // TestInputWidthAdjustment tests that input width adjusts with dialog size
 func TestInputWidthAdjustment(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 
 	dialog.SetRect(100, 24, 0, 0)
 	inputWidth1 := dialog.input.Width
@@ -204,7 +203,7 @@ func TestInputWidthAdjustment(t *testing.T) {
 
 // TestViewWithValidInput tests View method with valid input
 func TestViewWithValidInput(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("valid-branch")
 
 	view := dialog.View()
@@ -219,7 +218,7 @@ func TestViewWithValidInput(t *testing.T) {
 
 // TestViewWithInvalidInput tests View method with invalid input
 func TestViewWithInvalidInput(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("invalid branch")
 
 	view := dialog.View()
@@ -229,38 +228,77 @@ func TestViewWithInvalidInput(t *testing.T) {
 	}
 }
 
-// TestViewWithLoading tests View method during loading
-func TestViewWithLoading(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
-	dialog.loading = true
-
-	view := dialog.View()
-
-	if !strings.Contains(view, "Creating branch") {
-		t.Errorf("Expected view to show creating message during loading")
-	}
-}
-
-// TestHandleKey tests HandleKey method
+// TestHandleKeyWithValidBranch tests HandleKey creates branch on Enter
 func TestBranchCreateDialogHandleKey(t *testing.T) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("valid-branch")
 
 	enterMsg := tea.KeyMsg{
 		Type: tea.KeyEnter,
 	}
 
-	result, _ := dialog.HandleKey(enterMsg)
+	result, cmd := dialog.HandleKey(enterMsg)
 
-	// HandleKey should return DialogResultNone when starting creation
+	// HandleKey should return DialogResultClose to close dialog
+	if result != DialogResultClose {
+		t.Errorf("Expected HandleKey to return DialogResultClose, got %v", result)
+	}
+	// Should return a command to create the branch
+	if cmd == nil {
+		t.Errorf("Expected HandleKey to return a non-nil command for branch creation")
+	}
+}
+
+// TestHandleKeyWithInvalidBranch tests HandleKey rejects invalid branch names
+func TestHandleKeyWithInvalidBranch(t *testing.T) {
+	dialog := NewBranchCreateDialog("/test/repo", "")
+	dialog.input.SetValue("invalid branch")
+
+	enterMsg := tea.KeyMsg{
+		Type: tea.KeyEnter,
+	}
+
+	result, cmd := dialog.HandleKey(enterMsg)
+
+	// Should not create command for invalid branch
+	if cmd != nil {
+		t.Errorf("Expected HandleKey to return nil command for invalid branch")
+	}
+	// Should return DialogResultNone
 	if result != DialogResultNone {
-		t.Errorf("Expected HandleKey to return DialogResultNone")
+		t.Errorf("Expected DialogResultNone for invalid branch")
+	}
+	// Should set error message
+	if !strings.Contains(dialog.errorMsg, "Invalid") {
+		t.Errorf("Expected error message to contain 'Invalid', got %q", dialog.errorMsg)
+	}
+}
+
+// TestLaunchGitCreateBranch tests launchGitCreateBranch returns a command
+func TestLaunchGitCreateBranch(t *testing.T) {
+	dialog := NewBranchCreateDialog("/test/repo", "test-tag")
+	cmd := dialog.launchGitCreateBranch("test-branch")
+
+	// launchGitCreateBranch should return a non-nil tea.Cmd
+	if cmd == nil {
+		t.Errorf("Expected launchGitCreateBranch to return a non-nil tea.Cmd")
+	}
+}
+
+// TestLaunchGitCreateBranchWithoutTag tests launchGitCreateBranch with empty tag
+func TestLaunchGitCreateBranchWithoutTag(t *testing.T) {
+	dialog := NewBranchCreateDialog("/test/repo", "")
+	cmd := dialog.launchGitCreateBranch("feature-branch")
+
+	// Should still return a valid command even without a tag
+	if cmd == nil {
+		t.Errorf("Expected launchGitCreateBranch to return a non-nil tea.Cmd even without tag")
 	}
 }
 
 // BenchmarkIsValidBranchName benchmarks the validation function
 func BenchmarkIsValidBranchName(b *testing.B) {
-	dialog := NewBranchCreateDialog("/test/repo", nil)
+	dialog := NewBranchCreateDialog("/test/repo", "")
 	dialog.input.SetValue("feature-branch-name")
 
 	b.ResetTimer()

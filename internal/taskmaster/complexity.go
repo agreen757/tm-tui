@@ -1,7 +1,11 @@
 package taskmaster
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -161,4 +165,89 @@ func (report *ComplexityReport) FilterByLevel(levels []ComplexityLevel) *Complex
 	}
 
 	return filtered
+}
+
+// BuildAnalyzeComplexityArgs constructs CLI arguments for task-master analyze-complexity command
+func BuildAnalyzeComplexityArgs(scope string, taskID string, tags []string) []string {
+	args := []string{"analyze-complexity"}
+	
+	if scope != "" {
+		args = append(args, "--scope", scope)
+	}
+	
+	// Add task ID if analyzing a selected task
+	if taskID != "" && scope == "selected" {
+		args = append(args, "--task-id", taskID)
+	}
+	
+	// Add tags if analyzing by tag
+	if len(tags) > 0 && scope == "tag" {
+		tagsStr := strings.Join(tags, ",")
+		args = append(args, "--tags", tagsStr)
+	}
+	
+	return args
+}
+
+// ParseComplexityProgress parses a single line of complexity analysis output
+// and extracts progress information
+func ParseComplexityProgress(line string) ComplexityProgressState {
+	state := ComplexityProgressState{}
+	
+	line = strings.TrimSpace(line)
+	
+	// Filter out empty lines and noise
+	if line == "" ||
+		strings.Contains(line, "/.taskmaster/") ||
+		strings.HasPrefix(line, "/Users/") ||
+		strings.HasPrefix(line, "/home/") ||
+		len(line) > 200 {
+		return state
+	}
+	
+	// Parse "Analyzing task X (Y/Z)..." pattern
+	// Example: "Analyzing task 1.2 (5/47)..."
+	re := regexp.MustCompile(`Analyzing task (\S+)\s+\((\d+)/(\d+)\)`)
+	if matches := re.FindStringSubmatch(line); len(matches) > 3 {
+		taskID := matches[1]
+		analyzed, _ := strconv.Atoi(matches[2])
+		total, _ := strconv.Atoi(matches[3])
+		
+		state.CurrentTaskID = taskID
+		state.TasksAnalyzed = analyzed
+		state.TotalTasks = total
+		return state
+	}
+	
+	// Parse "Progress: X/Y" pattern
+	re = regexp.MustCompile(`Progress:\s*(\d+)/(\d+)`)
+	if matches := re.FindStringSubmatch(line); len(matches) > 2 {
+		analyzed, _ := strconv.Atoi(matches[1])
+		total, _ := strconv.Atoi(matches[2])
+		
+		state.TasksAnalyzed = analyzed
+		state.TotalTasks = total
+		return state
+	}
+	
+	return state
+}
+
+// ParseComplexityReportJSON parses JSON output from the CLI into a ComplexityReport
+func ParseComplexityReportJSON(jsonStr string) (*ComplexityReport, error) {
+	var report ComplexityReport
+	
+	// Trim any whitespace and quotes
+	jsonStr = strings.TrimSpace(jsonStr)
+	if strings.HasPrefix(jsonStr, "\"") && strings.HasSuffix(jsonStr, "\"") {
+		jsonStr = strings.Trim(jsonStr, "\"")
+		// Unescape JSON string escapes
+		jsonStr = strings.ReplaceAll(jsonStr, "\\\"", "\"")
+	}
+	
+	if err := json.Unmarshal([]byte(jsonStr), &report); err != nil {
+		return nil, fmt.Errorf("failed to parse complexity report JSON: %w", err)
+	}
+	
+	return &report, nil
 }

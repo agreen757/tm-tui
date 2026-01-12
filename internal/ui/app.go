@@ -138,6 +138,7 @@ type Model struct {
 	showDetailsPanel bool
 	showLogPanel     bool
 	showHelp         bool
+	helpViewport     viewport.Model
 
 	// Command mode state
 	commandMode  bool
@@ -195,6 +196,8 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	taskListVP := viewport.New(0, 0)
 	detailsVP := viewport.New(0, 0)
 	logVP := viewport.New(0, 0)
+	helpVP := viewport.New(0, 0)
+	helpVP.KeyMap = viewport.DefaultKeyMap()
 
 	// Initialize search input
 	searchInput := textinput.New()
@@ -243,6 +246,7 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		taskListViewport:  taskListVP,
 		detailsViewport:   detailsVP,
 		logViewport:       logVP,
+		helpViewport:      helpVP,
 		helpModel:         help.New(),
 		keyMap:            keyMap,
 		appState:          appState,
@@ -435,21 +439,18 @@ func (m *Model) openBranchSwitchDialog() {
 		return
 	}
 
-	onSwitch := func(branch string, output string, err error) {
-		if err != nil {
-			m.addLogLine("Failed to switch branch: " + output)
-			return
-		}
+	m.addLogLine("Starting branch switch operation...")
 
-		// Refresh git status
-		if m.gitRefresher != nil {
-			m.gitRefresher.Refresh()
-		}
-
-		m.addLogLine("Switched to branch: " + branch)
+	// Get tag name for logging
+	tagName := ""
+	if m.activeProject != nil {
+		tagName = m.activeProject.PrimaryTag()
+	}
+	if tagName == "" && m.taskService != nil {
+		tagName = m.taskService.GetActiveTag()
 	}
 
-	switchDialog, err := dialog.NewBranchSwitchDialog(m.gitRepoInfo.RootPath, onSwitch)
+	switchDialog, err := dialog.NewBranchSwitchDialog(m.gitRepoInfo.RootPath, nil, tagName)
 	if err != nil {
 		m.addLogLine("Failed to list branches: " + err.Error())
 		return
@@ -465,21 +466,18 @@ func (m *Model) openBranchCreateDialog() {
 		return
 	}
 
-	onCreate := func(branch string, output string, err error) {
-		if err != nil {
-			m.addLogLine("Failed to create branch: " + output)
-			return
-		}
+	m.addLogLine("Starting branch creation operation...")
 
-		// Refresh git status
-		if m.gitRefresher != nil {
-			m.gitRefresher.Refresh()
-		}
-
-		m.addLogLine("Created and switched to branch: " + branch)
+	// Get tag context for logging
+	tagName := ""
+	if m.activeProject != nil {
+		tagName = m.activeProject.PrimaryTag()
+	}
+	if tagName == "" && m.taskService != nil {
+		tagName = m.taskService.GetActiveTag()
 	}
 
-	createDialog := dialog.NewBranchCreateDialog(m.gitRepoInfo.RootPath, onCreate)
+	createDialog := dialog.NewBranchCreateDialog(m.gitRepoInfo.RootPath, tagName)
 	m.appState.PushDialog(createDialog)
 }
 
@@ -1186,7 +1184,10 @@ func (m *Model) executeCrushAgent(taskID, taskTitle string, task *taskmaster.Tas
 
 	// Ensure task runner modal exists and is visible
 	if m.taskRunner == nil {
-		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
+		// Use reasonable modal dimensions (80% width, 70% height)
+		modalWidth := int(float64(m.width) * 0.8)
+		modalHeight := int(float64(m.height) * 0.7)
+		m.taskRunner = dialog.NewTaskRunnerModal(modalWidth, modalHeight, m.appState.DialogStyle())
 	}
 	m.taskRunnerVisible = true
 
@@ -2583,7 +2584,10 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		// Create task runner modal if it doesn't exist
 		if m.taskRunner == nil {
 			m.addLogLine("Creating new TaskRunnerModal")
-			m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
+			// Use reasonable modal dimensions (80% width, 70% height)
+			modalWidth := int(float64(m.width) * 0.8)
+			modalHeight := int(float64(m.height) * 0.7)
+			m.taskRunner = dialog.NewTaskRunnerModal(modalWidth, modalHeight, m.appState.DialogStyle())
 		}
 		// Update the modal with the new task
 		updatedDialog, cmd := m.taskRunner.Update(msg)
@@ -2667,6 +2671,24 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Special handling for git branch creation completion
+		if msg.TaskID == "git-create-branch" {
+			// Refresh git status after successful branch creation
+			if m.gitRefresher != nil {
+				m.gitRefresher.Refresh()
+			}
+			m.addLogLine("✓ Branch created successfully")
+		}
+
+		// Special handling for git branch switch completion
+		if msg.TaskID == "git-switch-branch" {
+			// Refresh git status after successful branch switch
+			if m.gitRefresher != nil {
+				m.gitRefresher.Refresh()
+			}
+			m.addLogLine("✓ Branch switched successfully")
+		}
+
 		return m, tea.Batch(cmds...)
 
 	case dialog.TaskFailedMsg:
@@ -2693,6 +2715,16 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				m.prdCreationState.InProgress = false
 			}
 			m.showErrorDialog("PRD Generation Failed", fmt.Sprintf("%s\n\nPlease try again.", msg.Message))
+		}
+
+		// Special handling for git branch creation failure
+		if msg.TaskID == "git-create-branch" {
+			m.showErrorDialog("Branch Creation Failed", fmt.Sprintf("Failed to create branch:\n\n%s\n\nPlease try again.", msg.Error))
+		}
+
+		// Special handling for git branch switch failure
+		if msg.TaskID == "git-switch-branch" {
+			m.showErrorDialog("Branch Switch Failed", fmt.Sprintf("Failed to switch branch:\n\n%s\n\nPlease try again.", msg.Error))
 		}
 
 		return m, tea.Batch(cmds...)
@@ -2766,8 +2798,10 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showHelp = false
 				return m, nil
 			default:
-				// Ignore other keys when help is showing
-				return m, nil
+				// Delegate to viewport for scrolling
+				var cmd tea.Cmd
+				m.helpViewport, cmd = m.helpViewport.Update(msg)
+				return m, cmd
 			}
 		}
 
@@ -2877,9 +2911,6 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Check if we have any active dialogs - let dialogue manager handle messages first
 		if m.appState != nil && m.appState.HasActiveDialog() {
-			// Log that dialog is active and blocking shortcuts
-			m.addLogLine("DEBUG: Active dialog is blocking key events")
-
 			// Let dialog manager handle the message
 			cmd := m.appState.HandleDialogMsg(incomingMsg)
 			if cmd != nil {
@@ -3279,11 +3310,22 @@ func (m *Model) View() string {
 		modalHeight := lipgloss.Height(modalContent)
 		modalX := 0
 		modalY := 0
-		if modalWidth > 0 && modalWidth < m.width {
-			modalX = (m.width - modalWidth) / 2
-		}
-		if modalHeight > 0 && modalHeight < m.height {
-			modalY = (m.height - modalHeight) / 2
+		
+		// Position based on minimized state
+		if m.taskRunner.GetMinimized() {
+			// When minimized, place at top right corner
+			if modalWidth > 0 && modalWidth < m.width {
+				modalX = m.width - modalWidth - 2 // 2 spaces from right edge
+			}
+			modalY = 1 // 1 space from top
+		} else {
+			// When maximized, keep centered
+			if modalWidth > 0 && modalWidth < m.width {
+				modalX = (m.width - modalWidth) / 2
+			}
+			if modalHeight > 0 && modalHeight < m.height {
+				modalY = (m.height - modalHeight) / 2
+			}
 		}
 		layers = append(layers, uiLayer{content: modalContent, x: modalX, y: modalY})
 	}
@@ -3387,7 +3429,26 @@ func (m Model) renderLogPanel(layout LayoutDimensions) string {
 }
 
 // renderHelpOverlay renders a help overlay on top of the main content using organized sections
-func (m Model) renderHelpOverlay() string {
+// renderHelpOverlay renders a help overlay on top of the main content using organized sections
+func (m *Model) renderHelpOverlay() string {
+	// Build the full help content (independent of viewport size)
+	helpContent := m.buildHelpContent()
+	
+	// Set viewport content and return rendered view
+	m.helpViewport.SetContent(helpContent)
+	viewportContent := m.helpViewport.View()
+	
+	// Apply border OUTSIDE the viewport to ensure it displays completely
+	overlayStyle := lipgloss.NewStyle().
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color(ColorHighlight)).
+		Padding(1, 2)
+	
+	return overlayStyle.Render(viewportContent)
+}
+
+// buildHelpContent builds the complete help content as a string
+func (m Model) buildHelpContent() string {
 	helpWidth, _, _ := m.helpOverlayLayout()
 	innerWidth := helpWidth
 
@@ -3505,7 +3566,7 @@ func (m Model) renderHelpOverlay() string {
 	title := centerLine.Render(m.styles.Title.Render(" Task Master TUI Help"))
 
 	// Footer
-	footer := centerLine.Render(m.styles.Help.Render("Press '?' or 'Esc' to close help"))
+	footer := centerLine.Render(m.styles.Help.Render("Press '?' or 'Esc' to close help   |  Use arrow keys or Page Up/Down to scroll"))
 
 	// Combine all sections with consistent width
 	contentBox := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(
@@ -3526,13 +3587,8 @@ func (m Model) renderHelpOverlay() string {
 		),
 	)
 
-	// Create overlay style with distinct border
-	overlayStyle := lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(lipgloss.Color(ColorHighlight)).
-		Padding(1, 2)
-
-	return overlayStyle.Render(contentBox)
+	// Return just the content box without border (border applied outside viewport)
+	return contentBox
 }
 
 func (m Model) helpOverlayLayout() (helpWidth, contentWidth, overlayWidth int) {

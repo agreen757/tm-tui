@@ -918,3 +918,179 @@ func TestExecutorDoneMsg_BinaryNotExecutable(t *testing.T) {
 	}
 }
 
+// TestGitBranchCreationSuccess tests successful branch creation via TaskCompletedMsg
+func TestGitBranchCreationSuccess(t *testing.T) {
+	m := createTestModel()
+
+	// Initialize git components
+	m.gitAvailable = true
+	m.gitRepoInfo.IsRepo = true
+	m.gitRefresher = nil // No real git refresher in tests
+
+	// Simulate TaskCompletedMsg for git-create-branch
+	msg := dialog.TaskCompletedMsg{
+		TaskID: "git-create-branch",
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(*Model)
+
+	// Verify the success message was logged
+	logFound := false
+	for _, line := range model.logLines {
+		if line == "✓ Branch created successfully" {
+			logFound = true
+			break
+		}
+	}
+	if !logFound {
+		t.Error("Expected success message in log for git branch creation")
+	}
+}
+
+// TestGitBranchSwitchSuccess tests successful branch switch via TaskCompletedMsg
+func TestGitBranchSwitchSuccess(t *testing.T) {
+	m := createTestModel()
+
+	// Initialize git components
+	m.gitAvailable = true
+	m.gitRepoInfo.IsRepo = true
+	m.gitRefresher = nil
+
+	// Simulate TaskCompletedMsg for git-switch-branch
+	msg := dialog.TaskCompletedMsg{
+		TaskID: "git-switch-branch",
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(*Model)
+
+	// Verify the success message was logged
+	logFound := false
+	for _, line := range model.logLines {
+		if line == "✓ Branch switched successfully" {
+			logFound = true
+			break
+		}
+	}
+	if !logFound {
+		t.Error("Expected success message in log for git branch switch")
+	}
+}
+
+// TestGitBranchCreationFailure tests branch creation failure via TaskFailedMsg
+func TestGitBranchCreationFailure(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Initialize git components
+	m.gitAvailable = true
+	m.gitRepoInfo.IsRepo = true
+
+	// Simulate TaskFailedMsg for git-create-branch
+	msg := dialog.TaskFailedMsg{
+		TaskID: "git-create-branch",
+		Error:  "fatal: branch 'test' already exists",
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(*Model)
+
+	// Verify error was logged
+	errorFound := false
+	for _, line := range model.logLines {
+		if line == "Task git-create-branch failed: fatal: branch 'test' already exists" {
+			errorFound = true
+			break
+		}
+	}
+	if !errorFound {
+		t.Error("Expected error message in log for failed branch creation")
+	}
+}
+
+// TestGitBranchSwitchFailure tests branch switch failure via TaskFailedMsg
+func TestGitBranchSwitchFailure(t *testing.T) {
+	m := createTestModel()
+
+	if m.appState == nil {
+		t.Skip("appState not initialized in test model")
+	}
+
+	// Initialize git components
+	m.gitAvailable = true
+	m.gitRepoInfo.IsRepo = true
+
+	// Simulate TaskFailedMsg for git-switch-branch
+	msg := dialog.TaskFailedMsg{
+		TaskID: "git-switch-branch",
+		Error:  "error: pathspec 'nonexistent' did not match any files",
+	}
+
+	newM, _ := m.Update(msg)
+	model := newM.(*Model)
+
+	// Verify error was logged
+	errorFound := false
+	for _, line := range model.logLines {
+		if line == "Task git-switch-branch failed: error: pathspec 'nonexistent' did not match any files" {
+			errorFound = true
+			break
+		}
+	}
+	if !errorFound {
+		t.Error("Expected error message in log for failed branch switch")
+	}
+}
+
+// TestOpenBranchSwitchDialogLogging tests that openBranchSwitchDialog logs the operation start
+func TestOpenBranchSwitchDialogLogging(t *testing.T) {
+	m := createTestModel()
+
+	// Initialize git components
+	m.gitAvailable = true
+	m.gitRepoInfo.IsRepo = true
+
+	// Call the dialog open function - it should log the start
+	m.openBranchSwitchDialog()
+
+	// Verify logging occurred
+	logFound := false
+	for _, line := range m.logLines {
+		if line == "Starting branch switch operation..." {
+			logFound = true
+			break
+		}
+	}
+	if !logFound {
+		t.Error("Expected start message in log for branch switch operation")
+	}
+}
+
+// TestOpenBranchCreateDialogLogging tests that openBranchCreateDialog logs the operation start
+func TestOpenBranchCreateDialogLogging(t *testing.T) {
+	m := createTestModel()
+
+	// Initialize git components
+	m.gitAvailable = true
+	m.gitRepoInfo.IsRepo = true
+
+	// Call the dialog open function - it should log the start
+	m.openBranchCreateDialog()
+
+	// Verify logging occurred
+	logFound := false
+	for _, line := range m.logLines {
+		if line == "Starting branch creation operation..." {
+			logFound = true
+			break
+		}
+	}
+	if !logFound {
+		t.Error("Expected start message in log for branch creation operation")
+	}
+}
+

@@ -149,8 +149,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("F", "filter by status"),
 		),
 		AnalyzeComplexity: key.NewBinding(
-			key.WithKeys("alt+c"),
-			key.WithHelp("Alt+C", "analyze complexity"),
+			key.WithKeys("ctrl+shift+c"),
+			key.WithHelp("ctrl+shift+c", "analyze complexity"),
 		),
 		
 		GitMenu: key.NewBinding(

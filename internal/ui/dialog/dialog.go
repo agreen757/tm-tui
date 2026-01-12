@@ -571,9 +571,36 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 
 		// Special handling for key messages - check if dialog handles or closes
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			result, cmd := activeDialog.HandleKey(keyMsg)
+			// First call Update() to allow normal text input processing
+			updatedDialog, cmd := activeDialog.Update(msg)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
+			}
+
+			// If dialog returns nil, it wants to close
+			if updatedDialog == nil {
+				popped := m.popEntry()
+				if popped.callback != nil {
+					var value interface{}
+					var err error
+					if provider, ok := popped.dialog.(DialogResultProvider); ok {
+						value, err = provider.DialogResultValue()
+					}
+					cbCmd := popped.callback(value, err)
+					if cbCmd != nil {
+						cmds = append(cmds, cbCmd)
+					}
+				}
+				return tea.Batch(cmds...)
+			}
+
+			// Update the dialog in the stack
+			m.dialogs[m.activeDialog].dialog = updatedDialog
+
+			// Then call HandleKey() on the updated dialog to handle special keys
+			result, specialCmd := updatedDialog.HandleKey(keyMsg)
+			if specialCmd != nil {
+				cmds = append(cmds, specialCmd)
 			}
 
 			// Handle dialog result
@@ -600,6 +627,23 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 			updatedDialog, cmd := activeDialog.Update(msg)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
+			}
+
+			// If dialog returns nil, it wants to close
+			if updatedDialog == nil {
+				popped := m.popEntry()
+				if popped.callback != nil {
+					var value interface{}
+					var err error
+					if provider, ok := popped.dialog.(DialogResultProvider); ok {
+						value, err = provider.DialogResultValue()
+					}
+					cbCmd := popped.callback(value, err)
+					if cbCmd != nil {
+						cmds = append(cmds, cbCmd)
+					}
+				}
+				return tea.Batch(cmds...)
 			}
 
 			// Update the dialog in the stack

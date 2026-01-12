@@ -49,6 +49,12 @@ type Service struct {
 	
 	// mu protects concurrent access to task data
 	mu sync.RWMutex
+	
+	// latestComplexityReport caches the most recent complexity analysis
+	latestComplexityReport *ComplexityReport
+	
+	// complexityReportMu protects concurrent access to complexity report
+	complexityReportMu sync.RWMutex
 }
 
 // ComplexityProgressState captures incremental progress during analysis.
@@ -440,37 +446,163 @@ func (s *Service) AnalyzeComplexity(ctx context.Context, scope string, taskID st
 // AnalyzeComplexityWithProgress performs complexity analysis with progress reporting
 func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope string, taskID string, tags []string, onProgress func(ComplexityProgressState)) (*ComplexityReport, error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	
 	if !s.available {
+		s.mu.RUnlock()
 		return nil, fmt.Errorf("taskmaster not available")
 	}
+	s.mu.RUnlock()
 	
-	tasksToAnalyze := make([]*Task, 0)
-	for i := range s.Tasks {
-		tasksToAnalyze = append(tasksToAnalyze, &s.Tasks[i])
+	// Build CLI command args
+	args := BuildAnalyzeComplexityArgs(scope, taskID, tags)
+	
+	// Execute command with streaming output
+	cmd := exec.CommandContext(ctx, "task-master", args...)
+	cmd.Dir = s.RootDir
+	
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 	
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start command: %w", err)
+	}
+	
+	// Stream output and parse progress
+	progressCh := make(chan ComplexityProgressState, 10)
+	errCh := make(chan error, 1)
+	var jsonOutput strings.Builder
+	
+	// Parse stdout in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			
+			// Check if this line is JSON output (starts with { or [)
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+				// This is the final JSON report
+				jsonOutput.WriteString(line)
+			} else {
+				// Try to parse as progress
+				if state := ParseComplexityProgress(line); state.TotalTasks > 0 {
+					select {
+					case progressCh <- state:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}
+	}()
+	
+	// Capture stderr
+	go func() {
+		errOutput, _ := io.ReadAll(stderr)
+		if len(errOutput) > 0 {
+			select {
+			case errCh <- fmt.Errorf("CLI error: %s", string(errOutput)):
+			default:
+			}
+		}
+	}()
+	
+	// Forward progress updates to callback
+	go func() {
+		for {
+			select {
+			case state := <-progressCh:
+				if onProgress != nil {
+					onProgress(state)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	
+	// Wait for completion
+	cmdErr := cmd.Wait()
+	
+	// Check for errors
+	if cmdErr != nil {
+		if ctx.Err() == context.Canceled {
+			return nil, context.Canceled
+		}
+		select {
+		case err := <-errCh:
+			return nil, fmt.Errorf("command failed: %w: %v", cmdErr, err)
+		default:
+			return nil, fmt.Errorf("command failed: %w", cmdErr)
+		}
+	}
+	
+	// Parse the JSON report from output
+	jsonStr := jsonOutput.String()
+	if jsonStr == "" {
+		return nil, fmt.Errorf("no report output from complexity analysis")
+	}
+	
+	report, err := ParseComplexityReportJSON(jsonStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse complexity report: %w", err)
+	}
+	
+	// Cache the report
+	s.complexityReportMu.Lock()
+	s.latestComplexityReport = report
+	s.complexityReportMu.Unlock()
+	
+	// Send completion update
 	if onProgress != nil {
+		totalTasks := len(report.Tasks)
 		onProgress(ComplexityProgressState{
-			TasksAnalyzed: len(tasksToAnalyze),
-			TotalTasks:    len(tasksToAnalyze),
+			TasksAnalyzed: totalTasks,
+			TotalTasks:    totalTasks,
 		})
 	}
 	
-	complexities := AnalyzeComplexity(tasksToAnalyze)
-	report := NewComplexityReport(complexities, scope, tags)
 	return report, nil
 }
 
 // GetLatestComplexityReport returns the latest cached complexity report
 func (s *Service) GetLatestComplexityReport() *ComplexityReport {
-	return nil
+	s.complexityReportMu.RLock()
+	defer s.complexityReportMu.RUnlock()
+	return s.latestComplexityReport
 }
 
 // ExportComplexityReport exports a complexity report in the specified format
 func (s *Service) ExportComplexityReport(ctx context.Context, format string, outputPath string) (string, error) {
-	return "", fmt.Errorf("not implemented")
+	s.mu.RLock()
+	if !s.available {
+		s.mu.RUnlock()
+		return "", fmt.Errorf("taskmaster not available")
+	}
+	s.mu.RUnlock()
+	
+	// Build CLI command args
+	args := []string{"complexity-report", "--format", format}
+	if outputPath != "" {
+		args = append(args, "--output", outputPath)
+	}
+	
+	// Execute command
+	cmd := exec.CommandContext(ctx, "task-master", args...)
+	cmd.Dir = s.RootDir
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("command failed: %w", err)
+	}
+	
+	return string(output), nil
 }
 
 // ParsePRDWithProgress parses a PRD file and generates tasks with progress reporting

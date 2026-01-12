@@ -2,7 +2,9 @@ package dialog
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -1215,5 +1217,274 @@ func TestOutputIsolation(t *testing.T) {
 				t.Errorf("Tab %s line %d: expected %q, got %q", id, i, expected, output[i])
 			}
 		}
+	}
+}
+
+// TestIsGitTask tests git task recognition
+func TestIsGitTask(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	tests := []struct {
+		taskID   string
+		expected bool
+	}{
+		{"git-create-branch", true},
+		{"git-switch-branch", true},
+		{"git-status", true},
+		{"git-", true},
+		{"git", false},
+		{"create-branch", false},
+		{"regular-task", false},
+		{"my-git-task", false},
+		{"", false},
+	}
+
+	for _, test := range tests {
+		result := modal.isGitTask(test.taskID)
+		if result != test.expected {
+			t.Errorf("isGitTask(%q): expected %v, got %v", test.taskID, test.expected, result)
+		}
+	}
+}
+
+// TestGitTaskAutoCloseOnSuccess tests that successful git operations trigger 2-second auto-close
+func TestGitTaskAutoCloseOnSuccess(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	modal.SetGitAutoCloseDelay(0) // Disable delay for testing
+
+	// Start a git task
+	startMsg := TaskStartedMsg{
+		TaskID:    "git-create-branch",
+		TaskTitle: "Create Branch",
+		Model:     "test",
+	}
+	modal.Update(startMsg)
+
+	// Mark it as completed
+	completeMsg := TaskCompletedMsg{
+		TaskID: "git-create-branch",
+	}
+	modal.Update(completeMsg)
+
+	// Verify the timer was started
+	if timer, exists := modal.gitAutoCloseTimers["git-create-branch"]; !exists || timer == nil {
+		t.Error("Expected git auto-close timer to be set for successful git task")
+	}
+
+	// Verify status is completed
+	status, exists := modal.GetTaskStatus("git-create-branch")
+	if !exists || status != TaskCompleted {
+		t.Errorf("Expected task status to be TaskCompleted, got %v", status)
+	}
+}
+
+// TestGitTaskNoAutoCloseOnFailure tests that failed git operations do NOT trigger auto-close
+func TestGitTaskNoAutoCloseOnFailure(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Start a git task
+	startMsg := TaskStartedMsg{
+		TaskID:    "git-switch-branch",
+		TaskTitle: "Switch Branch",
+		Model:     "test",
+	}
+	modal.Update(startMsg)
+
+	// Mark it as failed
+	failMsg := TaskFailedMsg{
+		TaskID:  "git-switch-branch",
+		Error:   "Branch not found",
+		Message: "Git failed",
+	}
+	modal.Update(failMsg)
+
+	// Verify NO timer was started for failed git task
+	if timer, exists := modal.gitAutoCloseTimers["git-switch-branch"]; exists && timer != nil {
+		t.Error("Expected no git auto-close timer for failed git task")
+	}
+
+	// Verify status is failed
+	status, exists := modal.GetTaskStatus("git-switch-branch")
+	if !exists || status != TaskFailed {
+		t.Errorf("Expected task status to be TaskFailed, got %v", status)
+	}
+}
+
+// TestNonGitTaskUnaffectedByGitAutoClose tests that non-git tasks use normal auto-close
+func TestNonGitTaskUnaffectedByGitAutoClose(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Start a non-git task
+	startMsg := TaskStartedMsg{
+		TaskID:    "regular-task",
+		TaskTitle: "Regular Task",
+		Model:     "test",
+	}
+	modal.Update(startMsg)
+
+	// Mark it as completed
+	completeMsg := TaskCompletedMsg{
+		TaskID: "regular-task",
+	}
+	modal.Update(completeMsg)
+
+	// Verify NO git timer was started
+	if timer, exists := modal.gitAutoCloseTimers["regular-task"]; exists && timer != nil {
+		t.Error("Expected no git auto-close timer for non-git task")
+	}
+
+	// Verify normal close timer was set
+	if modal.closeTimer == nil && modal.autoCloseOnFailure {
+		t.Error("Expected normal auto-close timer to be set for regular task")
+	}
+}
+
+// TestKeyPressCancel sGitAutoClose tests that any key press cancels git auto-close countdown
+func TestKeyPressCancelsGitAutoClose(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Start and complete a git task
+	startMsg := TaskStartedMsg{
+		TaskID:    "git-create-branch",
+		TaskTitle: "Create Branch",
+		Model:     "test",
+	}
+	modal.Update(startMsg)
+
+	completeMsg := TaskCompletedMsg{
+		TaskID: "git-create-branch",
+	}
+	modal.Update(completeMsg)
+
+	// Verify timer was set
+	if len(modal.gitAutoCloseTimers) == 0 {
+		t.Error("Expected git auto-close timer to be set")
+	}
+
+	// Simulate key press
+	keyMsg := tea.KeyMsg{Type: tea.KeyTab}
+	modal.HandleKey(keyMsg)
+
+	// Verify timer was cleared
+	if len(modal.gitAutoCloseTimers) > 0 {
+		t.Error("Expected git auto-close timers to be cleared after key press")
+	}
+}
+
+// TestGitAutoCloseMessageHandling tests handling of TaskRunnerGitAutoCloseMsg
+func TestGitAutoCloseMessageHandling(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Add a completed git task
+	modal.addTab("git-status", "Git Status", "test")
+	modal.tabs[0].SetStatus(TaskCompleted)
+
+	// Set up a git auto-close timer
+	now := fmt.Sprintf("%v", time.Now())
+	t.Logf("Setting git auto-close timer at %s", now)
+
+	// Note: The actual timer expiration is handled by tea.Tick in handleGitTaskCompletion
+	// Here we test the message handler
+	gitAutoCloseMsg := TaskRunnerGitAutoCloseMsg{
+		TaskID: "git-status",
+	}
+
+	// Set up the timer manually for this test
+	expiredTime := time.Now().Add(-1 * time.Second) // Already expired
+	modal.gitAutoCloseTimers["git-status"] = &expiredTime
+
+	// Process the message
+	result, _ := modal.Update(gitAutoCloseMsg)
+
+	// Should close the modal since no tasks are running
+	if result != nil {
+		t.Error("Expected modal to be closed (nil returned)")
+	}
+}
+
+// TestGetGitAutoCloseInfo tests retrieving git auto-close information
+func TestGetGitAutoCloseInfo(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Initially no git auto-close timers
+	active, remaining := modal.getGitAutoCloseInfo()
+	if active {
+		t.Error("Expected no active git auto-close timers initially")
+	}
+
+	// Set up a future timer
+	futureTime := time.Now().Add(3 * time.Second)
+	modal.gitAutoCloseTimers["git-task"] = &futureTime
+
+	// Check info
+	active, remaining = modal.getGitAutoCloseInfo()
+	if !active {
+		t.Error("Expected git auto-close to be active")
+	}
+	if remaining <= 0 || remaining > 3*time.Second {
+		t.Errorf("Expected remaining time around 3 seconds, got %v", remaining)
+	}
+
+	// Set up an expired timer
+	expiredTime := time.Now().Add(-1 * time.Second)
+	modal.gitAutoCloseTimers["git-expired"] = &expiredTime
+
+	// Should not find the expired timer
+	active, _ = modal.getGitAutoCloseInfo()
+	// Note: May or may not be active depending on if futureTime still exists
+}
+
+// TestRenderGitAutoCloseCountdown tests countdown rendering
+func TestRenderGitAutoCloseCountdown(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Test countdown at 3 seconds
+	countdown := modal.renderGitAutoCloseCountdown(3 * time.Second)
+	if !strings.Contains(countdown, "3 seconds") {
+		t.Errorf("Expected '3 seconds' in countdown, got: %s", countdown)
+	}
+
+	// Test countdown at 1 second (singular)
+	countdown = modal.renderGitAutoCloseCountdown(1 * time.Second)
+	if !strings.Contains(countdown, "1 second") {
+		t.Errorf("Expected '1 second' (singular) in countdown, got: %s", countdown)
+	}
+
+	// Test countdown at 0 seconds
+	countdown = modal.renderGitAutoCloseCountdown(0 * time.Second)
+	if !strings.Contains(countdown, "0 seconds") {
+		t.Errorf("Expected '0 seconds' in countdown, got: %s", countdown)
+	}
+
+	// All countdowns should contain instruction text
+	for i := 0; i <= 3; i++ {
+		countdown = modal.renderGitAutoCloseCountdown(time.Duration(i) * time.Second)
+		if !strings.Contains(countdown, "Press any key to stay open") {
+			t.Errorf("Expected instruction text in countdown: %s", countdown)
+		}
+	}
+}
+
+// TestModalClosesOnGitAutoCloseExpiry tests that modal closes when git auto-close expires
+func TestModalClosesOnGitAutoCloseExpiry(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Add a git task and complete it
+	modal.addTab("git-finish", "Finish Operation", "test")
+	modal.tabs[0].SetStatus(TaskCompleted)
+
+	// Set an expired timer
+	expiredTime := time.Now().Add(-100 * time.Millisecond)
+	modal.gitAutoCloseTimers["git-finish"] = &expiredTime
+
+	// Process the auto-close message
+	gitAutoCloseMsg := TaskRunnerGitAutoCloseMsg{
+		TaskID: "git-finish",
+	}
+	result, _ := modal.Update(gitAutoCloseMsg)
+
+	// Modal should close (return nil)
+	if result != nil {
+		t.Error("Expected modal to close on git auto-close expiry")
 	}
 }

@@ -43,7 +43,7 @@ func defaultCommandSpecs() []CommandSpec {
 	return []CommandSpec{
 		{ID: CommandParsePRD, Label: "Parse PRD", Description: "Parse a PRD file and generate tasks", Shortcut: "Alt+P"},
 		{ID: CommandCreatePRD, Label: "Create PRD", Description: "Create a new PRD document with AI assistance", Shortcut: "Alt+Shift+P"},
-		{ID: CommandAnalyzeComplexity, Label: "Analyze Complexity", Description: "Run complexity analysis via Task Master", Shortcut: "Alt+C"},
+		{ID: CommandAnalyzeComplexity, Label: "Analyze Complexity", Description: "Run complexity analysis via Task Master", Shortcut: "Ctrl+Shift+C"},
 		{ID: CommandExpandTask, Label: "Expand Task", Description: "Break down the selected task with AI", Shortcut: "Alt+E"},
 		{ID: CommandDeleteTask, Label: "Delete Task", Description: "Open the safe delete workflow for selected tasks", Shortcut: "Alt+D"},
 		{ID: CommandRunTask, Label: "Run Task with Crush", Description: "Execute the selected task via Crush AI agent", Shortcut: "Alt+R / Ctrl+R"},

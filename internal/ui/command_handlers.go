@@ -921,7 +921,10 @@ func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult)
 	
 	// Create or show the task runner modal if not already present
 	if m.taskRunner == nil {
-		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-2, dialog.CreateDialogStyleFromAppStyles(
+		// Use reasonable modal dimensions (80% width, 70% height)
+		modalWidth := int(float64(m.width) * 0.8)
+		modalHeight := int(float64(m.height) * 0.7)
+		m.taskRunner = dialog.NewTaskRunnerModal(modalWidth, modalHeight, dialog.CreateDialogStyleFromAppStyles(
 			ColorBorder,    // border
 			ColorHighlight, // focused border
 			ColorText,      // title
@@ -1026,8 +1029,11 @@ func truncatePrompt(prompt string, maxLen int) string {
 // Creates a new modal if one doesn't exist, and sets the visible flag
 func (m *Model) ensureTaskRunnerModal() {
 	if m.taskRunner == nil {
-		// Create new TaskRunnerModal with current dimensions
-		m.taskRunner = dialog.NewTaskRunnerModal(m.width, m.height-4, m.appState.DialogStyle())
+		// Create new TaskRunnerModal with reasonable modal dimensions (80% width, 70% height)
+		modalWidth := int(float64(m.width) * 0.8)
+		modalHeight := int(float64(m.height) * 0.7)
+		m.taskRunner = dialog.NewTaskRunnerModal(modalWidth, modalHeight, m.appState.DialogStyle())
+		m.dialogManager().PushDialog(m.taskRunner)
 	}
 	m.taskRunnerVisible = true
 }

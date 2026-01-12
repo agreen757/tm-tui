@@ -402,6 +402,15 @@ func (m *Model) updateViewportSizes() {
 		}
 	}
 
+	// Update help viewport
+	_, _, overlayWidth := m.helpOverlayLayout()
+	maxHeight := m.height - 4 // Leave some border space
+	m.helpViewport.Width = overlayWidth
+	m.helpViewport.Height = maxHeight
+	if m.helpViewport.Height < 10 {
+		m.helpViewport.Height = 10
+	}
+
 	// Update task runner modal dimensions
 	if m.taskRunner != nil {
 		// Modal should take up most of the screen but leave some border

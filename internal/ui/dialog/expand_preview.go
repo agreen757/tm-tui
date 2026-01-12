@@ -70,75 +70,15 @@ func (d *ExpandTaskPreviewDialog) Init() tea.Cmd {
 
 // Update implements Dialog interface
 func (d *ExpandTaskPreviewDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
-	if !d.focused {
-		return d, nil
-	}
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		return d.handleKeyMsg(msg)
-	}
-
-	return d, nil
-}
-
-func (d *ExpandTaskPreviewDialog) handleKeyMsg(msg tea.KeyMsg) (Dialog, tea.Cmd) {
-	switch msg.String() {
-	case "up":
-		if d.selectedIndex > 0 {
-			d.selectedIndex--
-			d.ensureVisible()
-		}
-		return d, nil
-
-	case "down":
-		if d.selectedIndex < len(d.flattened)-1 {
-			d.selectedIndex++
-			d.ensureVisible()
-		}
-		return d, nil
-
-	case "enter":
-		if d.continueCallback != nil {
-			d.continueCallback()
-		}
-		return d, nil
-
-	case "esc", "ctrl+c":
-		if d.cancelCallback != nil {
-			d.cancelCallback()
-		}
-		return d, nil
-
-	case "home":
-		d.selectedIndex = 0
-		d.scrollOffset = 0
-		return d, nil
-
-	case "end":
-		d.selectedIndex = len(d.flattened) - 1
-		d.ensureVisible()
-		return d, nil
-
-	case "pgup":
-		d.selectedIndex -= d.maxHeight / 2
-		if d.selectedIndex < 0 {
-			d.selectedIndex = 0
-		}
-		d.ensureVisible()
-		return d, nil
-
-	case "pgdn":
-		d.selectedIndex += d.maxHeight / 2
-		if d.selectedIndex >= len(d.flattened) {
-			d.selectedIndex = len(d.flattened) - 1
-		}
-		d.ensureVisible()
+	switch msg.(type) {
+	case tea.WindowSizeMsg:
+		// Handle window resize if needed
 		return d, nil
 	}
 
 	return d, nil
 }
+
 
 func (d *ExpandTaskPreviewDialog) ensureVisible() {
 	if d.selectedIndex < d.scrollOffset {
@@ -311,8 +251,61 @@ func (d *ExpandTaskPreviewDialog) GetSelectedDrafts() []taskmaster.SubtaskDraft 
 
 // HandleKey implements Dialog interface
 func (d *ExpandTaskPreviewDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
-	_, cmd := d.handleKeyMsg(msg)
-	return DialogResultNone, cmd
+	switch msg.String() {
+	case "up":
+		if d.selectedIndex > 0 {
+			d.selectedIndex--
+			d.ensureVisible()
+		}
+		return DialogResultNone, nil
+
+	case "down":
+		if d.selectedIndex < len(d.flattened)-1 {
+			d.selectedIndex++
+			d.ensureVisible()
+		}
+		return DialogResultNone, nil
+
+	case "enter":
+		if d.continueCallback != nil {
+			d.continueCallback()
+		}
+		return DialogResultClose, nil
+
+	case "esc", "ctrl+c":
+		if d.cancelCallback != nil {
+			d.cancelCallback()
+		}
+		return DialogResultCancel, nil
+
+	case "home":
+		d.selectedIndex = 0
+		d.scrollOffset = 0
+		return DialogResultNone, nil
+
+	case "end":
+		d.selectedIndex = len(d.flattened) - 1
+		d.ensureVisible()
+		return DialogResultNone, nil
+
+	case "pgup":
+		d.selectedIndex -= d.maxHeight / 2
+		if d.selectedIndex < 0 {
+			d.selectedIndex = 0
+		}
+		d.ensureVisible()
+		return DialogResultNone, nil
+
+	case "pgdn":
+		d.selectedIndex += d.maxHeight / 2
+		if d.selectedIndex >= len(d.flattened) {
+			d.selectedIndex = len(d.flattened) - 1
+		}
+		d.ensureVisible()
+		return DialogResultNone, nil
+	}
+
+	return DialogResultNone, nil
 }
 
 // SetRect implements Dialog interface

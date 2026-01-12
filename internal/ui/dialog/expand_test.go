@@ -48,12 +48,18 @@ func TestExpandTaskPreviewDialogNavigation(t *testing.T) {
 		t.Errorf("Expected initial index 0, got %d", dialog.selectedIndex)
 	}
 
-	// Simulate key press: down
-	d, _ := dialog.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if preview, ok := d.(*ExpandTaskPreviewDialog); ok {
-		if preview.selectedIndex != 1 {
-			t.Errorf("Expected index 1 after down key, got %d", preview.selectedIndex)
-		}
+	// Simulate key press: down via HandleKey
+	keyMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := dialog.HandleKey(keyMsg)
+	
+	// HandleKey should process the key and update dialog state
+	if dialog.selectedIndex != 1 {
+		t.Errorf("Expected index 1 after down key, got %d", dialog.selectedIndex)
+	}
+	
+	// Result should be DialogResultNone for navigation
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone for navigation key, got %d", result)
 	}
 }
 
