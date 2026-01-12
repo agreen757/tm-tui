@@ -28,7 +28,53 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 
 **Note:** The Gemini integration approach implemented in v0.1.17 has been replaced with a new model selection strategy. The current branch (`gemini-integration`) contains the deprecated approach. Active development continues on the `crush-model-selection` branch, which implements a more flexible AI model selection system directly integrated with Crush's native model management.
 
-## Recent Improvements (v0.1.18)
+## Recent Improvements (v0.1.19)
+
+### Git Operations Integration & Dialog Enhancements
+
+**Comprehensive Git Management** - Full Git operations integration directly within the Task Master TUI with real-time streaming output and robust error handling.
+
+**What Was Added:**
+- **Git Menu** (`g` key): Access complete git operations without leaving the TUI
+  - View repository status (staged/unstaged changes, untracked files)
+  - Switch between branches with visual indicators
+  - Create new branches with validation
+  - View commit history with author and date information
+- **Real-time Output Streaming**: Live streaming of git command output to Task Runner modal
+- **Comprehensive Error Handling**: User-friendly error messages with helpful remediation suggestions
+- **Log Rotation**: Automatic log file rotation with configurable retention policies
+- **Dialog Improvements**: Enhanced confirmation dialog handling with comprehensive test coverage
+
+**Key Changes:**
+- **internal/git/operations.go** (338 lines): Git command execution and management
+- **internal/ui/dialog/git_runner.go** (419 lines): Git operation execution in Task Runner
+- **internal/ui/dialog/git_errors.go** (667 lines): Error handling and user-friendly messages
+- **internal/ui/dialog/git_log_viewer.go** (387 lines): Commit history viewer with scrolling
+- **internal/ui/dialog/log_rotator.go** (264 lines): Log file rotation and archiving
+- **internal/ui/dialog/startup_error_logger.go** (58 lines): Startup error capture and logging
+- **internal/ui/dialog/confirm_test.go** (246 lines): Confirmation dialog tests
+
+**Documentation Added:**
+- **docs/DEVELOPER_GIT_GUIDE.md**: Complete developer guide for git operations
+- **docs/GIT_OPERATIONS_USER_GUIDE.md**: End-user documentation for git management
+- **docs/GIT_RUNNER_API.md**: Technical API reference for git execution
+- **internal/git/GIT_OPERATIONS.md**: Git operations module documentation
+- **internal/ui/dialog/COMPREHENSIVE_IMPLEMENTATION_GUIDE.md**: Dialog implementation patterns and best practices
+
+**User Experience:**
+- Git operations execute immediately when selected
+- Real-time progress feedback in Task Runner modal
+- Clear status indicators (✓ for success, ✗ for errors)
+- Helpful error messages guide users to solutions
+- All operations logged automatically for audit trails
+
+**Testing:**
+- ✅ 1500+ new tests covering git operations, error handling, and dialogs
+- ✅ All existing tests pass
+- ✅ Build successful
+- ✅ Manual testing confirms robust git integration
+
+## Previous Improvements (v0.1.18)
 
 ### Enhanced UI Header & Layout Improvements
 
