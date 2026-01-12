@@ -413,6 +413,11 @@ func (m *TaskRunnerModal) cancelActiveTask() {
 		return
 	}
 
+	// If a cancellation confirmation dialog is already open, don't show another one
+	if m.cancellationConfirmDialog != nil {
+		return
+	}
+
 	tab := m.tabs[m.activeTab]
 
 	// Only allow cancellation of running tasks
@@ -452,6 +457,9 @@ func (m *TaskRunnerModal) performCancellation(tabIndex int) {
 	}
 
 	tab := m.tabs[tabIndex]
+	
+	// Only cancel if task is currently running
+	// This prevents double-cancellation if called multiple times
 	if tab.GetStatus() != TaskRunning {
 		return
 	}

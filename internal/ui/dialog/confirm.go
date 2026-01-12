@@ -48,7 +48,7 @@ func NewConfirmationDialog(title string, message string, width, height int) *Con
 	dialog.SetFooterHints(
 		ShortcutHint{Key: "←/→", Label: "Change Selection"},
 		ShortcutHint{Key: "Enter", Label: "Confirm"},
-		ShortcutHint{Key: "Esc", Label: "Cancel"},
+		ShortcutHint{Key: "Esc/Ctrl+C", Label: "Cancel"},
 	)
 	return dialog
 }
@@ -112,6 +112,18 @@ func (d *ConfirmationDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		d.Center(msg.Width, msg.Height)
+		return d, nil
+
+	case tea.KeyMsg:
+		result, cmd := d.HandleKey(msg)
+		switch result {
+		case DialogResultConfirm, DialogResultCancel:
+			// Dialog is being closed by user action
+			return nil, cmd
+		default:
+			// Dialog remains open
+			return d, cmd
+		}
 	}
 
 	return d, nil
@@ -193,7 +205,7 @@ func (d *ConfirmationDialog) renderButtons() string {
 
 // HandleKey processes a key event
 func (d *ConfirmationDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
-	// First check base focusable dialog keys (like Tab/Shift+Tab)
+	// First check base focusable dialog keys (like Tab/Shift+Tab, Esc)
 	result, cmd := d.HandleBaseFocusableKey(msg)
 	if result != DialogResultNone {
 		return result, cmd
@@ -201,6 +213,13 @@ func (d *ConfirmationDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 
 	// Handle confirmation-specific keys
 	switch {
+	case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+c"))):
+		// Treat Ctrl+C as cancellation (select "No" option)
+		d.result = ConfirmationResultNo
+		return DialogResultCancel, func() tea.Msg {
+			return ConfirmationMsg{Result: ConfirmationResultNo}
+		}
+
 	case key.Matches(msg, key.NewBinding(key.WithKeys("left", "h"))):
 		if d.FocusedIndex() == 1 {
 			return DialogResultNone, d.SetFocusedIndex(0)

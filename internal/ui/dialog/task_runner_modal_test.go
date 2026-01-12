@@ -1488,3 +1488,135 @@ func TestModalClosesOnGitAutoCloseExpiry(t *testing.T) {
 		t.Error("Expected modal to close on git auto-close expiry")
 	}
 }
+
+// TestCancellationDialogKeyHandling tests that the cancellation dialog properly handles keyboard input
+func TestCancellationDialogKeyHandling(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Add a running task
+	modal.addTab("task-1", "Long Running Task", "model")
+	tab := modal.tabs[0]
+	tab.SetStatus(TaskRunning)
+
+	// Set a very low threshold so even a newly created task is considered "long-running"
+	modal.longRunningThreshold = 0
+
+	// Press Ctrl+C to show confirmation dialog
+	ctrlCKey := tea.KeyMsg{Type: tea.KeyCtrlC}
+	modal.HandleKey(ctrlCKey)
+
+	// Confirmation dialog should be shown
+	if modal.cancellationConfirmDialog == nil {
+		t.Fatal("Expected cancellation confirmation dialog to be shown")
+	}
+
+	// Test pressing Ctrl+C on the confirmation dialog (should cancel without crashing)
+	updatedDialog, cmd := modal.cancellationConfirmDialog.Update(ctrlCKey)
+	if updatedDialog != nil {
+		t.Error("Expected confirmation dialog to close on Ctrl+C, but it remained open")
+	}
+	if cmd == nil {
+		t.Error("Expected Cmd to be returned when dialog closes")
+	}
+}
+
+// TestCancellationDialogEscKey tests that Esc key also closes the confirmation dialog
+func TestCancellationDialogEscKey(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Add a running task
+	modal.addTab("task-1", "Task", "model")
+	tab := modal.tabs[0]
+	tab.SetStatus(TaskRunning)
+	modal.longRunningThreshold = 0
+
+	// Show confirmation dialog
+	modal.HandleKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if modal.cancellationConfirmDialog == nil {
+		t.Fatal("Expected confirmation dialog")
+	}
+
+	// Press Esc on the dialog
+	escKey := tea.KeyMsg{Type: tea.KeyEsc}
+	updatedDialog, _ := modal.cancellationConfirmDialog.Update(escKey)
+
+	// Dialog should close
+	if updatedDialog != nil {
+		t.Error("Expected Esc to close the confirmation dialog")
+	}
+}
+
+// TestMultipleCancellationAttemptsAreSafe tests that repeated Ctrl+C presses don't crash
+func TestMultipleCancellationAttemptsAreSafe(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+
+	// Add a running task
+	modal.addTab("task-1", "Task", "model")
+	tab := modal.tabs[0]
+	tab.SetStatus(TaskRunning)
+	modal.longRunningThreshold = 0
+
+	// First Ctrl+C shows confirmation
+	ctrlCKey := tea.KeyMsg{Type: tea.KeyCtrlC}
+	modal.HandleKey(ctrlCKey)
+	if modal.cancellationConfirmDialog == nil {
+		t.Fatal("Expected confirmation dialog on first Ctrl+C")
+	}
+
+	firstDialog := modal.cancellationConfirmDialog
+
+	// Second Ctrl+C should be ignored (guard prevents creating another dialog)
+	modal.HandleKey(ctrlCKey)
+
+	// Dialog should be the same (not duplicated)
+	if modal.cancellationConfirmDialog != firstDialog {
+		t.Error("Expected guard to prevent creating another dialog on repeated Ctrl+C")
+	}
+
+	// Simulate the user pressing Ctrl+C on the dialog
+	// This happens through the modal's Update method, not the dialog directly
+	if modal.cancellationConfirmDialog != nil {
+		// The dialog.Update returns nil when it closes
+		updatedDialog, _ := modal.cancellationConfirmDialog.Update(ctrlCKey)
+		if updatedDialog == nil {
+			// Dialog closed, now modal needs to clear its reference
+			// This would happen in a real scenario through modal.Update()
+			modal.cancellationConfirmDialog = nil
+		}
+	}
+
+	// Modal state should be consistent
+	if modal.cancellationConfirmDialog != nil {
+		t.Error("Expected cancellation dialog to be cleared after closing")
+	}
+}
+
+// TestConfirmationDialogYesNoNavigation tests dialog button navigation
+func TestConfirmationDialogYesNoNavigation(t *testing.T) {
+	dialog := YesNo("Test", "Are you sure?", true)
+
+	// Initial focus should be on "Yes"
+	if dialog.FocusedIndex() != 0 {
+		t.Errorf("Expected initial focus on Yes button (0), got %d", dialog.FocusedIndex())
+	}
+
+	// Navigate to "No"
+	rightKey := tea.KeyMsg{Type: tea.KeyRight}
+	result, _ := dialog.HandleKey(rightKey)
+	if result != DialogResultNone {
+		t.Error("Expected navigation to not return a result")
+	}
+	if dialog.FocusedIndex() != 1 {
+		t.Errorf("Expected focus on No button (1), got %d", dialog.FocusedIndex())
+	}
+
+	// Navigate back to "Yes"
+	leftKey := tea.KeyMsg{Type: tea.KeyLeft}
+	result, _ = dialog.HandleKey(leftKey)
+	if result != DialogResultNone {
+		t.Error("Expected navigation to not return a result")
+	}
+	if dialog.FocusedIndex() != 0 {
+		t.Errorf("Expected focus back on Yes button (0), got %d", dialog.FocusedIndex())
+	}
+}
