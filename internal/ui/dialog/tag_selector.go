@@ -121,13 +121,15 @@ func NewTagSelector(cfg TagSelectorConfig) *TagSelector {
 	})
 
 	// Calculate visible items based on height
-	availHeight := 15 - 6 // Default to height 15, account for borders, title, etc.
+	// Use a larger height (30) to accommodate more tags
+	dialogHeight := 30
+	availHeight := dialogHeight - 6 // Account for borders, title, footer, etc.
 	if availHeight < 1 {
 		availHeight = 1
 	}
 	visibleItems := availHeight
 
-	bfd := NewBaseFocusableDialog(cfg.Title, 60, 15, DialogKindList, len(items))
+	bfd := NewBaseFocusableDialog(cfg.Title, 60, dialogHeight, DialogKindList, len(items))
 
 	selector := &TagSelector{
 		BaseFocusableDialog: &bfd,
@@ -141,17 +143,19 @@ func NewTagSelector(cfg TagSelectorConfig) *TagSelector {
 	}
 
 	// Set footer hints
-	selector.SetFooterHints(
-		ShortcutHint{Key: "↑/↓", Label: "Navigate"},
-		ShortcutHint{Key: "Enter", Label: "Select"},
-		ShortcutHint{Key: "Esc", Label: "Cancel"},
-	)
-
 	if cfg.MultiSelect {
 		selector.SetFooterHints(
 			ShortcutHint{Key: "↑/↓", Label: "Navigate"},
+			ShortcutHint{Key: "PgUp/PgDn", Label: "Page"},
 			ShortcutHint{Key: "Space", Label: "Toggle"},
 			ShortcutHint{Key: "Enter", Label: "Confirm"},
+			ShortcutHint{Key: "Esc", Label: "Cancel"},
+		)
+	} else {
+		selector.SetFooterHints(
+			ShortcutHint{Key: "↑/↓", Label: "Navigate"},
+			ShortcutHint{Key: "PgUp/PgDn", Label: "Page"},
+			ShortcutHint{Key: "Enter", Label: "Select"},
 			ShortcutHint{Key: "Esc", Label: "Cancel"},
 		)
 	}
@@ -255,6 +259,26 @@ func (t *TagSelector) renderItems(width int) string {
 		lines = append(lines, line)
 	}
 
+	// Add scroll indicators when there are more items above or below
+	if t.offset > 0 || endIdx < len(t.viewItems) {
+		scrollInfo := ""
+		if t.offset > 0 {
+			scrollInfo += "↑ "
+		}
+		scrollInfo += fmt.Sprintf("Showing %d-%d of %d", t.offset+1, endIdx, len(t.viewItems))
+		if endIdx < len(t.viewItems) {
+			scrollInfo += " ↓"
+		}
+		
+		scrollStyle := lipgloss.NewStyle().
+			Width(width).
+			Align(lipgloss.Center).
+			Foreground(lipgloss.Color("241")). // Dim gray
+			Italic(true)
+		
+		lines = append(lines, "", scrollStyle.Render(scrollInfo))
+	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -335,6 +359,26 @@ func (t *TagSelector) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 			t.selectedIndex++
 		}
 		log.Printf("[TagSelector.HandleKey] DOWN: index changed from %d to %d", oldIndex, t.selectedIndex)
+		return DialogResultNone, nil
+
+	case "pgup":
+		// Page up - move up by visibleItems
+		oldIndex := t.selectedIndex
+		t.selectedIndex -= t.visibleItems
+		if t.selectedIndex < 0 {
+			t.selectedIndex = 0
+		}
+		log.Printf("[TagSelector.HandleKey] PGUP: index changed from %d to %d", oldIndex, t.selectedIndex)
+		return DialogResultNone, nil
+
+	case "pgdown":
+		// Page down - move down by visibleItems
+		oldIndex := t.selectedIndex
+		t.selectedIndex += t.visibleItems
+		if t.selectedIndex >= len(t.viewItems) {
+			t.selectedIndex = len(t.viewItems) - 1
+		}
+		log.Printf("[TagSelector.HandleKey] PGDOWN: index changed from %d to %d", oldIndex, t.selectedIndex)
 		return DialogResultNone, nil
 
 	case "enter":
