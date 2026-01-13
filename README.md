@@ -24,11 +24,61 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## ⚠️ Development Status
+## Recent Improvements (v0.1.20)
 
-**Note:** The Gemini integration approach implemented in v0.1.17 has been replaced with a new model selection strategy. The current branch (`gemini-integration`) contains the deprecated approach. Active development continues on the `crush-model-selection` branch, which implements a more flexible AI model selection system directly integrated with Crush's native model management.
+### Tag Management Enhancement & Keybinding Fixes
 
-## Recent Improvements (v0.1.19)
+**Comprehensive Tag Management System** - Complete overhaul of tag management with new dialogs, improved workflows, and extensive test coverage.
+
+**What Was Added:**
+- **Tag Selector Dialog**: New multi-select and single-select tag picker with search and filtering
+  - Clean, intuitive interface for browsing and selecting tags
+  - Support for creating new tags directly from the selector
+  - Real-time filtering and keyboard navigation
+- **Tag Editor Flow**: State machine-based workflow for managing tag creation and selection
+  - Handles complex multi-step tag operations
+  - Proper state transitions between selection and creation
+  - Integrated refresh after tag creation
+- **Enhanced Tag Commands**: Improved command routing and dialog integration
+  - `Ctrl+T`: Opens tag context manager (fixed routing issue)
+  - `Ctrl+Shift+A`: Add or manage tags (quick access)
+  - `Ctrl+Shift+M`: Manage tag contexts (backward compatibility)
+- **Comprehensive Test Coverage**: 2,800+ new test lines across tag management components
+  - Tag selector tests with edge cases and error handling
+  - Tag editor flow tests for state transitions
+  - Form button interaction tests
+  - Expansion scope dialog tests
+
+**Key Changes:**
+- **internal/ui/dialog/tag_selector.go** (420 lines): New tag selection dialog with multi-select support
+- **internal/ui/dialog/tag_selector_test.go** (1,401 lines): Comprehensive test suite for tag selector
+- **internal/ui/dialog/tag_editor_flow.go** (262 lines): State machine for tag management workflows
+- **internal/ui/dialog/tag_editor_flow_test.go** (1,463 lines): Complete flow testing with mock services
+- **internal/ui/dialog/form_button_test.go** (304 lines): Button interaction and keyboard tests
+- **internal/ui/dialog/expansion_scope_test.go** (148 lines): Expansion dialog tests
+- **internal/ui/command_handlers.go**: Fixed Ctrl+T routing to tag management dialog
+- **internal/ui/keymap.go**: Updated key bindings for tag management consistency
+- **internal/ui/tag_helpers.go**: Enhanced helper functions for tag operations
+
+**Bug Fixes:**
+- Fixed Ctrl+T keybinding routing to open tag management dialog instead of tag switcher
+- Improved tag context retrieval for complexity analysis
+- Enhanced error handling in tag operations
+
+**User Experience:**
+- Intuitive tag selection with visual feedback
+- Seamless tag creation workflow without leaving the dialog
+- Consistent keyboard shortcuts across tag operations
+- Better error messages and recovery hints
+- Real-time tag list updates after creation
+
+**Testing:**
+- ✅ 2,800+ new test lines added
+- ✅ All existing tests pass
+- ✅ Build successful
+- ✅ Manual testing confirms improved tag management
+
+## Previous Improvements (v0.1.19)
 
 ### Git Operations Integration & Dialog Enhancements
 
