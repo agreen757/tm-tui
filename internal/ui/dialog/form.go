@@ -19,6 +19,7 @@ const (
 	FormFieldTypeTextArea
 	FormFieldTypeCheckbox
 	FormFieldTypeRadio
+	FormFieldTypeButton
 )
 
 // Backwards-compatible aliases for legacy demo/tests.
@@ -71,8 +72,9 @@ type FormField struct {
 
 	ValidationError string
 
-	input    textinput.Model
-	textarea textarea.Model
+	input          textinput.Model
+	textarea       textarea.Model
+	ButtonCallback func() tea.Cmd // Callback when button is clicked
 }
 
 // Helper constructors retained for backwards compatibility.
@@ -146,6 +148,11 @@ func (e ErrorFormValidation) Error() string {
 type FormValueChangedMsg struct {
 	FieldID  string
 	NewValue interface{}
+}
+
+// FormButtonClickedMsg is emitted when a button field is activated.
+type FormButtonClickedMsg struct {
+	FieldID string
 }
 
 // FormDialog is an interactive dialog with labeled inputs and buttons.
@@ -437,6 +444,12 @@ func (d *FormDialog) handleFieldKey(index int, msg tea.KeyMsg) (DialogResult, te
 		field.Value = field.Options[current].Value
 		field.SelectedOption = current
 		d.emitValueChanged(field.ID, field.Value)
+	case FormFieldTypeButton:
+		if key.Matches(msg, key.NewBinding(key.WithKeys(" ", "space", "enter"))) {
+			if field.ButtonCallback != nil {
+				return DialogResultNone, field.ButtonCallback()
+			}
+		}
 	}
 
 	return DialogResultNone, nil
@@ -646,6 +659,30 @@ func (d *FormDialog) renderField(index int) string {
 			rendered = append(rendered, fmt.Sprintf("%s %s", prefix, option.Label))
 		}
 		value = strings.Join(rendered, "  ")
+	case FormFieldTypeButton:
+		// Render button as a styled clickable element
+		buttonText := field.Placeholder
+		if buttonText == "" {
+			buttonText = "[Click to Select]"
+		}
+		
+		// Show selected items if any
+		if selectedTags, ok := field.Value.([]string); ok && len(selectedTags) > 0 {
+			buttonText = fmt.Sprintf("[%s]", strings.Join(selectedTags, ", "))
+		}
+		
+		buttonStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			Padding(0, 2).
+			BorderForeground(lipgloss.Color("#7d7d7d"))
+		
+		if isFocused {
+			buttonStyle = buttonStyle.
+				BorderForeground(lipgloss.Color("#00BFFF")).
+				Background(lipgloss.Color("#1a1a2e"))
+		}
+		
+		value = buttonStyle.Render(buttonText)
 	}
 
 	// For textarea, render label above the field

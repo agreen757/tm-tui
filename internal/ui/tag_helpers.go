@@ -113,16 +113,17 @@ func (m *Model) showTagListDialog(list *taskmaster.TagList) {
 		return
 	}
 
-	if len(list.Tags) == 0 {
-		m.showErrorDialog("Tag Contexts", "No tag contexts available. Use Add Tag to create one.")
-		return
+	// Use tag selector for tag list display with creation capability
+	cfg := dialog.TagSelectorConfig{
+		Title:       "Tag Contexts",
+		MultiSelect: false,
+		TagList:     list,
 	}
 
-	items := make([]dialog.ListItem, 0, len(list.Tags))
-	for _, ctx := range list.Tags {
-		items = append(items, newTagListItem(ctx))
-	}
-
+	selector := dialog.NewTagSelector(cfg)
+	selector.BaseFocusableDialog.BaseDialog.ID = tagListDialogID
+	
+	// Calculate dimensions based on app size
 	width := 72
 	height := 22
 	if m.width > 0 {
@@ -137,13 +138,40 @@ func (m *Model) showTagListDialog(list *taskmaster.TagList) {
 			height = 16
 		}
 	}
-
-	dialogList := dialog.NewListDialog("Tag Contexts", width, height, items)
-	dialogList.SetShowDescription(true)
-	dialogList.BaseFocusableDialog.BaseDialog.ID = tagListDialogID
-	dialogList.SetCancellable(true)
-
-	m.appState.AddDialog(dialogList, nil)
+	
+	selector.SetRect(width, height, 0, 0)
+	
+	m.appState.AddDialog(selector, func(value interface{}, err error) tea.Cmd {
+		if err != nil {
+			m.showErrorDialog("Tag Contexts", "An error occurred: "+err.Error())
+			return nil
+		}
+		
+		result, ok := value.(dialog.TagSelectorResult)
+		if !ok {
+			return nil
+		}
+		
+		// If user selected "Add New Tag..." option
+		if result.AddNewTag {
+			m.openAddTagDialog()
+			return nil
+		}
+		
+		// User selected an existing tag - open action dialog
+		if len(result.SelectedTags) > 0 {
+			// Find the selected tag context and set it for actions
+			for _, tag := range list.Tags {
+				if tag.Name == result.SelectedTags[0] {
+					m.tagActionContext = &tag
+					m.openTagActionDialog()
+					break
+				}
+			}
+		}
+		
+		return nil
+	})
 }
 
 func (m *Model) openTagActionDialog() {

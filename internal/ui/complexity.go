@@ -62,7 +62,6 @@ func (m *Model) showComplexityScopeDialog() {
 			return ComplexityScopeSelectedMsg{
 				Scope:  result.Scope,
 				TaskID: selectedTaskID,
-				Tags:   result.Tags,
 			}
 		}
 	})
@@ -85,27 +84,15 @@ func (m *Model) handleComplexityScopeSelected(msg ComplexityScopeSelectedMsg) te
 	case "selected":
 		// Just the selected task
 		totalTasks = 1
-	case "tag":
-		// Count tasks with the selected tags
-		for _, task := range m.taskIndex {
-			for _, taskTag := range task.Tags {
-				for _, selectedTag := range msg.Tags {
-					if taskTag == selectedTag {
-						totalTasks++
-						break
-					}
-				}
-			}
-		}
 	}
 
 	m.currentComplexityScope = msg.Scope
-	m.currentComplexityTags = append([]string(nil), msg.Tags...)
+	m.currentComplexityTags = nil
 
 	// Create and show progress dialog
 	progressDialog := dialog.NewComplexityProgressDialog(
 		msg.Scope,
-		msg.Tags,
+		nil,
 		totalTasks,
 		dm.Style,
 	)
@@ -130,7 +117,7 @@ func (m *Model) handleComplexityScopeSelected(msg ComplexityScopeSelectedMsg) te
 	m.complexityStartedAt = time.Now()
 
 	// Kick off analysis work
-	return m.startComplexityAnalysis(msg.Scope, msg.TaskID, msg.Tags, totalTasks)
+	return m.startComplexityAnalysis(msg.Scope, msg.TaskID, nil, totalTasks)
 }
 
 // handleComplexityAnalysisProgress updates the progress dialog during analysis

@@ -148,9 +148,8 @@ type projectSwitchedMsg struct {
 
 // ComplexityScopeSelectedMsg is sent when a scope is selected for analysis
 type ComplexityScopeSelectedMsg struct {
-	Scope  string   // "all", "selected", "tag"
-	TaskID string   // Only used when scope is "selected"
-	Tags   []string // Only used when scope is "tag"
+	Scope  string // "all", "selected"
+	TaskID string // Only used when scope is "selected"
 }
 
 // ComplexityAnalysisProgressMsg is sent during analysis to update progress

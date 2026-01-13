@@ -57,8 +57,41 @@ func (m Model) renderCompactHelp() string {
 	b.WriteString(formatCompactKey("ctrl+shift+c", "Analyze task complexity workflow", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+b", "Run command with Crush AI", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+p", "Open Command Palette (pick any action)", helpWidth))
-	b.WriteString(formatCompactKey("ctrl+shift+a", "Add a new tag context", helpWidth))
-	b.WriteString(formatCompactKey("ctrl+shift+m", "Open tag context manager", helpWidth))
+	b.WriteString("\n")
+
+	// Tag Management section
+	tagManagementTitle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorHighlight)).
+		Bold(true)
+	b.WriteString(tagManagementTitle.Render("Tag Management"))
+	b.WriteString("\n")
+	b.WriteString(formatCompactKey("ctrl+t", "Manage tag contexts (switch active tag)", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+shift+a", "Quick tag access (selector with add option)", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+shift+m", "Open tag context manager (view/modify tags)", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+shift+u", "Use tag context (select existing tag)", helpWidth))
+	b.WriteString("\n")
+
+	// Project Management section
+	projectTitle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorHighlight)).
+		Bold(true)
+	b.WriteString(projectTitle.Render("Project Management"))
+	b.WriteString("\n")
+	b.WriteString(formatCompactKey("alt+shift+t", "Project tags (browse and switch projects)", helpWidth))
+	b.WriteString(formatCompactKey("alt+shift+q", "Project quick search (find projects quickly)", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+q", "Quick project switch (recent projects)", helpWidth))
+	b.WriteString("\n")
+
+	// Tag Management Features section
+	featuresTitleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ColorHighlight)).
+		Bold(true)
+	b.WriteString(featuresTitleStyle.Render("Tag Management Features"))
+	b.WriteString("\n")
+	b.WriteString(formatCompactKey("🏷", "Visual tag selection shows all available tags with metadata", helpWidth))
+	b.WriteString(formatCompactKey("✓", "Multi-select supported for scope-based operations (expansion, analysis)", helpWidth))
+	b.WriteString(formatCompactKey("➕", "Add new tags inline without closing the parent dialog", helpWidth))
+	b.WriteString(formatCompactKey("⚡", "Newly created tags immediately available for selection", helpWidth))
 	b.WriteString("\n")
 
 	// Status keys in two columns

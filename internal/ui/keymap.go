@@ -248,8 +248,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("alt+r/ctrl+r", "run task with crush"),
 		),
 		ManageTags: key.NewBinding(
-			key.WithKeys("ctrl+shift+a"),
-			key.WithHelp("ctrl+shift+a", "add tag context"),
+			key.WithKeys("ctrl+t", "ctrl+shift+a"),
+			key.WithHelp("ctrl+t/ctrl+shift+a", "manage tags"),
 		),
 		TagManagement: key.NewBinding(
 			key.WithKeys("ctrl+shift+m"),
@@ -260,16 +260,16 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("ctrl+shift+u", "use tag"),
 		),
 		ProjectTags: key.NewBinding(
-			key.WithKeys("ctrl+t"),
-			key.WithHelp("ctrl+t", "project tags"),
+			key.WithKeys("alt+shift+t"),
+			key.WithHelp("alt+shift+t", "project tags"),
 		),
 		ProjectQuickSwitch: key.NewBinding(
 			key.WithKeys("ctrl+q"),
 			key.WithHelp("ctrl+q", "quick project switch"),
 		),
 		ProjectSearch: key.NewBinding(
-			key.WithKeys("ctrl+shift+t"),
-			key.WithHelp("ctrl+shift+t", "search projects"),
+			key.WithKeys("alt+shift+q"),
+			key.WithHelp("alt+shift+q", "project search"),
 		),
 
 		// View modes
@@ -439,10 +439,12 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		)
 	}
 
-	if manageKey := getKey("manageTags", "ctrl+shift+a"); manageKey != "" {
+	if manageKey := getKey("manageTags", "ctrl+t"); manageKey != "" {
+		// Support both old (ctrl+shift+a) and new (ctrl+t) keys
+		keys := []string{manageKey, "ctrl+shift+a"}
 		km.ManageTags = key.NewBinding(
-			key.WithKeys(manageKey),
-			key.WithHelp(manageKey, "add tag context"),
+			key.WithKeys(keys...),
+			key.WithHelp("ctrl+t/ctrl+shift+a", "manage tags"),
 		)
 	}
 
@@ -460,7 +462,7 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		)
 	}
 
-	if projectTagsKey := getKey("projectTags", "ctrl+t"); projectTagsKey != "" {
+	if projectTagsKey := getKey("projectTags", "alt+shift+t"); projectTagsKey != "" {
 		km.ProjectTags = key.NewBinding(
 			key.WithKeys(projectTagsKey),
 			key.WithHelp(projectTagsKey, "project tags"),
@@ -474,10 +476,10 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		)
 	}
 
-	if searchKey := getKey("projectSearch", "ctrl+shift+t"); searchKey != "" {
+	if searchKey := getKey("projectSearch", "alt+shift+q"); searchKey != "" {
 		km.ProjectSearch = key.NewBinding(
 			key.WithKeys(searchKey),
-			key.WithHelp(searchKey, "search projects"),
+			key.WithHelp(searchKey, "project search"),
 		)
 	}
 

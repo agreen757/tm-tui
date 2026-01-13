@@ -39,19 +39,12 @@ func NewComplexityFilterDialog(
 			Required: false,
 			Value:    currentSettings.Levels[taskmaster.ComplexityVeryHigh],
 		},
-		{
-			ID:       "tag",
-			Label:    "Filter by Tag (optional):",
-			Type:     FormFieldTypeText,
-			Required: false,
-			Value:    currentSettings.Tag,
-		},
 	}
 
 	// Create the form dialog
 	form := NewFormDialog(
 		"Filter Complexity Results",
-		"Select which complexity levels and tags to display:",
+		"Select which complexity levels to display:",
 		fields,
 		[]string{"Apply", "Cancel"},
 		style,
@@ -68,11 +61,6 @@ func NewComplexityFilterDialog(
 					taskmaster.ComplexityHigh:     values["level_high"] == true,
 					taskmaster.ComplexityVeryHigh: values["level_veryhigh"] == true,
 				},
-			}
-
-			// Extract tag filter if provided
-			if tag, ok := values["tag"].(string); ok {
-				settings.Tag = tag
 			}
 
 			return settings, nil

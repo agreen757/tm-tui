@@ -107,11 +107,6 @@ func (s *mockService) AnalyzeComplexity(ctx context.Context, scope string, taskI
 		if task, ok := s.GetTaskByID(taskID); ok {
 			tasksToAnalyze = []*taskmaster.Task{task}
 		}
-	case "tag":
-		// Simplified tag handling for tests
-		for i := range s.tasks {
-			tasksToAnalyze = append(tasksToAnalyze, &s.tasks[i])
-		}
 	}
 
 	// Generate mock complexity scores
@@ -295,7 +290,6 @@ func TestComplexityAnalysisWorkflow(t *testing.T) {
 	msg := ComplexityScopeSelectedMsg{
 		Scope:  "all",
 		TaskID: "",
-		Tags:   []string{},
 	}
 	cmd := model.handleComplexityScopeSelected(msg)
 	if cmd == nil {

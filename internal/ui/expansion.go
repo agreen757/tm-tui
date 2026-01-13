@@ -11,23 +11,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// showExpansionScopeDialog displays the dialog for selecting expansion scope and options
+// showExpansionScopeDialog displays the dialog for selecting expansion options
 func (m *Model) showExpansionScopeDialog() {
 	dm := m.dialogManager()
 	if dm == nil {
 		return
 	}
 
-	// Get the ID of the selected task
-	selectedTaskID := ""
-	if m.selectedTask != nil {
-		selectedTaskID = m.selectedTask.ID
-	}
-
-	// Create the dialog
-	scopeDialog, err := dialog.NewExpansionScopeDialog(selectedTaskID, dm.Style)
+	// Create the dialog (no tag list needed)
+	scopeDialog, err := dialog.NewExpansionScopeDialog("", dm.Style, nil)
 	if err != nil {
-		m.logLines = append(m.logLines, fmt.Sprintf("Error creating expansion scope dialog: %s", err))
+		m.logLines = append(m.logLines, fmt.Sprintf("Error creating expansion dialog: %s", err))
 		return
 	}
 
@@ -46,18 +40,14 @@ func (m *Model) showExpansionScopeDialog() {
 		result, ok := value.(dialog.ExpansionScopeResult)
 		if !ok {
 			return func() tea.Msg {
-				return ErrorMsg{Err: fmt.Errorf("invalid result type from expansion scope dialog")}
+				return ErrorMsg{Err: fmt.Errorf("invalid result type from expansion dialog")}
 			}
 		}
 
-		// Create a message with the selected scope
+		// Create a message with the expansion options
 		return func() tea.Msg {
 			return ExpansionScopeSelectedMsg{
-				Scope:       result.Scope,
-				TaskID:      result.TaskID,
-				FromID:      result.FromID,
-				ToID:        result.ToID,
-				Tags:        result.Tags,
+				Scope:       "all", // Always expand all tasks
 				Depth:       result.Depth,
 				NumSubtasks: result.NumSubtasks,
 				UseAI:       result.UseAI,
@@ -66,43 +56,18 @@ func (m *Model) showExpansionScopeDialog() {
 	})
 }
 
-// handleExpansionScopeSelected handles the selected expansion scope
+// handleExpansionScopeSelected handles the selected expansion options
 func (m *Model) handleExpansionScopeSelected(msg ExpansionScopeSelectedMsg) tea.Cmd {
 	dm := m.dialogManager()
 	if dm == nil {
 		return nil
 	}
 
-	// Determine total tasks to expand
-	var totalTasks int
-	switch msg.Scope {
-	case "single":
-		totalTasks = 1
-	case "all":
-		totalTasks = len(m.taskIndex)
-	case "range":
-		// Count tasks in range
-		for id := range m.taskIndex {
-			if (msg.FromID == "" || id >= msg.FromID) && (msg.ToID == "" || id <= msg.ToID) {
-				totalTasks++
-			}
-		}
-	case "tag":
-		// Count tasks with matching tags
-		for _, task := range m.taskIndex {
-			for _, taskTag := range task.Tags {
-				for _, selectedTag := range msg.Tags {
-					if taskTag == selectedTag {
-						totalTasks++
-						break
-					}
-				}
-			}
-		}
-	}
+	// Determine total tasks to expand (all tasks)
+	totalTasks := len(m.taskIndex)
 
-	m.currentExpansionScope = msg.Scope
-	m.currentExpansionTags = append([]string(nil), msg.Tags...)
+	m.currentExpansionScope = "all"
+	m.currentExpansionTags = nil
 
 	// Create and show progress dialog using the expansion progress helper
 	progressDialog := dialog.NewExpansionProgressDialog(msg.Scope, totalTasks, dm.Style)
@@ -125,8 +90,8 @@ func (m *Model) handleExpansionScopeSelected(msg ExpansionScopeSelectedMsg) tea.
 
 	m.expansionStartedAt = time.Now()
 
-	// Start expansion work
-	return m.startExpansion(msg.Scope, msg.TaskID, msg.FromID, msg.ToID, msg.Tags, taskmaster.ExpandTaskOptions{
+	// Start expansion work (always scope="all")
+	return m.startExpansion("all", "", "", "", nil, taskmaster.ExpandTaskOptions{
 		NumSubtasks: msg.NumSubtasks,
 		UseAI:       msg.UseAI,
 		Force:       false,

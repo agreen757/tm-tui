@@ -28,7 +28,6 @@ const (
 // FilterSettings contains filter options for the complexity report
 type FilterSettings struct {
 	Levels map[taskmaster.ComplexityLevel]bool
-	Tag    string
 }
 
 // NewFilterSettings creates default filter settings with all levels enabled
@@ -40,7 +39,6 @@ func NewFilterSettings() FilterSettings {
 			taskmaster.ComplexityHigh:     true,
 			taskmaster.ComplexityVeryHigh: true,
 		},
-		Tag: "",
 	}
 }
 
@@ -191,13 +189,6 @@ func (d *ComplexityReportDialog) applyFiltersAndSort() {
 		// Filter by complexity level
 		if !d.FilterSettings.Levels[task.Level] {
 			continue
-		}
-
-		// Filter by tag (if specified)
-		if d.FilterSettings.Tag != "" {
-			// Here we'd need to have tag information in TaskComplexity
-			// This is a placeholder for tag filtering logic
-			// We might need to modify our data model or pass additional context
 		}
 
 		filtered = append(filtered, task)

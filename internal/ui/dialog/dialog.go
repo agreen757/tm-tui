@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"log"
 	"reflect"
 	"strings"
 
@@ -571,7 +572,11 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 
 		// Special handling for key messages - check if dialog handles or closes
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			log.Printf("[DialogManager.HandleMsg] KeyMsg received: %s, Active dialog type: %T", 
+				keyMsg.String(), activeDialog)
+			
 			// First call Update() to allow normal text input processing
+			log.Printf("[DialogManager.HandleMsg] Calling Update() on dialog...")
 			updatedDialog, cmd := activeDialog.Update(msg)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
@@ -579,6 +584,7 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 
 			// If dialog returns nil, it wants to close
 			if updatedDialog == nil {
+				log.Printf("[DialogManager.HandleMsg] Dialog returned nil from Update(), closing dialog")
 				popped := m.popEntry()
 				if popped.callback != nil {
 					var value interface{}
@@ -595,10 +601,13 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 			}
 
 			// Update the dialog in the stack
+			log.Printf("[DialogManager.HandleMsg] Updating dialog in stack (index %d)", m.activeDialog)
 			m.dialogs[m.activeDialog].dialog = updatedDialog
 
 			// Then call HandleKey() on the updated dialog to handle special keys
+			log.Printf("[DialogManager.HandleMsg] Calling HandleKey() on updated dialog...")
 			result, specialCmd := updatedDialog.HandleKey(keyMsg)
+			log.Printf("[DialogManager.HandleMsg] HandleKey() returned result: %v", result)
 			if specialCmd != nil {
 				cmds = append(cmds, specialCmd)
 			}
@@ -606,6 +615,7 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 			// Handle dialog result
 			switch result {
 			case DialogResultClose, DialogResultCancel, DialogResultConfirm:
+				log.Printf("[DialogManager.HandleMsg] Dialog result is %v, closing dialog", result)
 				popped := m.popEntry()
 				if popped.callback != nil {
 					var value interface{}

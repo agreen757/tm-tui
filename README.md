@@ -552,11 +552,16 @@ go run ./cmd/tm-tui/main.go
 #### Complexity & Analysis
 - `Ctrl+Shift+C` - Analyze task complexity (AI-powered scoring)
 
-#### Tags & Projects
-- `Alt+A` / `Ctrl+Shift+A` - Add or manage task tags
-- `Ctrl+M` / `Ctrl+Shift+M` - Open tag context manager
-- `Ctrl+T` - Switch to different tag context/project
-- `Ctrl+P` - Switch project
+#### Tag Management
+- `Ctrl+T` - Manage tag contexts (switch active tag, visual selector)
+- `Ctrl+Shift+T` - Add new tag context (create tag with options)
+- `Ctrl+Shift+A` - Quick tag access (selector with add option)
+- `Alt+Shift+T` - View project tags (filter by project context)
+
+#### Project Management
+- `Ctrl+P` - Command palette (general project access)
+- `Alt+Shift+Q` - Quick project switch (find projects quickly)
+- `Alt+Shift+S` - Project search (full-text project search)
 
 #### Filtering & Search
 - `/` - Search tasks by ID, title, or content
@@ -605,6 +610,7 @@ go run ./cmd/tm-tui/main.go
 1. Navigate to a task or select multiple tasks with `Space`
 2. Press `Ctrl+Shift+C` to open "Analyze Complexity" dialog
 3. Choose analysis scope: all tasks, selected task, or by tag
+   - Use visual tag selector to pick specific tags for analysis
 4. View complexity scores (LOW, MEDIUM, HIGH, VERY HIGH)
 5. Filter and sort results for focused planning
 
@@ -615,7 +621,7 @@ go run ./cmd/tm-tui/main.go
    - **Selected task only** - Expand just the current task
    - **All tasks** - Expand all tasks in the project
    - **Task range** - Expand tasks from ID X to ID Y
-   - **By tag** - Expand all tasks with specific tags
+   - **By tag** - Use visual tag selector to pick multiple tags for expansion
 4. Configure options:
    - Expansion depth: 1-3 levels of nested subtasks
    - Number of subtasks: Leave blank for auto-detection
@@ -625,6 +631,30 @@ go run ./cmd/tm-tui/main.go
 7. Tasks are automatically reloaded after expansion completes
 
 **Note:** This feature executes `task-master expand` CLI commands. Ensure the Task Master CLI is properly installed and accessible.
+
+### Managing Tags with Visual Selection
+
+The new tag management system provides visual, interactive tag selection:
+
+1. Press `Ctrl+T` to open Tag Management
+   - Visual list shows all available tags with metadata
+   - Active tag marked with indicator (●)
+   - Each tag shows task count and completion status
+
+2. **Switch to a tag**: Select it from the list
+   - Immediate context switch
+   - All subsequent operations use new tag context
+
+3. **Create a new tag**: Select "Add New Tag..." option
+   - Opens inline creation dialog
+   - Configure name, copy-from options, description
+   - New tag immediately available in list
+   - Select it to switch to new context
+
+4. **Quick tag access**: Press `Ctrl+Shift+A` for fast switching
+   - Opens tag selector with minimal overhead
+   - Add new tags on-the-fly
+   - Close when done (Esc)
 
 ### Running Tasks with Crush AI
 

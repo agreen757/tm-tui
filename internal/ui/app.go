@@ -90,6 +90,8 @@ type Model struct {
 	deleteWorkflow       *DeleteWorkflowState
 	undoSession          *UndoSession
 	tagActionContext     *taskmaster.TagContext
+	tagEditorFlow        *dialog.TagEditorFlow // For managing tag selection/creation flow
+	useTagFlowPending    bool                  // Flag to track if we're returning from add tag in use tag flow
 	projectRegistry      *projects.Registry
 	activeProject        *projects.Metadata
 	pendingProjectSwitch *projects.Metadata
@@ -3551,6 +3553,17 @@ func (m Model) buildHelpContent() string {
 	}
 	panelSection := createSection(" PANELS & VIEWS", panelBindings)
 
+	// Tag Management section
+	tagBindings := [][]string{
+		{m.renderBinding(m.keyMap.ManageTags) + "  Manage tag contexts"},
+		{m.renderBinding(m.keyMap.TagManagement) + "  Manage tag contexts (view/modify tags)"},
+		{m.renderBinding(m.keyMap.UseTag) + "  Use tag context (select existing tag)"},
+		{m.renderBinding(m.keyMap.ProjectTags) + "  Project tags (browse and switch)"},
+		{m.renderBinding(m.keyMap.ProjectQuickSwitch) + "  Quick project switch"},
+		{m.renderBinding(m.keyMap.ProjectSearch) + "  Project search (find projects)"},
+	}
+	tagSection := createSection(" TAG MANAGEMENT", tagBindings)
+
 	// General section
 	generalBindings := [][]string{
 		{m.renderBinding(m.keyMap.Help) + "  Toggle this help"},
@@ -3580,6 +3593,8 @@ func (m Model) buildHelpContent() string {
 			statusSection,
 			"",
 			panelSection,
+			"",
+			tagSection,
 			"",
 			generalSection,
 			"",

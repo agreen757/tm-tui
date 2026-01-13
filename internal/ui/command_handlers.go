@@ -52,7 +52,7 @@ func (m *Model) dispatchCommand(id CommandID) tea.Cmd {
 	case CommandRunCommand:
 		return m.openCommandRunner()
 	case CommandManageTags:
-		m.openAddTagDialog()
+		return m.handleTagManagement()
 	case CommandTagManagement:
 		return m.handleTagManagement()
 	case CommandUseTag:
@@ -491,58 +491,119 @@ func (m *Model) openDeleteTagDialog() {
 }
 
 func (m *Model) openUseTagDialog() tea.Cmd {
-	dm := m.dialogManager()
-	if dm == nil {
-		return nil
-	}
-	fields := []dialog.FormField{
-		{
-			ID:       "name",
-			Label:    "Tag name",
-			Type:     dialog.FormFieldTypeText,
-			Required: true,
-		},
-	}
-	form := dialog.NewFormDialog(
-		"Use Tag Context",
-		"Switch the active Task Master tag (Ctrl+T).",
-		fields,
-		[]string{"Switch", "Cancel"},
-		dm.Style,
-		func(form *dialog.FormDialog, button string, values map[string]interface{}) (interface{}, error) {
-			if button != "Switch" {
-				return nil, nil
-			}
-			name := strings.TrimSpace(stringValue(values, "name"))
-			if name == "" {
-				return nil, fmt.Errorf("Tag name is required")
-			}
-			return useTagFormResult{Name: name}, nil
-		},
-	)
-	m.appState.AddDialog(form, func(value interface{}, err error) tea.Cmd {
+	// Load tag list for selector
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		list, err := m.taskService.ListTagContexts(ctx, false)
 		if err != nil {
-			appErr := NewOperationError("Use Tag", "Failed to switch tag", err).
+			return ErrorMsg{Err: fmt.Errorf("failed to load tags: %w", err)}
+		}
+		return useTagDialogLoadedMsg{TagList: list}
+	}
+}
+
+// useTagDialogLoadedMsg is sent when the tag list is loaded for the use tag dialog
+type useTagDialogLoadedMsg struct {
+	TagList *taskmaster.TagList
+}
+
+// handleUseTagDialogLoaded opens the tag selector dialog with loaded tags
+func (m *Model) handleUseTagDialogLoaded(list *taskmaster.TagList) {
+	dm := m.dialogManager()
+	if dm == nil || list == nil {
+		m.showErrorDialog("Switch Tag", "Failed to load available tags.")
+		return
+	}
+
+	// Create tag selector config for single-select mode
+	cfg := dialog.TagSelectorConfig{
+		Title:       "Select Tag Context",
+		MultiSelect: false,
+		TagList:     list,
+	}
+
+	// Create tag editor flow for handling selection and creation
+	// Type assert TaskService to *taskmaster.Service
+	taskService, ok := m.taskService.(*taskmaster.Service)
+	if !ok {
+		m.showErrorDialog("Switch Tag", "Invalid task service type.")
+		return
+	}
+	flow := dialog.NewTagEditorFlow(cfg, taskService)
+	
+	// Set refresh function to reload tags after creation
+	flow.SetRefreshFunc(func(ctx context.Context) (*taskmaster.TagList, error) {
+		return m.taskService.ListTagContexts(ctx, false)
+	})
+
+	// Get the initial selector and add it as a dialog
+	selector := flow.GetInitialSelector()
+	
+	// Calculate dimensions
+	width := 60
+	height := 15
+	if m.width > 0 {
+		width = m.width - 20
+		if width < 50 {
+			width = 50
+		}
+	}
+	if m.height > 0 {
+		height = m.height - 10
+		if height < 12 {
+			height = 12
+		}
+	}
+	
+	selector.SetRect(width, height, 0, 0)
+	
+	// Store the flow in the model for handling state transitions
+	m.tagEditorFlow = flow
+	
+	m.appState.AddDialog(selector, func(value interface{}, err error) tea.Cmd {
+		if err != nil {
+			appErr := NewOperationError("Select Tag", "Failed to select tag", err).
 				WithRecoveryHints(
-					"Check if the tag exists",
-					"Verify the tag name is correct",
+					"Check if tags are available",
 					"Try again",
 				)
 			m.showAppError(appErr)
+			m.tagEditorFlow = nil
 			return nil
 		}
-		if value == nil {
-			return nil
-		}
-		result, ok := value.(useTagFormResult)
+		
+		result, ok := value.(dialog.TagSelectorResult)
 		if !ok {
+			m.tagEditorFlow = nil
 			return nil
 		}
-		return m.runTagOperation("use-tag", result.Name, func(ctx context.Context) (*taskmaster.TagOperationResult, error) {
-			return m.taskService.UseTagContext(ctx, result.Name)
-		})
+		
+		// Handle the selector result through the flow
+		if m.tagEditorFlow == nil {
+			return nil
+		}
+		
+		shouldContinue, finalResult := m.tagEditorFlow.HandleSelectorResult(result, err == nil && value != nil)
+		
+		if !shouldContinue {
+			// Flow completed with selection
+			if len(finalResult.SelectedTags) > 0 {
+				tagName := finalResult.SelectedTags[0]
+				m.tagEditorFlow = nil
+				return m.runTagOperation("use-tag", tagName, func(ctx context.Context) (*taskmaster.TagOperationResult, error) {
+					return m.taskService.UseTagContext(ctx, tagName)
+				})
+			}
+			m.tagEditorFlow = nil
+			return nil
+		}
+		
+		// User wants to create a new tag - open add tag dialog
+		m.openAddTagDialog()
+		m.useTagFlowPending = true
+		return nil
 	})
-	return nil
 }
 
 func (m *Model) executeTaskMasterCommand(label, command string, args ...string) {
