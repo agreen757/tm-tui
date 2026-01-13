@@ -981,6 +981,8 @@ func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult)
 	commandID := fmt.Sprintf("cmd-%d", time.Now().UnixNano())
 	
 	// Create or show the task runner modal if not already present
+	// Note: Task Runner Modal is managed separately via m.taskRunnerVisible flag,
+	// NOT added to the dialog stack. This prevents modal overlap issues.
 	if m.taskRunner == nil {
 		// Use reasonable modal dimensions (80% width, 70% height)
 		modalWidth := int(float64(m.width) * 0.8)
@@ -996,8 +998,12 @@ func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult)
 			ColorDone,      // success
 			ColorPending,   // warning
 		))
-		m.dialogManager().PushDialog(m.taskRunner)
+		// DO NOT push to dialog stack - Task Runner is managed separately
+		// m.dialogManager().PushDialog(m.taskRunner) // REMOVED to fix double modal issue
 	}
+	
+	// Set visibility flag - Task Runner Modal is rendered independently
+	m.taskRunnerVisible = true
 	
 	// Execute the ad-hoc command using RunCommand (no specific model)
 	// Use tea.Sequence to ensure tab is created before execution starts
@@ -1088,13 +1094,15 @@ func truncatePrompt(prompt string, maxLen int) string {
 
 // ensureTaskRunnerModal ensures the Task Runner modal is created and visible
 // Creates a new modal if one doesn't exist, and sets the visible flag
+// Note: Task Runner Modal is managed separately via m.taskRunnerVisible flag
 func (m *Model) ensureTaskRunnerModal() {
 	if m.taskRunner == nil {
 		// Create new TaskRunnerModal with reasonable modal dimensions (80% width, 70% height)
 		modalWidth := int(float64(m.width) * 0.8)
 		modalHeight := int(float64(m.height) * 0.7)
 		m.taskRunner = dialog.NewTaskRunnerModal(modalWidth, modalHeight, m.appState.DialogStyle())
-		m.dialogManager().PushDialog(m.taskRunner)
+		// DO NOT push to dialog stack - Task Runner is managed separately
+		// m.dialogManager().PushDialog(m.taskRunner) // REMOVED to fix double modal issue
 	}
 	m.taskRunnerVisible = true
 }
