@@ -24,7 +24,41 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
-## Recent Improvements (v0.1.20)
+## Recent Improvements (v0.1.21)
+
+### Command Runner Modal Fix
+
+**Fixed Double Modal Overlap** - Resolved issue where pressing CTRL+B to run commands caused two modals to appear simultaneously.
+
+**What Was Fixed:**
+- **Command Runner Dialog Overlap**: Pressing CTRL+B previously showed both the Command Runner form dialog and the Task Runner Modal at the same time, causing visual confusion
+- **Root Cause**: Task Runner Modal was incorrectly being added to the dialog stack while the Command Runner Dialog was still active
+- **Solution**: Task Runner Modal is now managed separately via `m.taskRunnerVisible` flag, not through the dialog stack
+
+**Changes:**
+- **internal/ui/command_handlers.go**: Removed `PushDialog()` calls for Task Runner Modal
+  - `handleCommandRunnerSubmission()`: Task Runner created without adding to dialog stack
+  - `ensureTaskRunnerModal()`: Updated for consistency
+- Clean separation between modal types (Command Runner Dialog vs Task Runner Modal)
+- Aligns with existing architecture where Task Runner is rendered independently
+
+**User Experience:**
+- **Before**: CTRL+B showed overlapping modals, unclear which was active
+- **After**: Clean transition from Command Runner Dialog → Task Runner Modal
+- Improved visual clarity and expected behavior
+
+**Technical Details:**
+- Task Runner Modal already managed via `m.taskRunnerVisible` flag in `app.go`
+- No breaking changes to API or test expectations
+- Minimal code change (2 PushDialog calls removed)
+
+**Testing:**
+- ✅ Independent test suite validates both approaches
+- ✅ Build successful
+- ✅ All existing tests pass
+- ✅ Manual testing confirms clean modal transitions
+
+## Previous Improvements (v0.1.20)
 
 ### Tag Management Enhancement & Keybinding Fixes
 
