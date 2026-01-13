@@ -4,7 +4,7 @@ An interactive terminal user interface for [Task Master AI](https://github.com/c
 
 ## Overview
 
-Task Master TUI provides a beautiful, keyboard-driven interface for managing development tasks, viewing task hierarchies, and executing Task Master commands without leaving your terminal. This tool seamlessly integrates with Task Master AI to provide a rich terminal experience for project management.
+Task Master TUI provides a beautiful, keyboard-driven interface for managing development tasks, viewing task hierarchies, and executing Task Master commands without leaving your terminal. This tool seamlessly integrates with Task Master AI to provide a rich terminal experience for project management. **Autonomously execute tasks with AI assistance and track detailed completion logs** for comprehensive project documentation and progress tracking.
 
 ## Features
 
@@ -20,6 +20,8 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - 🗑️ **Safe Deletion**: Delete tasks with confirmation dialogs to prevent accidents
 - 📄 **PRD Creation & Parsing**: Create PRDs with AI assistance and load tasks from documents
 - 🔴 **Live Output Streaming**: Real-time visual feedback for PRD generation and task execution
+- 🤖 **Autonomous Task Execution**: AI-powered autonomous execution of tasks with intelligent decision-making and problem-solving
+- 📋 **Detailed Completion Logging**: Comprehensive logging of task execution with implementation notes, challenges, solutions, and test results
 - 💡 **Context-sensitive Help**: Dynamic help panels and status bar hints
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
@@ -742,7 +744,18 @@ The new tag management system provides visual, interactive tag selection:
 
 ### Running Tasks with Crush AI
 
-Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush), an AI-powered terminal assistant, to execute tasks automatically.
+Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush), an AI-powered terminal assistant, to execute tasks **autonomously with minimal human intervention**. The tool handles complex implementation tasks, test execution, and debugging with detailed logging of all activities and outcomes.
+
+#### Autonomous Execution Capabilities
+
+Crush AI autonomously:
+- **Analyzes task requirements** from the task description and implementation details
+- **Explores the codebase** to understand project structure and patterns
+- **Implements features** following existing code conventions and best practices
+- **Writes and runs tests** to validate implementation
+- **Debugs issues** by analyzing error messages and adjusting approach
+- **Documents changes** through detailed implementation logs
+- **Handles edge cases** and error scenarios systematically
 
 #### Prerequisites
 - Crush CLI installed and accessible in PATH (`crush` command available)
@@ -772,6 +785,45 @@ Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush),
 - **Automatic logging**: All output saved to `.taskmaster/logs/crush-run-<task-id>-<timestamp>.log`
 - **Cancellation**: Stop tasks that are stuck or producing incorrect results
 - **Minimizable**: Continue using the TUI while tasks run in the background
+
+#### Detailed Completion Logging
+
+When a task executes autonomously, all activities are logged to `.taskmaster/logs/` with comprehensive details:
+
+**Log File Structure** (`.taskmaster/logs/crush-run-<task-id>-<timestamp>.log`):
+- **Command Execution**: Full output from all commands run
+- **Code Changes**: File modifications with before/after snippets
+- **Test Results**: Complete test output and pass/fail status
+- **Error Handling**: Error messages encountered and resolution strategies
+- **Decision Points**: AI reasoning for implementation choices
+- **Debugging Steps**: Investigation and troubleshooting process
+- **Performance Notes**: Execution time and resource usage
+
+**Task Completion Summary**:
+1. Navigate to a completed task
+2. Press `Ctrl+R` to view the task log in the Task Runner modal
+3. Scroll through the output to see the complete execution history
+4. Use `↑/↓` arrows to review specific sections
+5. Task status automatically updates to "done" upon successful completion
+
+**Manual Completion Logging**:
+You can add detailed notes after task execution using the Task Master CLI:
+```bash
+# Log implementation details for a completed task
+task-master update-subtask --id=<task-id> --prompt="Implementation completed:
+- [List of features implemented]
+- [Files modified and changes made]
+- [Challenges encountered and solutions applied]
+- [Test results and coverage achieved]
+- [Integration with other system components]"
+```
+
+**Log Retention and Analysis**:
+- All execution logs stored in `.taskmaster/logs/` for future reference
+- Logs retained until manually deleted (automatic rotation available)
+- Use logs to understand task execution patterns and identify bottlenecks
+- Review logs during code review or documentation phases
+- Reference logs when implementing related tasks for consistency
 
 #### Task Prompt Generation
 When you run a task, the TUI generates a prompt for Crush that includes:
