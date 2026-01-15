@@ -80,6 +80,9 @@ type KeyMap struct {
 
 	// Command runner
 	CommandRunner key.Binding
+
+	// Update task
+	UpdateTask key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings
@@ -162,6 +165,12 @@ func DefaultKeyMap() KeyMap {
 		CommandRunner: key.NewBinding(
 			key.WithKeys("ctrl+b"),
 			key.WithHelp("ctrl+b", "run command with Crush AI"),
+		),
+
+		// Update task
+		UpdateTask: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("ctrl+u", "update selected task"),
 		),
 
 		// Status changes
@@ -510,7 +519,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.ToggleDetails, k.ToggleLog},
 		{k.Help, k.Quit, k.Cancel, k.ClearState},
 		{k.AnalyzeComplexity},
-		{k.CommandPalette, k.ParsePRD, k.CreatePRD, k.ExpandTask, k.DeleteTask, k.RunTask, k.CommandRunner},
+		{k.CommandPalette, k.ParsePRD, k.CreatePRD, k.ExpandTask, k.DeleteTask, k.RunTask, k.UpdateTask, k.CommandRunner},
 		{k.ManageTags, k.TagManagement, k.UseTag},
 		{k.ProjectTags, k.ProjectQuickSwitch, k.ProjectSearch},
 		{k.GitMenu},

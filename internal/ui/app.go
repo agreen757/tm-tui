@@ -319,6 +319,7 @@ func (m *Model) registerDefaultCommandShortcuts() {
 		{binding: m.keyMap.DeleteTask, command: CommandDeleteTask, help: "Delete Task"},
 		{binding: m.keyMap.RunTask, command: CommandRunTask, help: "Run Task with Crush"},
 		{binding: m.keyMap.CommandRunner, command: CommandRunCommand, help: "Run Command with Crush"},
+		{binding: m.keyMap.UpdateTask, command: CommandUpdateTask, help: "Update Task"},
 		{binding: m.keyMap.ManageTags, command: CommandManageTags, help: "Add Tag Context"},
 		{binding: m.keyMap.TagManagement, command: CommandTagManagement, help: "Manage Tags"},
 		{binding: m.keyMap.UseTag, command: CommandUseTag, help: "Use Tag"},
@@ -662,6 +663,47 @@ func (m *Model) rebuildVisibleTasks() {
 		} else {
 			m.selectedTask = m.visibleTasks[m.selectedIndex]
 		}
+	}
+}
+
+// refreshTaskTree reloads tasks from disk and updates the UI while preserving selection
+func (m *Model) refreshTaskTree() tea.Cmd {
+	return func() tea.Msg {
+		// Store current selection for restoration
+		selectedTaskID := ""
+		if m.selectedTask != nil {
+			selectedTaskID = m.selectedTask.ID
+		}
+
+		// Force reload tasks from disk
+		ctx := context.WithValue(context.Background(), "force", true)
+		if err := m.taskService.LoadTasks(ctx); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("failed to refresh tasks: %w", err)}
+		}
+
+		// Get the reloaded tasks
+		tasks, _ := m.taskService.GetTasks()
+		m.tasks = tasks
+
+		// Rebuild the task index
+		m.buildTaskIndex()
+
+		// Rebuild visible tasks based on current view mode and expanded state
+		m.rebuildVisibleTasks()
+
+		// Restore selection to the previously selected task if it still exists
+		if selectedTaskID != "" {
+			m.ensureTaskSelected(selectedTaskID)
+		}
+
+		// Update viewports to show new content
+		m.updateTaskListViewport()
+		m.updateDetailsViewport()
+
+		m.addLogLine("Task tree refreshed from disk")
+
+		// Continue listening for next reload
+		return WaitForTasksReload(m.taskService)
 	}
 }
 
@@ -3412,20 +3454,46 @@ func (m Model) renderMainContent(layout LayoutDimensions) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, taskListPanel, detailsPanel)
 }
 
-// renderLogPanel renders the log panel
+// renderLogPanel renders the log panel with proper width and height constraints
+// to ensure the bottom border is always visible and contained within the terminal
 func (m Model) renderLogPanel(layout LayoutDimensions) string {
 	title := m.styles.PanelTitle.Render("📝 Log")
 	logContent := title + "\n\n" + m.logViewport.View()
 
-	// Let panel naturally fit viewport content
-	logPanel := m.styles.Panel.Render(logContent)
-
-	// Add focus indicator for log panel
+	// Determine border color based on focus
+	borderColor := ColorBorder
 	if m.focusedPanel == PanelLog {
-		logPanel = m.styles.PanelBorder.
-			BorderForeground(lipgloss.Color(ColorHighlight)).
-			Render(logPanel)
+		borderColor = ColorHighlight
 	}
+
+	// Measure the raw content height (without borders/padding)
+	rawHeight := lipgloss.Height(logContent) - 2
+	
+	// Calculate how much vertical space we have inside the border
+	// layout.LogHeight is the TARGET total height
+	// Borders add 2 lines (top + bottom), so interior space is LogHeight - 2
+	interiorHeight := layout.LogHeight - 2
+	
+	// Calculate how many blank lines to add to fill the interior space
+	paddingLines := interiorHeight - rawHeight
+	if paddingLines < 0 {
+		paddingLines = 0
+	}
+	
+	// Build final content with padding to fill the allocated space
+	finalContent := logContent
+	for i := 0; i < paddingLines; i++ {
+		finalContent += "\n"
+	}
+
+	// Render with the border - this will be exactly layout.LogHeight tall
+	containerStyle := lipgloss.NewStyle().
+		Width(layout.LogWidth).
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(borderColor)).
+		Padding(0, 1)
+
+	logPanel := containerStyle.Render(finalContent)
 
 	return logPanel
 }
@@ -3524,6 +3592,7 @@ func (m Model) buildHelpContent() string {
 		{m.renderBinding(m.keyMap.NextTask) + "  Get next available task"},
 		{m.renderBinding(m.keyMap.Refresh) + "  Refresh tasks from disk"},
 		{m.renderBinding(m.keyMap.JumpToID) + "  Jump to task by ID"},
+		{m.renderBinding(m.keyMap.UpdateTask) + "  Update selected task"},
 		{m.renderBinding(m.keyMap.CommandRunner) + "  Run command with Crush AI"},
 	}
 	taskSection := createSection(" TASK OPERATIONS", taskBindings)

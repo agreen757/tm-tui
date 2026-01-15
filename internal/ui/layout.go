@@ -62,16 +62,26 @@ func (m Model) calculateLayout() LayoutDimensions {
 	}
 
 	// Determine log panel height
+	// IMPORTANT: Both main content and log panel have borders that add to rendered height
+	// Each bordered panel adds ~2 lines (top + bottom border)
+	// Total border overhead: ~4 lines (2 for main + 2 for log)
 	logHeight := 0
 	if m.showLogPanel {
-		logHeight = contentHeight / 3 // Log takes 1/3 of content height
-		if logHeight < 5 {
-			logHeight = 5
+		rawLogHeight := contentHeight / 3 // Log takes 1/3 of content height
+		
+		// Reduce to account for border overhead in the final rendering
+		// Main content will have borders, log panel will have borders
+		// We subtract from log height to ensure total fits in contentHeight
+		logHeight = rawLogHeight - 4
+		
+		if logHeight < 4 {
+			logHeight = 4 // Absolute minimum for usability
 		}
 	}
 
 	// Main content area (task list + details)
-	mainHeight := contentHeight - logHeight
+	// This also needs border space accounted for
+	mainHeight := contentHeight - logHeight - 4 // Subtract log height and border overhead
 	if mainHeight < 5 {
 		mainHeight = 5
 	}
@@ -159,7 +169,7 @@ func (m Model) renderHeader() string {
 }
 
 // renderWideHeader renders a full-featured header for wide terminals (≥100 columns)
-// Displays application name, tag, and detailed progress in a bordered layout
+// Displays application name, tag, git branch, and detailed progress in a bordered layout
 func (m Model) renderWideHeader(tag string, done, total int, percentage float64) string {
 	// Application name in bold
 	appName := m.styles.Title.Render("Task Master TUI")
@@ -170,6 +180,19 @@ func (m Model) renderWideHeader(tag string, done, total int, percentage float64)
 		m.styles.Subtle.Render("Tag: "),
 		tagDisplay,
 	)
+	
+	// Git branch with brackets and highlight color
+	branchInfo := ""
+	if m.gitAvailable && m.gitRepoInfo.IsRepo {
+		status := m.GitStatus()
+		if status.Branch != "" {
+			branchDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", status.Branch))
+			branchInfo = lipgloss.JoinHorizontal(lipgloss.Left,
+				m.styles.Subtle.Render("Branch: "),
+				branchDisplay,
+			)
+		}
+	}
 
 	// Progress text and bar
 	progressText := fmt.Sprintf("Progress: %d/%d (%.0f%%)", done, total, percentage)
@@ -185,6 +208,20 @@ func (m Model) renderWideHeader(tag string, done, total int, percentage float64)
 		appName,
 		m.styles.Subtle.Render(" │ "),
 		tagInfo,
+	)
+	
+	// Add branch info if available
+	if branchInfo != "" {
+		headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
+			headerContent,
+			m.styles.Subtle.Render(" │ "),
+			branchInfo,
+		)
+	}
+	
+	// Add progress display
+	headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
+		headerContent,
 		m.styles.Subtle.Render(" │ "),
 		progressDisplay,
 	)
@@ -202,13 +239,22 @@ func (m Model) renderWideHeader(tag string, done, total int, percentage float64)
 }
 
 // renderMediumHeader renders compact header for medium terminals (80-99 columns)
-// Displays application name, tag, and simplified progress with a rounded border
+// Displays application name, tag, git branch, and simplified progress with a rounded border
 func (m Model) renderMediumHeader(tag string, done, total int, percentage float64) string {
 	// Application name in bold
 	appName := m.styles.Title.Bold(true).Render("Task Master TUI")
 
 	// Tag with brackets and highlight color (no "Tag:" prefix)
 	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", tag))
+	
+	// Git branch with brackets and highlight color (compact version, no label)
+	branchDisplay := ""
+	if m.gitAvailable && m.gitRepoInfo.IsRepo {
+		status := m.GitStatus()
+		if status.Branch != "" {
+			branchDisplay = m.styles.Highlight.Render(fmt.Sprintf("[%s]", status.Branch))
+		}
+	}
 
 	// Shorter progress format - just percentage
 	progressText := fmt.Sprintf("%.0f%%", percentage)
@@ -219,6 +265,20 @@ func (m Model) renderMediumHeader(tag string, done, total int, percentage float6
 		appName,
 		m.styles.Subtle.Render(" │ "),
 		tagDisplay,
+	)
+	
+	// Add branch if available
+	if branchDisplay != "" {
+		headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
+			headerContent,
+			m.styles.Subtle.Render(" │ "),
+			branchDisplay,
+		)
+	}
+	
+	// Add progress display
+	headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
+		headerContent,
 		m.styles.Subtle.Render(" │ "),
 		m.styles.Info.Render(progressText),
 		" ",
@@ -238,7 +298,7 @@ func (m Model) renderMediumHeader(tag string, done, total int, percentage float6
 }
 
 // renderNarrowHeader renders minimal header for narrow terminals (<80 columns)
-// Displays abbreviated app name, abbreviated tag, and percentage only with normal border
+// Displays abbreviated app name, abbreviated tag, abbreviated git branch, and percentage only with normal border
 func (m Model) renderNarrowHeader(tag string, percentage float64) string {
 	// Abbreviated application name
 	appName := m.styles.Title.Bold(true).Render("TM-TUI")
@@ -246,6 +306,18 @@ func (m Model) renderNarrowHeader(tag string, percentage float64) string {
 	// Shorten tag if too long
 	shortTag := abbreviateTag(tag, tagMaxLength)
 	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", shortTag))
+	
+	// Abbreviated git branch with brackets and highlight color
+	branchDisplay := ""
+	if m.gitAvailable && m.gitRepoInfo.IsRepo {
+		status := m.GitStatus()
+		if status.Branch != "" {
+			// Use a shorter max length for branch to save space
+			branchMaxLength := 10
+			shortBranch := abbreviateTag(status.Branch, branchMaxLength)
+			branchDisplay = m.styles.Highlight.Render(fmt.Sprintf("[%s]", shortBranch))
+		}
+	}
 
 	// Progress text - percentage only (no progress bar)
 	progressText := fmt.Sprintf("%.0f%%", percentage)
@@ -255,6 +327,20 @@ func (m Model) renderNarrowHeader(tag string, percentage float64) string {
 		appName,
 		m.styles.Subtle.Render(" │ "),
 		tagDisplay,
+	)
+	
+	// Add branch if available
+	if branchDisplay != "" {
+		headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
+			headerContent,
+			m.styles.Subtle.Render(" │ "),
+			branchDisplay,
+		)
+	}
+	
+	// Add progress percentage
+	headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
+		headerContent,
 		m.styles.Subtle.Render(" │ "),
 		m.styles.Info.Render(progressText),
 	)
