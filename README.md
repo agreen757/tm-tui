@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Built with Bubble Tea](https://img.shields.io/badge/Built%20with-Bubble%20Tea-blueviolet)](https://github.com/charmbracelet/bubbletea)
 
-**A beautiful, keyboard-driven terminal interface for [Task Master AI](https://github.com/cyanheads/task-master-ai)**
+**Keyboard-driven terminal interface for [Task Master AI](https://github.com/cyanheads/task-master-ai)**
 
 </div>
 
@@ -14,7 +14,6 @@
 
 <div align="center">
   <img src="docs/images/tui-screenshot.png" alt="Task Master TUI Screenshot" width="800">
-  <p><em>Task Master TUI in action - Manage tasks, analyze complexity, and execute work autonomously</em></p>
 </div>
 
 ---
@@ -34,28 +33,28 @@
 
 ## Overview
 
-Task Master TUI provides a beautiful, keyboard-driven interface for managing development tasks, viewing task hierarchies, and executing Task Master commands without leaving your terminal. This tool seamlessly integrates with Task Master AI to provide a rich terminal experience for project management. **Autonomously execute tasks with AI assistance and track detailed completion logs** for comprehensive project documentation and progress tracking.
+Terminal interface for managing development tasks, viewing task hierarchies, and executing Task Master commands. Integrates with Task Master AI for project management with autonomous task execution and detailed completion logging.
 
 ## Features
 
-- 🎯 **Task Management**: View and navigate task hierarchies with ease
-- ✏️ **In-Place Task Updates**: Add notes, progress, and implementation details directly to tasks
-- 🔄 **Real-time Sync**: Automatically updates when task files change using fsnotify
+- 🎯 **Task Management**: View and navigate task hierarchies
+- ✏️ **In-Place Task Updates**: Add notes and implementation details to tasks
+- 🔄 **Real-time Sync**: Auto-updates when task files change via fsnotify
 - ⌨️ **Keyboard-driven**: Full navigation and control via keyboard shortcuts
-- 🎨 **Beautiful UI**: Built with Bubble Tea and Lipgloss for a polished experience
-- 🔍 **Search & Filter**: Quickly find tasks by ID, title, status, or content
-- 📊 **Complexity Analysis**: Analyze task complexity across your project with AI-powered scoring
-- 🚀 **Task Expansion**: Generate subtasks using AI to break down complex tasks automatically
-- 🏷️ **Task Tagging**: Organize tasks with custom tags and filter by tag groups
-- 📦 **Project Management**: Manage multiple project-specific task views with project tags
-- 🗑️ **Safe Deletion**: Delete tasks with confirmation dialogs to prevent accidents
-- 📄 **PRD Creation & Parsing**: Create PRDs with AI assistance and load tasks from documents
-- 🔴 **Live Output Streaming**: Real-time visual feedback for PRD generation and task execution
-- 🤖 **Autonomous Task Execution**: AI-powered autonomous execution of tasks with intelligent decision-making and problem-solving
-- 📋 **Detailed Completion Logging**: Comprehensive logging of task execution with implementation notes, challenges, solutions, and test results
-- 💡 **Context-sensitive Help**: Dynamic help panels and status bar hints
-- ⚙️ **Customizable**: Configure through simple JSON configuration
-- 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
+- 🎨 **Terminal UI**: Built with Bubble Tea and Lipgloss
+- 🔍 **Search & Filter**: Find tasks by ID, title, status, or content
+- 📊 **Complexity Analysis**: AI-powered task complexity scoring
+- 🚀 **Task Expansion**: AI-generated subtasks for complex work
+- 🏷️ **Task Tagging**: Organize and filter with custom tags
+- 📦 **Project Management**: Multiple project-specific task views
+- 🗑️ **Safe Deletion**: Confirmation dialogs prevent accidents
+- 📄 **PRD Creation & Parsing**: AI-assisted PRD generation and task loading
+- 🔴 **Live Output Streaming**: Real-time feedback for operations
+- 🤖 **Autonomous Task Execution**: AI-powered task completion with decision-making
+- 📋 **Completion Logging**: Detailed logs of execution, challenges, and solutions
+- 💡 **Context-sensitive Help**: Dynamic help panels and status hints
+- ⚙️ **Customizable**: JSON-based configuration
+- 🎯 **Accessibility**: High-contrast themes, text labels, keyboard-only navigation
 
 ## Requirements
 
