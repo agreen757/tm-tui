@@ -1,6 +1,36 @@
 # Task Master TUI
 
-An interactive terminal user interface for [Task Master AI](https://github.com/cyanheads/task-master-ai), forked from [Crush](https://github.com/charmbracelet/crush).
+<div align="center">
+
+[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Built with Bubble Tea](https://img.shields.io/badge/Built%20with-Bubble%20Tea-blueviolet)](https://github.com/charmbracelet/bubbletea)
+
+**A beautiful, keyboard-driven terminal interface for [Task Master AI](https://github.com/cyanheads/task-master-ai)**
+
+</div>
+
+---
+
+<div align="center">
+  <img src="docs/images/tui-screenshot.png" alt="Task Master TUI Screenshot" width="800">
+  <p><em>Task Master TUI in action - Manage tasks, analyze complexity, and execute work autonomously</em></p>
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Common Workflows](#common-workflows)
+- [Memory System](#memory-system)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Credits](#credits)
 
 ## Overview
 
