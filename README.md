@@ -9,6 +9,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 ## Features
 
 - 🎯 **Task Management**: View and navigate task hierarchies with ease
+- ✏️ **In-Place Task Updates**: Add notes, progress, and implementation details directly to tasks
 - 🔄 **Real-time Sync**: Automatically updates when task files change using fsnotify
 - ⌨️ **Keyboard-driven**: Full navigation and control via keyboard shortcuts
 - 🎨 **Beautiful UI**: Built with Bubble Tea and Lipgloss for a polished experience
@@ -97,6 +98,7 @@ make build
 - `Enter` - Select item / toggle expand
 - `Space` - Multi-select task for bulk operations
 - `Ctrl+R` / `Alt+R` - Run task with Crush AI agent
+- `Ctrl+U` - Update selected task (add notes, progress, or implementation details)
 - `Alt+X` - Expand tasks (opens scope selection dialog)
   - Supports single task, all tasks, task range, or by tag
   - AI-powered expansion with --research flag
@@ -158,7 +160,63 @@ make build
 - `Ctrl+Shift+C` - Clear TUI state
 - `q` - Quit TUI
 
-## Recent Improvements (v0.1.21)
+## Recent Improvements (v0.1.22)
+
+### Task Update Functionality
+
+**In-Place Task Updates** - Add notes, progress updates, and implementation details directly to tasks without leaving the TUI.
+
+**What Was Added:**
+
+- **Update Task Dialog** (`Ctrl+U`): Interactive form for adding updates to tasks
+  - Multi-line textarea for detailed notes
+  - Support for implementation notes, progress logs, and findings
+  - Integration with Task Master CLI `update-task` and `update-subtask` commands
+  - Real-time validation and feedback
+  - Works with both parent tasks and subtasks
+- **Task Master Executor Integration**: New unified interface for executing Task Master commands
+  - `UpdateTask()` and `UpdateSubtask()` methods for command execution
+  - Proper error handling and output capture
+  - Stream output to Task Runner modal for visual feedback
+- **Command Handler Enhancement**: Improved command routing for task updates
+  - Automatic detection of task vs. subtask based on ID format
+  - Proper prompt formatting with newlines and special characters
+  - Integration with existing dialog and modal systems
+- **Comprehensive Test Coverage**: 1,700+ new test lines across components
+  - Update task dialog tests with edge cases
+  - Task Master executor tests for command execution
+  - Command handler tests for routing and formatting
+  - Integration tests for full workflow
+
+**Key Changes:**
+
+- **internal/ui/dialog/update_task.go** (79 lines): New update task dialog with textarea support
+- **internal/ui/dialog/update_task_test.go** (371 lines): Complete test suite for update dialog
+- **internal/executor/taskmaster.go** (73 lines): Unified Task Master command executor interface
+- **internal/executor/taskmaster_test.go** (511 lines): Comprehensive executor tests
+- **internal/ui/command_handlers.go** (232 new lines): Enhanced command routing with update support
+- **internal/ui/command_handlers_test.go** (721 lines): Command handler tests
+- **internal/ui/keymap.go**: Added `Ctrl+U` keybinding for update task
+- **internal/ui/helpview.go**: Updated help text to include update task shortcut
+- **internal/ui/app.go** (85 new lines): App integration for update task flow
+
+**User Experience:**
+
+- Quick access to update any task with `Ctrl+U`
+- Large textarea for detailed notes and implementation details
+- Real-time execution feedback in Task Runner modal
+- Clear status indicators (✓ for success, ✗ for errors)
+- Seamless integration with existing task management workflow
+- Output logged automatically for audit trails
+
+**Testing:**
+
+- ✅ 1,700+ new test lines added
+- ✅ All existing tests pass
+- ✅ Build successful
+- ✅ Manual testing confirms robust update functionality
+
+## Previous Improvements (v0.1.21)
 
 ### Command Runner Modal Fix
 
