@@ -191,3 +191,67 @@ func TestKeyStyles(t *testing.T) {
 	rendered := styles.Key.Render("Enter")
 	assert.NotEmpty(t, rendered, "Should render key with styling")
 }
+
+func TestUpdateTaskHelpInclusion(t *testing.T) {
+	cfg := &config.Config{
+		KeyBindings:    make(map[string]string),
+		TaskMasterPath: ".",
+	}
+	configManager, _ := config.NewConfigManager()
+	taskService := &taskmaster.Service{}
+	execService, _ := executor.NewService(cfg)
+
+	model := NewModel(cfg, configManager, taskService, execService)
+	model.ready = true
+	model.width = 100
+	model.height = 40
+
+	// Get help content
+	helpContent := model.buildHelpContent()
+
+	// Check that UpdateTask shortcut is included
+	assert.Contains(t, helpContent, "Update selected task",
+		"Help should include 'Update selected task' description")
+	
+	// Check that the shortcut appears in Task Operations section
+	assert.Contains(t, helpContent, "TASK OPERATIONS",
+		"Help should have Task Operations section")
+}
+
+func TestUpdateTaskShortcutBinding(t *testing.T) {
+	km := DefaultKeyMap()
+	
+	// Verify UpdateTask key binding exists
+	require.NotNil(t, km.UpdateTask, "UpdateTask key binding should exist")
+	
+	// Verify the key binding has the correct help text
+	help := km.UpdateTask.Help()
+	assert.Equal(t, "update selected task", help.Desc,
+		"UpdateTask should have help description 'update selected task'")
+	assert.Equal(t, "ctrl+u", help.Key,
+		"UpdateTask should be bound to ctrl+u")
+}
+
+func TestUpdateTaskInHelpOverlay(t *testing.T) {
+	cfg := &config.Config{
+		TaskMasterPath: ".",
+	}
+	configManager, _ := config.NewConfigManager()
+	taskService := &taskmaster.Service{}
+	execService, _ := executor.NewService(cfg)
+
+	model := NewModel(cfg, configManager, taskService, execService)
+	model.showHelp = true
+	model.width = 100
+	model.height = 40
+	model.ready = true
+
+	// Get the help content directly
+	helpContent := model.buildHelpContent()
+
+	// Check that help content contains the update task reference
+	assert.Contains(t, helpContent, "Update selected task",
+		"Help overlay should include UpdateTask shortcut")
+	assert.Contains(t, helpContent, "TASK OPERATIONS",
+		"Help overlay should have Task Operations section")
+}

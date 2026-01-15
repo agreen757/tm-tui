@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,6 +72,8 @@ func (m *Model) dispatchCommand(id CommandID) tea.Cmd {
 		m.openBranchCreateDialog()
 	case CommandGitRecentCommits:
 		m.openCommitsDialog()
+	case CommandUpdateTask:
+		return m.openUpdateTaskDialog()
 	default:
 		m.addLogLine(fmt.Sprintf("Command %s not implemented", id))
 	}
@@ -1117,4 +1120,233 @@ func (m *Model) listenForCommandOutput(commandID string, outputChan <-chan strin
 	msgChan := m.convertOutputChannelToMsgChannel(commandID, outputChan)
 	// Subscribe to the channel using the built-in WaitForCrushMsg subscription
 	return dialog.WaitForCrushMsg(msgChan)
+}
+
+// getSelectedTask returns the currently selected task or nil if none is selected
+func (m *Model) getSelectedTask() *taskmaster.Task {
+	return m.selectedTask
+}
+
+// openUpdateTaskDialog opens the update task dialog for the selected task
+func (m *Model) openUpdateTaskDialog() tea.Cmd {
+	// Validate task-master binary is available
+	if err := m.validateTaskMasterAvailable(); err != nil {
+		m.showErrorDialog("Task Master Not Found", err.Error())
+		return nil
+	}
+
+	selectedTask := m.getSelectedTask()
+	if selectedTask == nil || selectedTask.ID == "" {
+		m.showErrorDialog("No Task Selected", "Please select a task to update.")
+		return nil
+	}
+	
+	if selectedTask.IsCategory || selectedTask.IsRoot {
+		m.showErrorDialog("Invalid Selection", "Please select a task, not a category or root node.")
+		return nil
+	}
+	
+	// Create and show update dialog
+	dm := m.dialogManager()
+	if dm == nil {
+		m.addLogLine("Cannot open update dialog: dialog manager unavailable")
+		return nil
+	}
+	
+	updateDialog := dialog.NewUpdateTaskDialog(selectedTask.ID, dm.Style)
+	
+	// Add dialog with callback to handle form submission
+	m.appState.AddDialog(updateDialog, func(value interface{}, err error) tea.Cmd {
+		if err != nil {
+			m.showErrorDialog("Update Task", err.Error())
+			return nil
+		}
+		
+		// Handle form cancellation
+		if value == nil {
+			return nil
+		}
+		
+		// Extract result from callback
+		result, ok := value.(dialog.UpdateTaskResult)
+		if !ok {
+			return nil
+		}
+		
+		// Check for empty update and show confirmation dialog
+		if result.IsEmpty {
+			return m.executeTaskUpdateWithConfirmation(result.TaskID, result.Update)
+		}
+		
+		// Execute update command directly for non-empty updates
+		return m.executeTaskUpdate(result.TaskID, result.Update)
+	})
+	
+	return nil
+}
+
+// executeTaskUpdateWithConfirmation shows a confirmation dialog for empty updates
+func (m *Model) executeTaskUpdateWithConfirmation(taskID, updateContent string) tea.Cmd {
+	// Create confirmation dialog for empty update
+	confirmDialog := dialog.NewConfirmationDialog(
+		"Empty Update",
+		"You are about to submit an empty update. Continue?",
+		60,
+		10,
+	)
+	confirmDialog.SetYesText("Continue")
+	confirmDialog.SetNoText("Cancel")
+	
+	// Add dialog with callback to handle confirmation result
+	m.appState.AddDialog(confirmDialog, func(value interface{}, err error) tea.Cmd {
+		if err != nil {
+			m.showErrorDialog("Confirmation Error", err.Error())
+			return nil
+		}
+		
+		// Extract confirmation result
+		result, ok := value.(dialog.ConfirmationMsg)
+		if !ok {
+			return nil
+		}
+		
+		// Check if user confirmed
+		if result.Result == dialog.ConfirmationResultYes {
+			// Proceed with empty update
+			return m.executeTaskUpdateInternal(taskID, updateContent)
+		}
+		
+		// User cancelled, do nothing
+		return nil
+	})
+	
+	return nil
+}
+
+// executeTaskUpdate runs the task-master update command and streams output to Task Runner
+func (m *Model) executeTaskUpdate(taskID, updateContent string) tea.Cmd {
+	return m.executeTaskUpdateInternal(taskID, updateContent)
+}
+
+// executeTaskUpdateInternal is the internal implementation of task update execution
+func (m *Model) executeTaskUpdateInternal(taskID, updateContent string) tea.Cmd {
+	// Generate unique update ID using task ID and timestamp
+	updateID := fmt.Sprintf("update-%s-%d", taskID, time.Now().UnixMilli())
+	
+	// Ensure Task Runner modal is visible
+	m.ensureTaskRunnerModal()
+	
+	// Determine command type based on task ID
+	cmdType := "update-task"
+	if strings.Contains(taskID, ".") {
+		cmdType = "update-subtask"
+	}
+	
+	// Build arguments for task-master update command
+	args := []string{fmt.Sprintf("--id=%s", taskID)}
+	if strings.TrimSpace(updateContent) != "" {
+		args = append(args, fmt.Sprintf("--prompt=%s", escapeShellArgForUpdate(updateContent)))
+	}
+	
+	// Start task update execution via executor service
+	err := m.execService.Execute(cmdType, args...)
+	if err != nil {
+		m.showErrorDialog("Update Failed", err.Error())
+		return nil
+	}
+	
+	m.addLogLine(fmt.Sprintf("Started update task %s: %s", taskID, truncatePrompt(updateContent, 50)))
+	
+	// Emit TaskStartedMsg to create tab in Task Runner, then set up output streaming
+	return tea.Sequence(
+		func() tea.Msg {
+			return dialog.TaskStartedMsg{
+				TaskID:    updateID,
+				TaskTitle: fmt.Sprintf("Update [%s]", taskID),
+				Model:     "task-master",
+			}
+		},
+		m.listenForTaskMasterUpdateOutput(updateID, taskID),
+	)
+}
+
+// listenForTaskMasterUpdateOutput streams output from the task-master update command
+func (m *Model) listenForTaskMasterUpdateOutput(updateID, taskID string) tea.Cmd {
+	return func() tea.Msg {
+		// Get output and done channels from executor
+		outputChan := m.execService.GetOutput()
+		doneChan := m.execService.GetDone()
+		
+		// Process output until command completes
+		for {
+			select {
+			case line, ok := <-outputChan:
+				if !ok {
+					// Channel closed, continue waiting for completion
+					continue
+				}
+				return dialog.TaskOutputMsg{
+					TaskID: updateID,
+					Output: line,
+				}
+			case result := <-doneChan:
+				// Command completed
+				m.addLogLine(fmt.Sprintf("Task update %s completed successfully: %s", updateID, taskID))
+				
+				// Reload tasks to show updated information
+				if m.taskService != nil {
+					return tea.Batch(
+						func() tea.Msg {
+							if result.Success {
+								return dialog.TaskCompletedMsg{
+									TaskID: updateID,
+								}
+							}
+							errorMsg := "Task update failed"
+							if result.Error != nil {
+								errorMsg = result.Error.Error()
+							}
+							return dialog.TaskFailedMsg{
+								TaskID:  updateID,
+								Message: "Task update failed",
+								Error:   errorMsg,
+							}
+						},
+						WaitForTasksReload(m.taskService),
+					)
+				}
+				
+				if result.Success {
+					return dialog.TaskCompletedMsg{
+						TaskID: updateID,
+					}
+				}
+				errorMsg := "Task update failed"
+				if result.Error != nil {
+					errorMsg = result.Error.Error()
+				}
+				return dialog.TaskFailedMsg{
+					TaskID:  updateID,
+					Message: "Task update failed",
+					Error:   errorMsg,
+				}
+			}
+		}
+	}
+}
+
+// escapeShellArgForUpdate properly escapes a string for shell execution
+func escapeShellArgForUpdate(arg string) string {
+	// Use single quotes and escape single quotes by ending the single-quoted string,
+	// adding an escaped single quote, and starting a new single-quoted string
+	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+}
+
+// validateTaskMasterAvailable checks if task-master binary is available in PATH
+func (m *Model) validateTaskMasterAvailable() error {
+	_, err := exec.LookPath("task-master")
+	if err != nil {
+		return fmt.Errorf("task-master binary not found in PATH. Please install it with:\n\nnpm install -g @cyanheads/task-master-ai\n\nor visit https://github.com/cyanheads/task-master-ai for installation instructions.")
+	}
+	return nil
 }

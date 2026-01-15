@@ -26,6 +26,8 @@ type Task struct {
 	ActualHours     float64           `json:"actualHours,omitempty"`
 	Notes           []string          `json:"notes,omitempty"`
 	Tags            []string          `json:"tags,omitempty"`
+	IsCategory      bool              `json:"isCategory,omitempty"`
+	IsRoot          bool              `json:"isRoot,omitempty"`
 	
 	// Navigation helpers (not serialized)
 	Parent   *Task   `json:"-"`

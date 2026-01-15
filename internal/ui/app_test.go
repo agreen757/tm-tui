@@ -1094,3 +1094,81 @@ func TestOpenBranchCreateDialogLogging(t *testing.T) {
 	}
 }
 
+// TestRefreshTaskTree_ReturnsCommand tests that refreshTaskTree returns a command
+func TestRefreshTaskTree_ReturnsCommand(t *testing.T) {
+	m := createTestModel()
+	
+	// Call refreshTaskTree - it should return a command
+	cmd := m.refreshTaskTree()
+	
+	// Verify a command was returned
+	if cmd == nil {
+		t.Error("Expected refreshTaskTree to return a command, got nil")
+	}
+}
+
+// TestRefreshTaskTree_WithSelectedTask tests refreshTaskTree with a selected task
+func TestRefreshTaskTree_WithSelectedTask(t *testing.T) {
+	m := createTestModel()
+	
+	// Ensure we have a selected task
+	if len(m.tasks) == 0 {
+		t.Skip("Test requires tasks to be present")
+	}
+	
+	// Select the first task
+	m.selectedTask = &m.tasks[0]
+	originalTaskID := m.selectedTask.ID
+	
+	// Call refreshTaskTree
+	cmd := m.refreshTaskTree()
+	
+	// Verify command is returned
+	if cmd == nil {
+		t.Error("Expected refreshTaskTree to return a command with selected task")
+	}
+	
+	// Verify the task ID is still what we selected (before command execution)
+	if m.selectedTask.ID != originalTaskID {
+		t.Errorf("Selected task changed unexpectedly: was %s, now %s", originalTaskID, m.selectedTask.ID)
+	}
+}
+
+// TestRefreshTaskTree_WithoutSelection tests refreshTaskTree when no task is selected
+func TestRefreshTaskTree_WithoutSelection(t *testing.T) {
+	m := createTestModel()
+	
+	// Explicitly clear the selection
+	m.selectedTask = nil
+	
+	// Call refreshTaskTree
+	cmd := m.refreshTaskTree()
+	
+	// Verify command is returned
+	if cmd == nil {
+		t.Error("Expected refreshTaskTree to return a command even with no selection")
+	}
+}
+
+// TestRefreshTaskTree_PreservesViewMode tests that refreshTaskTree preserves the current view mode
+func TestRefreshTaskTree_PreservesViewMode(t *testing.T) {
+	m := createTestModel()
+	
+	// Set a specific view mode
+	m.viewMode = ViewModeList
+	originalViewMode := m.viewMode
+	
+	// Call refreshTaskTree
+	cmd := m.refreshTaskTree()
+	
+	// Verify command is returned
+	if cmd == nil {
+		t.Error("Expected refreshTaskTree to return a command")
+	}
+	
+	// Verify view mode is still the same (before command execution)
+	if m.viewMode != originalViewMode {
+		t.Errorf("View mode changed: was %d, now %d", originalViewMode, m.viewMode)
+	}
+}
+

@@ -54,6 +54,8 @@ func (m Model) renderCompactHelp() string {
 	b.WriteString(formatCompactKey("n", "Get next available task", helpWidth))
 	b.WriteString(formatCompactKey("r", "Refresh tasks from disk", helpWidth))
 	b.WriteString(formatCompactKey(":", "Jump to task by ID", helpWidth))
+	b.WriteString(formatCompactKey("ctrl+u", "Update selected task", helpWidth))
+	b.WriteString(formatCompactKey("      ", "(only works when a task is selected)", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+shift+c", "Analyze task complexity workflow", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+b", "Run command with Crush AI", helpWidth))
 	b.WriteString(formatCompactKey("ctrl+p", "Open Command Palette (pick any action)", helpWidth))

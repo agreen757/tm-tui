@@ -26,6 +26,138 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - ⚙️ **Customizable**: Configure through simple JSON configuration
 - 🎯 **Accessibility**: High-contrast themes, text labels for icons, keyboard-only navigation
 
+## Requirements
+
+- Go 1.23 or later
+- [Task Master AI](https://github.com/cyanheads/task-master-ai) installed globally (`npm i -g task-master-ai`)
+- A Task Master project (`.taskmaster` directory with tasks)
+
+## Installation
+
+### Quick Install (Recommended)
+
+```bash
+# Install tm-tui directly
+go install github.com/agreen757/tm-tui/cmd/tm-tui@latest
+
+# Run directly using full path
+~/go/bin/tm-tui
+```
+
+### Making the Command Available System-Wide
+
+After installation, ensure `~/go/bin` is in your PATH to use `tm-tui` directly:
+
+```bash
+# For Zsh (macOS default)
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# For Bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bash_profile
+source ~/.bash_profile
+```
+
+After adding to your PATH, you can simply use:
+
+```bash
+tm-tui
+```
+
+### Building from Source (Alternative)
+
+```bash
+# Clone the repository
+git clone https://github.com/agreen757/tm-tui.git
+cd tm-tui
+
+# Build
+make build
+
+# Run the built binary
+./bin/tm-tui
+```
+
+### Keyboard Shortcuts
+
+#### Navigation
+
+- `↑/k` - Move up
+- `↓/j` - Move down
+- `←/h` - Navigate left / collapse
+- `→/l` - Navigate right / expand
+- `Tab` - Switch between panels
+- `PageUp/PageDn` - Scroll by page
+- `Esc` - Back / close dialog
+
+#### Task Management
+
+- `n` - Jump to next available task
+- `s` - Change task status
+- `Enter` - Select item / toggle expand
+- `Space` - Multi-select task for bulk operations
+- `Ctrl+R` / `Alt+R` - Run task with Crush AI agent
+- `Alt+X` - Expand tasks (opens scope selection dialog)
+  - Supports single task, all tasks, task range, or by tag
+  - AI-powered expansion with --research flag
+  - Configurable depth (1-3 levels) and subtask count
+- `Alt+D` - Delete selected task (with confirmation)
+- `d` - Mark task as done (quick status change)
+- `p` - Change task priority
+
+#### PRD & Document Management
+
+- `Alt+Shift+P` - Create new PRD (interactive form)
+- `Alt+P` - Parse PRD file (load tasks from document)
+
+#### Git Operations
+
+- `g` - Open Git menu
+  - View repository status
+  - Switch branches
+  - Create new branches
+  - View commit history
+
+#### Complexity & Analysis
+
+- `Ctrl+Shift+C` - Analyze task complexity (AI-powered scoring)
+
+#### Tag Management
+
+- `Ctrl+T` - Manage tag contexts (switch active tag, visual selector)
+- `Ctrl+Shift+T` - Add new tag context (create tag with options)
+- `Ctrl+Shift+A` - Quick tag access (selector with add option)
+- `Alt+Shift+T` - View project tags (filter by project context)
+
+#### Project Management
+
+- `Ctrl+P` - Command palette (general project access)
+- `Alt+Shift+Q` - Quick project switch (find projects quickly)
+- `Alt+Shift+S` - Project search (full-text project search)
+
+#### Filtering & Search
+
+- `/` - Search tasks by ID, title, or content
+- `f` - Filter tasks by status or tag
+- `F` - Clear all filters
+
+#### View & Display
+
+- `1` - Switch to tree view
+- `2` - Switch to list view
+- `Alt+T` - Cycle through view modes
+- `Alt+L` - Toggle log panel
+- `Alt+I` - Toggle details panel
+
+#### Global Commands
+
+- `?` - Show/hide help overlay
+- `:` - Open command palette for additional commands
+- `r` - Refresh tasks from disk
+- `Ctrl+Z` - Undo (task modifications)
+- `Ctrl+Shift+C` - Clear TUI state
+- `q` - Quit TUI
+
 ## Recent Improvements (v0.1.21)
 
 ### Command Runner Modal Fix
@@ -33,11 +165,13 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Fixed Double Modal Overlap** - Resolved issue where pressing CTRL+B to run commands caused two modals to appear simultaneously.
 
 **What Was Fixed:**
+
 - **Command Runner Dialog Overlap**: Pressing CTRL+B previously showed both the Command Runner form dialog and the Task Runner Modal at the same time, causing visual confusion
 - **Root Cause**: Task Runner Modal was incorrectly being added to the dialog stack while the Command Runner Dialog was still active
 - **Solution**: Task Runner Modal is now managed separately via `m.taskRunnerVisible` flag, not through the dialog stack
 
 **Changes:**
+
 - **internal/ui/command_handlers.go**: Removed `PushDialog()` calls for Task Runner Modal
   - `handleCommandRunnerSubmission()`: Task Runner created without adding to dialog stack
   - `ensureTaskRunnerModal()`: Updated for consistency
@@ -45,16 +179,19 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - Aligns with existing architecture where Task Runner is rendered independently
 
 **User Experience:**
+
 - **Before**: CTRL+B showed overlapping modals, unclear which was active
 - **After**: Clean transition from Command Runner Dialog → Task Runner Modal
 - Improved visual clarity and expected behavior
 
 **Technical Details:**
+
 - Task Runner Modal already managed via `m.taskRunnerVisible` flag in `app.go`
 - No breaking changes to API or test expectations
 - Minimal code change (2 PushDialog calls removed)
 
 **Testing:**
+
 - ✅ Independent test suite validates both approaches
 - ✅ Build successful
 - ✅ All existing tests pass
@@ -67,6 +204,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Comprehensive Tag Management System** - Complete overhaul of tag management with new dialogs, improved workflows, and extensive test coverage.
 
 **What Was Added:**
+
 - **Tag Selector Dialog**: New multi-select and single-select tag picker with search and filtering
   - Clean, intuitive interface for browsing and selecting tags
   - Support for creating new tags directly from the selector
@@ -86,6 +224,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
   - Expansion scope dialog tests
 
 **Key Changes:**
+
 - **internal/ui/dialog/tag_selector.go** (420 lines): New tag selection dialog with multi-select support
 - **internal/ui/dialog/tag_selector_test.go** (1,401 lines): Comprehensive test suite for tag selector
 - **internal/ui/dialog/tag_editor_flow.go** (262 lines): State machine for tag management workflows
@@ -97,11 +236,13 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - **internal/ui/tag_helpers.go**: Enhanced helper functions for tag operations
 
 **Bug Fixes:**
+
 - Fixed Ctrl+T keybinding routing to open tag management dialog instead of tag switcher
 - Improved tag context retrieval for complexity analysis
 - Enhanced error handling in tag operations
 
 **User Experience:**
+
 - Intuitive tag selection with visual feedback
 - Seamless tag creation workflow without leaving the dialog
 - Consistent keyboard shortcuts across tag operations
@@ -109,6 +250,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - Real-time tag list updates after creation
 
 **Testing:**
+
 - ✅ 2,800+ new test lines added
 - ✅ All existing tests pass
 - ✅ Build successful
@@ -121,6 +263,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Comprehensive Git Management** - Full Git operations integration directly within the Task Master TUI with real-time streaming output and robust error handling.
 
 **What Was Added:**
+
 - **Git Menu** (`g` key): Access complete git operations without leaving the TUI
   - View repository status (staged/unstaged changes, untracked files)
   - Switch between branches with visual indicators
@@ -132,6 +275,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - **Dialog Improvements**: Enhanced confirmation dialog handling with comprehensive test coverage
 
 **Key Changes:**
+
 - **internal/git/operations.go** (338 lines): Git command execution and management
 - **internal/ui/dialog/git_runner.go** (419 lines): Git operation execution in Task Runner
 - **internal/ui/dialog/git_errors.go** (667 lines): Error handling and user-friendly messages
@@ -141,6 +285,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - **internal/ui/dialog/confirm_test.go** (246 lines): Confirmation dialog tests
 
 **Documentation Added:**
+
 - **docs/DEVELOPER_GIT_GUIDE.md**: Complete developer guide for git operations
 - **docs/GIT_OPERATIONS_USER_GUIDE.md**: End-user documentation for git management
 - **docs/GIT_RUNNER_API.md**: Technical API reference for git execution
@@ -148,6 +293,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - **internal/ui/dialog/COMPREHENSIVE_IMPLEMENTATION_GUIDE.md**: Dialog implementation patterns and best practices
 
 **User Experience:**
+
 - Git operations execute immediately when selected
 - Real-time progress feedback in Task Runner modal
 - Clear status indicators (✓ for success, ✗ for errors)
@@ -155,6 +301,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - All operations logged automatically for audit trails
 
 **Testing:**
+
 - ✅ 1500+ new tests covering git operations, error handling, and dialogs
 - ✅ All existing tests pass
 - ✅ Build successful
@@ -167,6 +314,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Refined Visual Design** - Improved header styling and overall UI layout for better visual hierarchy and clarity.
 
 **What Was Improved:**
+
 - **Header Redesign**: Re-enabled and enhanced header component with modern styling
 - **Visual Hierarchy**: Improved spacing and alignment for better content organization
 - **Layout Consistency**: Refined layout.go with comprehensive test coverage (1366 new tests in layout_test.go)
@@ -174,6 +322,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - **Status Bar Integration**: Improved integration with status indicators
 
 **Key Changes:**
+
 - **internal/ui/layout.go**: Major refactoring with improved component rendering and spacing
 - **internal/ui/layout_test.go**: Comprehensive test suite added (1366+ test lines)
 - **internal/ui/app.go**: Enhanced app initialization and layout management
@@ -182,6 +331,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - **internal/config/model_config.go**: Refined configuration handling
 
 **User Experience:**
+
 - Cleaner, more professional UI appearance
 - Better visual feedback and navigation cues
 - Improved readability with refined spacing and alignment
@@ -189,6 +339,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - Enhanced overall aesthetic consistency
 
 **Testing:**
+
 - ✅ 1366+ new layout tests added for comprehensive coverage
 - ✅ All existing tests pass
 - ✅ Build successful
@@ -201,15 +352,19 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Direct Crush Command Execution** - Fixed the Command Runner (Ctrl+B) to properly execute commands and detect completion.
 
 **What Was Fixed:**
+
 - **Issue #1**: After submitting a command via the Command Runner dialog, the Task Runner modal appeared but nothing happened. The command was never actually executed.
 - **Issue #2**: When commands did execute (in previous versions), they would run to completion but the UI remained stuck showing "Running" status indefinitely.
 
 **Root Causes:**
+
 1. **Execution Not Triggered**: `handleCommandRunnerSubmission` only sent `TaskStartedMsg` to create the tab, but never called `continueAdHocCommand` to actually start the command execution.
 2. **No Completion Detection**: `RunCommand` function returned `chan string` for output lines but never sent completion messages (`TaskCompletedMsg`/`TaskFailedMsg`) when the command finished.
 
 **Changes:**
+
 - **Command Execution Flow** (internal/ui/command_handlers.go):
+
   - Changed to use `tea.Sequence` to chain both tab creation and command execution
   - Ensures `executeAdHocCommand` (creates tab) runs before `continueAdHocCommand` (starts execution)
   - Matches the pattern used by regular task execution in `startCrushRun`
@@ -223,23 +378,26 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
   - Removed need for `convertOutputChannelToMsgChannel` helper
 
 **User Experience:**
-- **Before**: 
+
+- **Before**:
   - Modal showed "Running" but command never executed
   - If command did run, it would complete but stay in "Running" state forever
-- **After**: 
+- **After**:
   - Commands execute immediately when submitted
   - Real-time output streaming shows progress
   - Tab status updates to "Completed ✓" or "Failed ✗" when done
   - Clear visual feedback throughout the entire lifecycle
 
 **Technical Details:**
+
 - Proper message sequencing with `tea.Sequence` for guaranteed execution order
 - Unified message types (`TaskOutputMsg`, `TaskCompletedMsg`, `TaskFailedMsg`) across all execution paths
 - Command exit status tracked via `cmd.Wait()` error return
 - Completion messages sent before channel close for proper UI updates
 
 **Testing:**
-- ✅ All unit tests pass (TestRunCommand*)
+
+- ✅ All unit tests pass (TestRunCommand\*)
 - ✅ Build successful
 - ✅ Manual testing confirms proper execution and completion detection
 
@@ -250,10 +408,12 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Real-time Streaming Output** - Fixed PRD creation feature to display live output during generation in the Task Runner modal.
 
 **What Was Fixed:**
+
 - **Issue**: After completing the PRD creation form (`Alt+Shift+P`) and selecting a model, nothing appeared to happen. The generation was running in the background but users had no visual feedback.
 - **Solution**: Implemented proper channel-based message flow to stream Crush output in real-time to the Task Runner modal.
 
 **Changes:**
+
 - Task Runner modal now automatically appears when PRD generation starts
 - Real-time streaming of Crush AI output during PRD creation
 - Progress updates visible as the PRD is being generated
@@ -264,10 +424,12 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - Special handling for prd-creation task completion and failure states
 
 **User Experience:**
+
 - **Before**: Blank screen after form submission, unclear if anything was happening
 - **After**: Immediate Task Runner modal with live streaming output showing generation progress
 
 **Technical Details:**
+
 - Channel-based messaging for streaming updates (1000 message buffer)
 - Automatic TaskRunnerModal creation on TaskStartedMsg
 - Separate handling for "prd-creation" task ID
@@ -280,6 +442,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Git Repository Management** - Full Git integration directly in the TUI with dedicated dialogs for common Git operations.
 
 **Changes:**
+
 - **Git Menu Dialog** (`g` key): Access Git operations without leaving the TUI
   - View repository status with file changes
   - Switch between branches with visual indicators
@@ -294,6 +457,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **PRD Creation & Management** - Streamlined workflow for creating Product Requirements Documents directly in the TUI.
 
 **Changes:**
+
 - **Create PRD Dialog** (`Alt+Shift+P`): Interactive form for generating PRDs
   - Multi-field input form with title, summary, and scope
   - Textarea support for longer content
@@ -307,6 +471,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Next Task Output Modal** - Dedicated dialog for viewing `task-master next` command output.
 
 **Changes:**
+
 - Modal displays real-time output from `task-master next` command
 - Scrollable viewport for long output
 - Clean separation from log panel for better focus
@@ -314,6 +479,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - Keyboard shortcuts for navigation and closing
 
 **Benefits:**
+
 - Complete Git workflow without context switching to terminal
 - Faster branch management and status checking
 - Streamlined PRD creation process integrated into task workflow
@@ -328,11 +494,13 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Centered Pop-up Help Dialog** - The help view now renders as a true modal overlay, centered on top of the TUI instead of replacing the screen.
 
 **Changes:**
+
 - Introduced a layered render pipeline to draw dialogs over the base UI
 - Help dialog is now a modal with proper borders, positioning, and background fill
 - Dialog stack honors focus and overlays without breaking the underlying layout
 
 **Benefits:**
+
 - Help stays readable without hiding the main UI context
 - Consistent modal behavior aligned with other dialogs
 
@@ -343,6 +511,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 **Next Task Hotkey Output** - The `n` hotkey now fully integrates with the Log panel to display real-time command output.
 
 **Changes:**
+
 - Pressing `n` executes `task-master next` and streams output to the Log panel
 - Log panel automatically shows when the command starts
 - Output displays in real-time as the command executes
@@ -350,6 +519,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 - Full command history logged to `.taskmaster/logs/tui-session.log`
 
 **Benefits:**
+
 - Seamless workflow for jumping to next available task
 - Clear visibility of command results without context switching
 - Integrated logging for debugging and audit trails
@@ -360,12 +530,14 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
 
 **Task Selection & Display Stability** - Fixed a critical bug where selecting tasks in the tree view would display incorrect task details. For example, selecting Task 5 would show Task 10's information in the details panel.
 
-**Root Cause:** 
+**Root Cause:**
+
 - Subtasks in `tasks.json` had numeric IDs (1, 2, 3) instead of proper dotted notation ("1.1", "1.2", "1.3")
 - This caused ID collisions in the internal task index where subtask ID "1" would overwrite parent task "1"
 - Additionally, pointer instability in recursive task traversal created references to temporary memory
 
 **Solution Implemented:**
+
 - **Automatic ID Normalization**: Added `normalizeSubtaskIDs()` function that automatically fixes all subtask IDs during task loading
   - Parent task "1" now correctly has subtasks "1.1", "1.2", "1.3"
   - Nested subtasks properly cascade: "1.1" gets subtasks "1.1.1", "1.1.2", etc.
@@ -377,6 +549,7 @@ Task Master TUI provides a beautiful, keyboard-driven interface for managing dev
   - Added defensive re-fetching in `renderTaskDetails()` to guarantee correctness
 
 **Benefits:**
+
 - Task details panel now always shows the correct task information
 - Tasks with subtasks (Tasks 1-5) are now properly expandable in the tree view
 - No more confusion between parent tasks and their subtasks
@@ -426,16 +599,17 @@ The memory system stores key-value pairs persistently with BadgerDB:
 
 ### Memory Key Conventions
 
-| Prefix | Purpose | Example |
-|--------|---------|----------|
-| `task:` | Task metadata and status | `task:2.1` → task info |
-| `log:` | Task completion logs | `log:2.1` → implementation details |
-| `readme:` | Cached documentation | `readme:main` → README content |
-| `context:` | LLM context snapshots | `context:session-1` → session notes |
+| Prefix     | Purpose                  | Example                             |
+| ---------- | ------------------------ | ----------------------------------- |
+| `task:`    | Task metadata and status | `task:2.1` → task info              |
+| `log:`     | Task completion logs     | `log:2.1` → implementation details  |
+| `readme:`  | Cached documentation     | `readme:main` → README content      |
+| `context:` | LLM context snapshots    | `context:session-1` → session notes |
 
 ### Storage & Performance
 
 **Default**: BadgerDB storage at `.taskmaster/memory/`
+
 - **Fast**: O(1) key lookups
 - **Reliable**: ACID transactions for data consistency
 - **Embedded**: No external server required
@@ -444,6 +618,7 @@ The memory system stores key-value pairs persistently with BadgerDB:
 - **Concurrent safe**: Handles multiple CLI invocations
 
 **Implementation details**:
+
 - Database path: `.taskmaster/memory/` (auto-created)
 - Concurrent safe (handles multiple CLI invocations)
 - Automatic garbage collection for obsolete values
@@ -533,145 +708,10 @@ Agents working with Task Master can leverage memory for:
 
 This integration enables continuous learning and improved decision-making across development sessions.
 
-## Prerequisites
-
-- Go 1.23 or later
-- [Task Master AI](https://github.com/cyanheads/task-master-ai) installed globally (`npm i -g task-master-ai`)
-- A Task Master project (`.taskmaster` directory with tasks)
-
-## Installation
-
-### From Source
-
-```bash
-# Clone the repository
-git clone https://github.com/agreen757/tm-tui.git
-cd tm-tui
-
-# Build and install (includes Crush CLI for task execution)
-make install
-
-# Or install everything (tm-tui, memory tool, crush)
-make install-all
-
-# Or just build without installing
-make build
-
-# Check if Crush is installed
-make check-crush
-```
-
-### Using Go Install
-
-```bash
-# Install tm-tui
-go install github.com/agreen757/tm-tui/cmd/tm-tui@latest
-
-# Install Crush CLI (required for task execution feature)
-go install github.com/charmbracelet/crush@latest
-```
-
-**Note:** After installation, ensure `~/go/bin` is in your PATH:
-
-```bash
-# For Zsh (macOS default)
-echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# For Bash
-echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bash_profile
-source ~/.bash_profile
-```
-
-Alternatively, run directly with the full path:
-```bash
-~/go/bin/tm-tui
-```
-
-## Usage
-
-Navigate to a directory with a Task Master project (containing `.taskmaster` directory) and run:
-
-```bash
-tm-tui
-
-# or run directly without installing
-go run ./cmd/tm-tui/main.go
-```
-
-### Keyboard Shortcuts
-
-#### Navigation
-- `↑/k` - Move up
-- `↓/j` - Move down  
-- `←/h` - Navigate left / collapse
-- `→/l` - Navigate right / expand
-- `Tab` - Switch between panels
-- `PageUp/PageDn` - Scroll by page
-- `Esc` - Back / close dialog
-
-#### Task Management
-- `n` - Jump to next available task
-- `s` - Change task status
-- `Enter` - Select item / toggle expand
-- `Space` - Multi-select task for bulk operations
-- `Ctrl+R` / `Alt+R` - Run task with Crush AI agent
-- `Alt+X` - Expand tasks (opens scope selection dialog)
-  - Supports single task, all tasks, task range, or by tag
-  - AI-powered expansion with --research flag
-  - Configurable depth (1-3 levels) and subtask count
-- `Alt+D` - Delete selected task (with confirmation)
-- `d` - Mark task as done (quick status change)
-- `p` - Change task priority
-
-#### PRD & Document Management
-- `Alt+Shift+P` - Create new PRD (interactive form)
-- `Alt+P` - Parse PRD file (load tasks from document)
-
-#### Git Operations
-- `g` - Open Git menu
-  - View repository status
-  - Switch branches
-  - Create new branches
-  - View commit history
-
-#### Complexity & Analysis
-- `Ctrl+Shift+C` - Analyze task complexity (AI-powered scoring)
-
-#### Tag Management
-- `Ctrl+T` - Manage tag contexts (switch active tag, visual selector)
-- `Ctrl+Shift+T` - Add new tag context (create tag with options)
-- `Ctrl+Shift+A` - Quick tag access (selector with add option)
-- `Alt+Shift+T` - View project tags (filter by project context)
-
-#### Project Management
-- `Ctrl+P` - Command palette (general project access)
-- `Alt+Shift+Q` - Quick project switch (find projects quickly)
-- `Alt+Shift+S` - Project search (full-text project search)
-
-#### Filtering & Search
-- `/` - Search tasks by ID, title, or content
-- `f` - Filter tasks by status or tag
-- `F` - Clear all filters
-
-#### View & Display
-- `1` - Switch to tree view
-- `2` - Switch to list view
-- `Alt+T` - Cycle through view modes
-- `Alt+L` - Toggle log panel
-- `Alt+I` - Toggle details panel
-
-#### Global Commands
-- `?` - Show/hide help overlay
-- `:` - Open command palette for additional commands
-- `r` - Refresh tasks from disk
-- `Ctrl+Z` - Undo (task modifications)
-- `Ctrl+Shift+C` - Clear TUI state
-- `q` - Quit TUI
-
 ## Common Workflows
 
 ### Creating a PRD with AI
+
 1. Press `Alt+Shift+P` to open the "Create PRD" dialog
 2. Fill in the PRD details:
    - **Title**: Short descriptive title for your project
@@ -687,12 +727,14 @@ go run ./cmd/tm-tui/main.go
 **New in v0.1.16:** The Task Runner modal now displays live streaming output during PRD generation, providing immediate visual feedback and progress updates.
 
 ### Creating Tasks from a PRD
+
 1. Press `Alt+P` to open the "Parse PRD" dialog
 2. Select or enter the path to your PRD document
 3. Review the generated tasks in the main view
 4. Edit, organize, or prioritize as needed
 
 ### Analyzing Task Complexity
+
 1. Navigate to a task or select multiple tasks with `Space`
 2. Press `Ctrl+Shift+C` to open "Analyze Complexity" dialog
 3. Choose analysis scope: all tasks, selected task, or by tag
@@ -701,6 +743,7 @@ go run ./cmd/tm-tui/main.go
 5. Filter and sort results for focused planning
 
 ### Expanding Tasks into Subtasks
+
 1. Select a task or prepare to expand all tasks
 2. Press `Alt+X` to open the "Expand Tasks" dialog
 3. Choose expansion scope:
@@ -723,15 +766,18 @@ go run ./cmd/tm-tui/main.go
 The new tag management system provides visual, interactive tag selection:
 
 1. Press `Ctrl+T` to open Tag Management
+
    - Visual list shows all available tags with metadata
    - Active tag marked with indicator (●)
    - Each tag shows task count and completion status
 
 2. **Switch to a tag**: Select it from the list
+
    - Immediate context switch
    - All subsequent operations use new tag context
 
 3. **Create a new tag**: Select "Add New Tag..." option
+
    - Opens inline creation dialog
    - Configure name, copy-from options, description
    - New tag immediately available in list
@@ -749,6 +795,7 @@ Task Master TUI integrates with [Crush](https://github.com/charmbracelet/crush),
 #### Autonomous Execution Capabilities
 
 Crush AI autonomously:
+
 - **Analyzes task requirements** from the task description and implementation details
 - **Explores the codebase** to understand project structure and patterns
 - **Implements features** following existing code conventions and best practices
@@ -758,10 +805,12 @@ Crush AI autonomously:
 - **Handles edge cases** and error scenarios systematically
 
 #### Prerequisites
+
 - Crush CLI installed and accessible in PATH (`crush` command available)
 - API keys configured in Crush for your preferred AI provider
 
 #### Running a Task
+
 1. Navigate to the task you want to execute
 2. Press `Ctrl+R` (or `Alt+R`) to start the task runner
 3. Model selection inside the task runner is not currently enabled
@@ -770,6 +819,7 @@ Crush AI autonomously:
 6. Monitor progress as Crush works through the task
 
 #### Task Runner Modal Controls
+
 - `Tab` / `Shift+Tab` - Switch between task tabs (when running multiple tasks)
 - `1-9` - Jump directly to tab number
 - `↑/↓` - Scroll output
@@ -780,6 +830,7 @@ Crush AI autonomously:
 - `Esc` - Close modal (only when no tasks are running)
 
 #### Features
+
 - **Real-time streaming**: See Crush's output as it works
 - **Multi-task support**: Run up to 9 tasks concurrently in separate tabs
 - **Automatic logging**: All output saved to `.taskmaster/logs/crush-run-<task-id>-<timestamp>.log`
@@ -791,6 +842,7 @@ Crush AI autonomously:
 When a task executes autonomously, all activities are logged to `.taskmaster/logs/` with comprehensive details:
 
 **Log File Structure** (`.taskmaster/logs/crush-run-<task-id>-<timestamp>.log`):
+
 - **Command Execution**: Full output from all commands run
 - **Code Changes**: File modifications with before/after snippets
 - **Test Results**: Complete test output and pass/fail status
@@ -800,6 +852,7 @@ When a task executes autonomously, all activities are logged to `.taskmaster/log
 - **Performance Notes**: Execution time and resource usage
 
 **Task Completion Summary**:
+
 1. Navigate to a completed task
 2. Press `Ctrl+R` to view the task log in the Task Runner modal
 3. Scroll through the output to see the complete execution history
@@ -808,6 +861,7 @@ When a task executes autonomously, all activities are logged to `.taskmaster/log
 
 **Manual Completion Logging**:
 You can add detailed notes after task execution using the Task Master CLI:
+
 ```bash
 # Log implementation details for a completed task
 task-master update-subtask --id=<task-id> --prompt="Implementation completed:
@@ -819,6 +873,7 @@ task-master update-subtask --id=<task-id> --prompt="Implementation completed:
 ```
 
 **Log Retention and Analysis**:
+
 - All execution logs stored in `.taskmaster/logs/` for future reference
 - Logs retained until manually deleted (automatic rotation available)
 - Use logs to understand task execution patterns and identify bottlenecks
@@ -826,7 +881,9 @@ task-master update-subtask --id=<task-id> --prompt="Implementation completed:
 - Reference logs when implementing related tasks for consistency
 
 #### Task Prompt Generation
+
 When you run a task, the TUI generates a prompt for Crush that includes:
+
 - Task ID and title
 - Full task description
 - Implementation details
@@ -835,6 +892,7 @@ When you run a task, the TUI generates a prompt for Crush that includes:
 - Dependencies (if any)
 
 You can customize the prompt template by creating a `CRUSH_RUN_INSTRUCTIONS.md` file in your project root. The template supports Go text/template syntax with the following variables:
+
 - `{{.TaskID}}` - Task identifier
 - `{{.Title}}` - Task title
 - `{{.Description}}` - Task description
@@ -844,6 +902,7 @@ You can customize the prompt template by creating a `CRUSH_RUN_INSTRUCTIONS.md` 
 - `{{.Dependencies}}` - Comma-separated dependency IDs
 
 ### Managing Task Tags
+
 1. Press `Alt+A` to add tags to the selected task
 2. Create new tags or select from existing tags
 3. Use `Ctrl+Shift+M` to open the tag context manager
@@ -851,6 +910,7 @@ You can customize the prompt template by creating a `CRUSH_RUN_INSTRUCTIONS.md` 
 5. Filter tasks by tag using `f` and selecting tags
 
 ### Switching Projects
+
 1. Press `Ctrl+T` to open the project switcher
 2. Navigate to your desired project
 3. View tasks specific to that project context
@@ -894,12 +954,14 @@ When a git operation executes, you'll see:
 #### Handling Git Operation Results
 
 **Successful Operation:**
+
 - Output shows git's normal success message
 - Status bar displays "Completed ✓"
 - You can press `Esc` to close the modal
 - Changes are immediately reflected (branches refresh, status updates, etc.)
 
 **Failed Operation:**
+
 - Output shows git's error message
 - Status bar displays "Failed ✗"
 - Error details are logged for review
@@ -908,6 +970,7 @@ When a git operation executes, you'll see:
 #### Example Workflows
 
 **Switching Branches**
+
 ```
 1. Press g → Switch Branch
 2. Highlight "feature/my-feature" in the list
@@ -919,6 +982,7 @@ When a git operation executes, you'll see:
 ```
 
 **Creating a Branch**
+
 ```
 1. Press g → Create Branch
 2. Enter branch name when prompted
