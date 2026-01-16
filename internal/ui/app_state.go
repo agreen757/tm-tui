@@ -5,6 +5,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// SavedDialogState captures the app state before opening a dialog
+// to enable restoration when the dialog closes
+type SavedDialogState struct {
+	CurrentView     ViewMode
+	ScrollPosition  int
+	SelectedTaskID  string
+	FocusedPanel    Panel
+	ShowDetailsPane bool
+	ShowLogPane     bool
+}
+
 // AppState centralizes references shared across the UI (dialogs, keymap, etc.).
 type AppState struct {
 	dialogManager        *dialog.DialogManager
@@ -12,6 +23,7 @@ type AppState struct {
 	nextTaskModalActive  bool
 	nextTaskOutput       []string
 	PrdCreationState     *PrdCreationState
+	SavedDialogStates    []SavedDialogState // Stack of saved states for dialog nesting
 }
 
 // NewAppState constructs an AppState helper.
@@ -160,4 +172,25 @@ func (s *AppState) GetPrdCreationState() *PrdCreationState {
 // ClearPrdCreationState clears the PRD creation state.
 func (s *AppState) ClearPrdCreationState() {
 	s.PrdCreationState = nil
+}
+
+// SaveDialogState saves the current app state for restoration after dialog closes
+func (s *AppState) SaveDialogState(state SavedDialogState) {
+	s.SavedDialogStates = append(s.SavedDialogStates, state)
+}
+
+// RestoreDialogState pops and returns the most recently saved app state
+func (s *AppState) RestoreDialogState() *SavedDialogState {
+	if len(s.SavedDialogStates) == 0 {
+		return nil
+	}
+	// Pop from the end of the slice
+	state := s.SavedDialogStates[len(s.SavedDialogStates)-1]
+	s.SavedDialogStates = s.SavedDialogStates[:len(s.SavedDialogStates)-1]
+	return &state
+}
+
+// HasSavedState checks if there are any saved dialog states
+func (s *AppState) HasSavedState() bool {
+	return len(s.SavedDialogStates) > 0
 }

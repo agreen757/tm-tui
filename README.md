@@ -179,6 +179,7 @@ make build
 - `Alt+T` - Cycle through view modes
 - `Alt+L` - Toggle log panel
 - `Alt+I` - Toggle details panel
+- `Ctrl+F` - Open log file browser dialog
 
 #### Global Commands
 

@@ -83,6 +83,9 @@ type KeyMap struct {
 
 	// Update task
 	UpdateTask key.Binding
+
+	// Log Browser
+	LogBrowser key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings
@@ -171,6 +174,12 @@ func DefaultKeyMap() KeyMap {
 		UpdateTask: key.NewBinding(
 			key.WithKeys("ctrl+u"),
 			key.WithHelp("ctrl+u", "update selected task"),
+		),
+
+		// Log Browser
+		LogBrowser: key.NewBinding(
+			key.WithKeys("ctrl+f"),
+			key.WithHelp("ctrl+f", "log browser"),
 		),
 
 		// Status changes
@@ -499,6 +508,13 @@ func NewKeyMap(cfg *config.Config) KeyMap {
 		)
 	}
 
+	if logBrowserKey := getKey("logBrowser", "ctrl+f"); logBrowserKey != "" {
+		km.LogBrowser = key.NewBinding(
+			key.WithKeys(logBrowserKey),
+			key.WithHelp(logBrowserKey, "log browser"),
+		)
+	}
+
 	return km
 }
 
@@ -516,7 +532,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.SetInProgress, k.SetDone, k.SetBlocked, k.SetCancelled},
 		{k.SetDeferred, k.SetPending},
 		{k.FocusTaskList, k.FocusDetails, k.FocusLog, k.CyclePanel},
-		{k.ToggleDetails, k.ToggleLog},
+		{k.ToggleDetails, k.ToggleLog, k.LogBrowser},
 		{k.Help, k.Quit, k.Cancel, k.ClearState},
 		{k.AnalyzeComplexity},
 		{k.CommandPalette, k.ParsePRD, k.CreatePRD, k.ExpandTask, k.DeleteTask, k.RunTask, k.UpdateTask, k.CommandRunner},

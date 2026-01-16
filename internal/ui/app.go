@@ -380,6 +380,60 @@ func (m *Model) GitStatus() git.GitStatus {
 	return m.gitRefresher.GetStatus()
 }
 
+// saveStateBeforeDialog saves the current app state before opening a dialog
+func (m *Model) saveStateBeforeDialog() {
+	selectedID := ""
+	if m.selectedTask != nil {
+		selectedID = m.selectedTask.ID
+	}
+
+	savedState := SavedDialogState{
+		CurrentView:     m.viewMode,
+		ScrollPosition:  m.taskListViewport.YOffset,
+		SelectedTaskID:  selectedID,
+		FocusedPanel:    m.focusedPanel,
+		ShowDetailsPane: m.showDetailsPanel,
+		ShowLogPane:     m.showLogPanel,
+	}
+	m.appState.SaveDialogState(savedState)
+}
+
+// restoreStateAfterDialog restores the app state that was saved before opening a dialog
+func (m *Model) restoreStateAfterDialog() {
+	savedState := m.appState.RestoreDialogState()
+	if savedState == nil {
+		return
+	}
+
+	// Restore view mode
+	m.viewMode = savedState.CurrentView
+
+	// Restore scroll position
+	m.taskListViewport.YOffset = savedState.ScrollPosition
+
+	// Restore selected task
+	if savedState.SelectedTaskID != "" {
+		m.ensureTaskSelected(savedState.SelectedTaskID)
+	}
+
+	// Restore focused panel
+	m.focusedPanel = savedState.FocusedPanel
+
+	// Restore panel visibility
+	m.showDetailsPanel = savedState.ShowDetailsPane
+	m.showLogPanel = savedState.ShowLogPane
+
+	// Update viewports to reflect changes
+	m.updateViewportSizes()
+	m.updateTaskListViewport()
+	if m.showDetailsPanel {
+		m.updateDetailsViewport()
+	}
+	if m.showLogPanel {
+		m.updateLogViewport()
+	}
+}
+
 // openCommandPalette displays the palette dialog listing all commands.
 func (m *Model) openCommandPalette() {
 	dm := m.dialogManager()
@@ -497,6 +551,23 @@ func (m *Model) openCommitsDialog() {
 
 	commitsDialog := dialog.NewCommitsDialog(m.gitRepoInfo.RootPath, onSelect)
 	m.appState.PushDialog(commitsDialog)
+}
+
+func (m *Model) openLogBrowserDialog() tea.Cmd {
+	return func() tea.Msg {
+		// Save current app state before opening dialog
+		m.saveStateBeforeDialog()
+
+		// Type assert taskService to *taskmaster.Service
+		taskSvc, ok := m.taskService.(*taskmaster.Service)
+		if !ok {
+			m.addLogLine("Error: Unable to open log browser - invalid task service")
+			return nil
+		}
+		logBrowserDialog := dialog.NewLogBrowserDialog(m.width, m.height, taskSvc)
+		m.appState.PushDialog(logBrowserDialog)
+		return logBrowserDialog.Init()
+	}
 }
 
 func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
@@ -2954,7 +3025,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Check if we have any active dialogs - let dialogue manager handle messages first
-		if m.appState != nil && m.appState.HasActiveDialog() {
+		hadActiveDialog := m.appState != nil && m.appState.HasActiveDialog()
+		if hadActiveDialog {
 			// Let dialog manager handle the message
 			cmd := m.appState.HandleDialogMsg(incomingMsg)
 			if cmd != nil {
@@ -2982,6 +3054,11 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 						cmds = append(cmds, wait)
 					}
 				}
+			}
+
+			// Check if dialog was just closed - restore app state if we had saved it
+			if !m.appState.HasActiveDialog() && m.appState.HasSavedState() {
+				m.restoreStateAfterDialog()
 			}
 
 			// If message is a key event and we have active dialogs,
@@ -3188,6 +3265,10 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.showLogPanel {
 					m.updateLogViewport()
 				}
+
+			case key.Matches(msg, m.keyMap.LogBrowser):
+				// Open log browser dialog
+				return m, m.openLogBrowserDialog()
 
 			case key.Matches(msg, m.keyMap.CommandPalette):
 				m.openCommandPalette()
