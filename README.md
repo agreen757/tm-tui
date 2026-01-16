@@ -194,7 +194,18 @@ make build
 
 For detailed information about all releases, new features, bug fixes, and improvements, see the [CHANGELOG.md](CHANGELOG.md).
 
-### Latest Release: v0.1.22
+### Latest Release: v0.1.23
+
+**Log Browser & Performance Optimization** - Browse and search log files directly within the TUI, plus enhanced caching for improved performance.
+
+- Press `Ctrl+F` to open the Log Browser dialog
+- Navigate and view all log files in `.taskmaster/logs/`
+- Full-featured log viewer with line numbers, word wrap, and search
+- Thread-safe LRU cache implementation for improved performance
+- 10,000+ new test lines for comprehensive test coverage
+- Supports markdown formatting and syntax highlighting
+
+### Previous Release: v0.1.22
 
 **Task Update Functionality** - Add notes, progress updates, and implementation details directly to tasks without leaving the TUI.
 

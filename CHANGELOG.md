@@ -5,6 +5,58 @@ All notable changes to Task Master TUI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.1.23] - 2026-01-16
+
+### Log Browser & Performance Optimization
+
+**Interactive Log File Browser** - Browse, view, and search log files directly within the TUI with a comprehensive feature set and performance optimizations.
+
+#### Added
+
+- **Log File Browser Dialog** (`Ctrl+F`): Browse and view log files in the TUI
+  - Navigate all log files in `.taskmaster/logs/` directory
+  - View files with syntax highlighting and markdown support
+  - Toggle line numbers, word wrap, and search within content
+  - Optimized for large log files with virtualized rendering
+  - Support for filtering logs by tag or task ID
+- **LRU Cache Implementation**: Thread-safe Least Recently Used cache
+  - Efficient key-value storage with configurable size limits
+  - Automatic eviction of least recently used items
+  - Thread-safe operations with mutex protection
+  - Support for Get, Put, Delete, Clear, and Keys operations
+  - Comprehensive benchmark suite for performance validation
+- **State Preservation**: Save and restore UI state when opening dialogs
+  - Remember selected task, scroll position, and panel focus
+  - Seamless return to previous state after dialog closes
+  - Handles nested dialog scenarios correctly
+
+#### Changed
+
+- **internal/ui/dialog/log_browser.go** (580 lines): Log file browser dialog implementation
+- **internal/ui/dialog/log_file_browser.go** (797 lines): File navigation interface
+- **internal/ui/dialog/log_viewer.go** (1265 lines): Log content viewer with advanced features
+- **internal/ui/dialog/log_tag_selector.go** (451 lines): Tag-based log filtering
+- **internal/ui/dialog/lru_cache.go** (118 lines): Thread-safe LRU cache implementation
+- **internal/ui/keymap.go**: Added `Ctrl+F` keybinding for log browser
+- **internal/ui/app.go**: State preservation for dialog integration
+
+#### Test Coverage
+
+- **10,000+ new test lines** across 14 new test files
+- Comprehensive edge case handling for large files, performance scenarios
+- Accessibility testing for keyboard navigation and screen readers
+- Integration tests with mock file system for reliable testing
+- Performance benchmarks for LRU cache operations
+
+#### User Experience
+
+- Quick access to log files with `Ctrl+F` from anywhere in the TUI
+- File browser navigation with familiar keyboard controls
+- Content viewer with line numbers, word wrap, and search
+- Syntax highlighting for common file formats
+- State preservation ensures seamless dialog integration
+- Improved performance with caching for frequently accessed data
+
 ## [v0.1.22] - 2025-01-15
 
 ### Task Update Functionality
@@ -331,6 +383,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All selection paths (`selectNext`, `selectPrevious`, `ensureTaskSelected`) consistently use stable pointers
   - Added defensive re-fetching in `renderTaskDetails()` to guarantee correctness
 
+[v0.1.23]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.23
 [v0.1.22]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.22
 [v0.1.21]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.21
 [v0.1.20]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.20
