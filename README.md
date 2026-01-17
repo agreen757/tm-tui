@@ -194,7 +194,19 @@ make build
 
 For detailed information about all releases, new features, bug fixes, and improvements, see the [CHANGELOG.md](CHANGELOG.md).
 
-### Latest Release: v0.1.23
+### Latest Release: v0.1.24
+
+**Task Score Highlighting** - Enhanced visual representation of task complexity with consistent color-coding and improved accessibility.
+
+- Color-coded complexity indicators (Low: Blue, Medium: Turquoise, High: Orange, Very High: Crimson)
+- Accessible text labels for all complexity levels
+- Consistent styling across all complexity representations
+- Combined visual and textual indicators for better readability
+- Enhanced test coverage with 200+ new test lines
+- Improved color contrast for better visibility
+- Support for both numeric complexity scores and level enums
+
+### Previous Release: v0.1.23
 
 **Log Browser & Performance Optimization** - Browse and search log files directly within the TUI, plus enhanced caching for improved performance.
 
@@ -204,16 +216,6 @@ For detailed information about all releases, new features, bug fixes, and improv
 - Thread-safe LRU cache implementation for improved performance
 - 10,000+ new test lines for comprehensive test coverage
 - Supports markdown formatting and syntax highlighting
-
-### Previous Release: v0.1.22
-
-**Task Update Functionality** - Add notes, progress updates, and implementation details directly to tasks without leaving the TUI.
-
-- Press `Ctrl+U` on any task to open the update dialog
-- Multi-line textarea for detailed implementation notes
-- Automatic detection of task vs. subtask for proper command routing
-- Real-time execution feedback in Task Runner modal
-- 1,700+ new test lines for comprehensive coverage
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history and detailed release notes.
 

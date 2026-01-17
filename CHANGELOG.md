@@ -5,6 +5,52 @@ All notable changes to Task Master TUI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.1.24] - 2026-01-16
+
+### Task Score Highlighting
+
+**Enhanced Complexity Visualization** - Improved visual representation of task complexity scores with consistent color-coding and enhanced accessibility support.
+
+#### Added
+
+- **Color-coded Complexity System**: Standardized color scheme for complexity levels
+  - Low complexity: Royal Blue (#4169E1)
+  - Medium complexity: Dark Turquoise (#00CED1)
+  - High complexity: Orange (#FFA500)
+  - Very High complexity: Crimson (#DC143C)
+- **Accessibility Improvements**: Text-based alternatives for color-coded indicators
+  - `GetComplexityLabel()`: Returns text representation (LOW, MEDIUM, HIGH, VERY HIGH)
+  - `GetComplexityIndicator()`: Combined format with both text and numeric score
+  - Consistent labeling across all UI components
+- **Complexity Style Functions**:
+  - `GetComplexityStyle()`: Style based on numeric complexity scores
+  - `GetComplexityLevelStyle()`: Style based on complexity level enums
+  - Consistent bold formatting and color application
+
+#### Changed
+
+- **internal/ui/styles.go**: Enhanced with complexity styling constants and functions
+- **internal/ui/styles_test.go** (213 lines): Comprehensive test coverage for complexity styling
+- **internal/ui/complexity.go**: Updated for consistent level representation
+- **internal/ui/dialog/complexity_report.go**: Enhanced report dialog with new styling
+- **internal/ui/app.go**: Updated complexity rendering
+
+#### Test Coverage
+
+- **200+ new test lines** focusing on complexity style consistency
+- Tests for color constants and their correct hex values
+- Tests for style application based on complexity thresholds
+- Boundary testing for complexity level transitions
+- Comprehensive accessibility testing
+
+#### User Experience
+
+- More intuitive visual complexity representation
+- Consistent color-coding throughout the application
+- Improved readability with combined text and color indicators
+- Better accessibility for users with color vision deficiencies
+- Enhanced visual hierarchy in complexity reports
+
 ## [v0.1.23] - 2026-01-16
 
 ### Log Browser & Performance Optimization
@@ -383,6 +429,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All selection paths (`selectNext`, `selectPrevious`, `ensureTaskSelected`) consistently use stable pointers
   - Added defensive re-fetching in `renderTaskDetails()` to guarantee correctness
 
+[v0.1.24]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.24
 [v0.1.23]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.23
 [v0.1.22]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.22
 [v0.1.21]: https://github.com/agreen757/tm-tui/releases/tag/v0.1.21
