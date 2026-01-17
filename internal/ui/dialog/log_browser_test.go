@@ -21,10 +21,6 @@ func TestLogBrowserDialogInit(t *testing.T) {
 		t.Errorf("Expected focusedPanel=0, got %d", dialog.focusedPanel)
 	}
 
-	if dialog.currentTag != "" {
-		t.Errorf("Expected empty currentTag, got %s", dialog.currentTag)
-	}
-
 	if dialog.currentPath != "" {
 		t.Errorf("Expected empty currentPath, got %s", dialog.currentPath)
 	}
@@ -38,10 +34,6 @@ func TestLogBrowserDialogInit(t *testing.T) {
 		t.Fatal("fileBrowser is nil")
 	}
 
-	if dialog.tagSelector == nil {
-		t.Fatal("tagSelector is nil")
-	}
-
 	if dialog.logViewer == nil {
 		t.Fatal("logViewer is nil")
 	}
@@ -49,10 +41,6 @@ func TestLogBrowserDialogInit(t *testing.T) {
 	// Verify panel dimensions
 	if dialog.fileBrowser.width == 0 {
 		t.Errorf("fileBrowser width is 0")
-	}
-
-	if dialog.tagSelector.width == 0 {
-		t.Errorf("tagSelector width is 0")
 	}
 
 	if dialog.logViewer.width == 0 {
@@ -72,11 +60,9 @@ func TestFocusCycling(t *testing.T) {
 		expected int
 	}{
 		{"Tab from 0 to 1", 0, "tab", 1},
-		{"Tab from 1 to 2", 1, "tab", 2},
-		{"Tab from 2 to 0", 2, "tab", 0},
-		{"Shift+Tab from 2 to 1", 2, "shift+tab", 1},
+		{"Tab from 1 to 0", 1, "tab", 0},
 		{"Shift+Tab from 1 to 0", 1, "shift+tab", 0},
-		{"Shift+Tab from 0 to 2", 0, "shift+tab", 2},
+		{"Shift+Tab from 0 to 1", 0, "shift+tab", 1},
 	}
 
 	for _, test := range tests {
@@ -117,17 +103,12 @@ func TestPanelProportions(t *testing.T) {
 	width, height := 100, 30
 	dialog := NewLogBrowserDialog(width, height, mockService)
 
-	// Expected proportions: 35% file browser, 25% tag selector, 40% log viewer
-	expectedBrowserWidth := (width * 35) / 100
-	expectedTagWidth := (width * 25) / 100
-	expectedViewerWidth := width - expectedBrowserWidth - expectedTagWidth
+	// Expected proportions: 40% file browser, 60% log viewer
+	expectedBrowserWidth := (width * 40) / 100
+	expectedViewerWidth := width - expectedBrowserWidth
 
 	if dialog.fileBrowser.width != expectedBrowserWidth {
 		t.Errorf("Expected fileBrowser width=%d, got %d", expectedBrowserWidth, dialog.fileBrowser.width)
-	}
-
-	if dialog.tagSelector.width != expectedTagWidth {
-		t.Errorf("Expected tagSelector width=%d, got %d", expectedTagWidth, dialog.tagSelector.width)
 	}
 
 	if dialog.logViewer.width != expectedViewerWidth {
@@ -185,10 +166,6 @@ func TestLayoutRendering(t *testing.T) {
 		t.Errorf("View() should include file browser panel")
 	}
 
-	if !hasSubstring(view, "Tags") && !hasSubstring(view, "tag") {
-		t.Errorf("View() should include tag selector panel")
-	}
-
 	if !hasSubstring(view, "Content") && !hasSubstring(view, "content") {
 		t.Errorf("View() should include log viewer panel")
 	}
@@ -199,7 +176,7 @@ func TestFocusIndicators(t *testing.T) {
 	mockService := &taskmaster.Service{}
 	dialog := NewLogBrowserDialog(100, 30, mockService)
 
-	for panelIdx := 0; panelIdx < 3; panelIdx++ {
+	for panelIdx := 0; panelIdx < 2; panelIdx++ {
 		dialog.focusedPanel = panelIdx
 		// Manually set the base focusedIndex to match
 		dialog.BaseFocusableDialog.SetFocusedIndex(panelIdx)
@@ -320,12 +297,12 @@ func TestEscapeKeyClosesDialog(t *testing.T) {
 	}
 }
 
-// TestTabFocusCycling verifies Tab cycles focus through all three panels
+// TestTabFocusCycling verifies Tab cycles focus through panels
 func TestTabFocusCycling(t *testing.T) {
 	mockService := &taskmaster.Service{}
 	dialog := NewLogBrowserDialog(100, 30, mockService)
 
-	expectedCycle := []int{0, 1, 2, 0, 1}
+	expectedCycle := []int{0, 1, 0}
 
 	for _, expectedPanel := range expectedCycle {
 		if dialog.focusedPanel != expectedPanel {
@@ -342,8 +319,8 @@ func TestShiftTabReverseFocusCycling(t *testing.T) {
 	mockService := &taskmaster.Service{}
 	dialog := NewLogBrowserDialog(100, 30, mockService)
 
-	// Start at panel 0, shift+tab should go to panel 2
-	expectedCycle := []int{0, 2, 1, 0, 2}
+	// Start at panel 0, shift+tab should go to panel 1
+	expectedCycle := []int{0, 1, 0}
 
 	for _, expectedPanel := range expectedCycle {
 		if dialog.focusedPanel != expectedPanel {
@@ -469,7 +446,7 @@ func TestGlobalShortcutsWorkRegardlessOfFocusedPanel(t *testing.T) {
 	dialog := NewLogBrowserDialog(100, 30, mockService)
 
 	// Test help toggle from each panel
-	for panelIdx := 0; panelIdx < 3; panelIdx++ {
+	for panelIdx := 0; panelIdx < 2; panelIdx++ {
 		dialog.focusedPanel = panelIdx
 		dialog.showHelp = false
 
@@ -489,7 +466,7 @@ func TestGlobalShortcutsWorkRegardlessOfFocusedPanel(t *testing.T) {
 	dialog.showHelp = false
 
 	// Test refresh from each panel
-	for panelIdx := 0; panelIdx < 3; panelIdx++ {
+	for panelIdx := 0; panelIdx < 2; panelIdx++ {
 		dialog.focusedPanel = panelIdx
 		dialog.statusMsg = ""
 
@@ -633,7 +610,7 @@ func TestHelpOverlayContextSensitive(t *testing.T) {
 
 	// Get help for each panel
 	var helpViews []string
-	for panelIdx := 0; panelIdx < 3; panelIdx++ {
+	for panelIdx := 0; panelIdx < 2; panelIdx++ {
 		dialog.focusedPanel = panelIdx
 		helpView := dialog.renderHelpOverlay()
 		helpViews = append(helpViews, helpView)
@@ -644,8 +621,8 @@ func TestHelpOverlayContextSensitive(t *testing.T) {
 	}
 
 	// Help should contain different content for different panels
-	// (File Browser mentions different shortcuts than Tag Selector or Log Viewer)
-	if len(helpViews) == 3 {
+	// (File Browser mentions different shortcuts than Log Viewer)
+	if len(helpViews) == 2 {
 		// All help views should contain global shortcuts
 		for idx, view := range helpViews {
 			if !hasSubstring(view, "Global") && !hasSubstring(view, "Esc") {
@@ -656,8 +633,8 @@ func TestHelpOverlayContextSensitive(t *testing.T) {
 		// Each panel should have unique content
 		// We can't do exact string comparison due to rendering, but we can check length differences
 		// This is a basic check - more sophisticated checks would parse the content
-		if helpViews[0] == helpViews[1] && helpViews[1] == helpViews[2] {
-			t.Logf("Warning: Help content appears identical for all panels")
+		if helpViews[0] == helpViews[1] {
+			t.Logf("Warning: Help content appears identical for both panels")
 		}
 	}
 }

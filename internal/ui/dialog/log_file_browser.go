@@ -115,8 +115,14 @@ func (m *LogFileBrowserModel) Init() tea.Cmd {
 func (m *LogFileBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle directory navigation keys
+		// Intercept Tab/Shift+Tab to allow dialog focus cycling
+		// These keys should NOT be handled by the list component
 		switch msg.String() {
+		case "tab", "shift+tab":
+			// Don't pass to list - return as-is so dialog can handle focus cycling
+			return m, nil
+		
+		// Handle directory navigation keys
 		case "enter", "l", "right":
 			// Enter directory or select file
 			return m.handleEnter()

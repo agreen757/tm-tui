@@ -1372,7 +1372,10 @@ func (m Model) renderTaskTree(tasks []taskmaster.Task, depth int) string {
 		if task.Complexity > 0 {
 			complexityIndicator := GetComplexityIndicator(task.Complexity)
 			if complexityIndicator != "" {
-				line += " " + complexityIndicator
+				// Apply cool-to-hot color style based on score
+				complexityStyle := m.styles.GetComplexityStyle(task.Complexity)
+				styledIndicator := complexityStyle.Render(complexityIndicator)
+				line += " " + styledIndicator
 			}
 		}
 
@@ -1833,11 +1836,14 @@ func (m Model) renderTaskDetails() string {
 		b.WriteString("\n\n")
 	}
 
-	// Complexity
+	// Complexity with color-coded indicator
 	if task.Complexity > 0 {
 		b.WriteString(m.styles.Subtitle.Render("Complexity: "))
 		complexityIndicator := GetComplexityIndicator(task.Complexity)
-		b.WriteString(complexityIndicator)
+		// Apply cool-to-hot color style based on score
+		complexityStyle := m.styles.GetComplexityStyle(task.Complexity)
+		styledIndicator := complexityStyle.Render(complexityIndicator)
+		b.WriteString(styledIndicator)
 		b.WriteString("\n\n")
 	}
 

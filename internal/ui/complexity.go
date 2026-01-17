@@ -173,7 +173,7 @@ func (m *Model) handleComplexityAnalysisCompleted(msg ComplexityAnalysisComplete
 	if dm == nil {
 		return nil
 	}
-	reportDialog := dialog.NewComplexityReportDialog(msg.Report, dm.Style)
+	reportDialog := dialog.NewComplexityReportDialog(msg.Report, dm.Style, m.styles)
 	reportDialog.SetSize(m.width, m.height)
 
 	// Add the dialog

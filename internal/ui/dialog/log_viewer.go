@@ -569,6 +569,14 @@ func (lv *LogViewerPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	
+	// Intercept Tab/Shift+Tab to allow dialog focus cycling
+	// These keys should NOT be handled by the log viewer
+	switch msg.String() {
+	case "tab", "shift+tab":
+		// Don't handle these keys - let dialog handle focus cycling
+		return lv, nil
+	}
+	
 	switch msg.String() {
 	// Line scrolling
 	case "up", "k":

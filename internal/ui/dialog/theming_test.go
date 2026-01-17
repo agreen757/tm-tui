@@ -149,7 +149,7 @@ func TestComplexityReportDialogStyling(t *testing.T) {
 	}
 
 	// Create report dialog with style
-	reportDlg := NewComplexityReportDialog(report, style)
+	reportDlg := NewComplexityReportDialog(report, style, nil)
 
 	// Verify it has the style applied
 	if reportDlg.Style == nil {

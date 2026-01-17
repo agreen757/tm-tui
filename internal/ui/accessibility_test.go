@@ -51,8 +51,12 @@ func TestComplexityIndicator(t *testing.T) {
 		{3, "LOW", "LOW(3)"},
 		{4, "MEDIUM", "MEDIUM(4)"},
 		{6, "MEDIUM", "MEDIUM(6)"},
-		{7, "HIGH", "HIGH(7)"},
+		{7, "MEDIUM", "MEDIUM(7)"},    // Fixed: 7 is at Medium threshold (4-7)
+		{8, "HIGH", "HIGH(8)"},        // Added: 8 starts High range (8-12)
 		{10, "HIGH", "HIGH(10)"},
+		{12, "HIGH", "HIGH(12)"},      // Added: 12 is at High threshold
+		{13, "VERY HIGH", "VERY HIGH(13)"}, // Added: 13+ is Very High
+		{15, "VERY HIGH", "VERY HIGH(15)"}, // Added: test well above threshold
 		{0, "", ""},
 		{-1, "", ""},
 	}

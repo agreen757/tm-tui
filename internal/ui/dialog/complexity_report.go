@@ -14,6 +14,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// StyleProvider interface for accessing complexity styling
+type StyleProvider interface {
+	GetComplexityLevelStyle(level taskmaster.ComplexityLevel) lipgloss.Style
+}
+
 // SortOrder represents sorting options for the complexity report
 type SortOrder int
 
@@ -57,6 +62,7 @@ type ComplexityReportDialog struct {
 	ShowLegend     bool
 	width          int
 	height         int
+	StyleProvider  StyleProvider // For getting complexity level styles
 }
 
 // Init satisfies Dialog interface
@@ -130,6 +136,7 @@ func DefaultComplexityReportKeyMap() ComplexityReportKeyMap {
 func NewComplexityReportDialog(
 	report *taskmaster.ComplexityReport,
 	style *DialogStyle,
+	styleProvider StyleProvider,
 ) *ComplexityReportDialog {
 	// Default viewport
 	vp := viewport.New(80, 20)
@@ -154,6 +161,7 @@ func NewComplexityReportDialog(
 		ShowLegend:     true,
 		width:          defaultWidth,
 		height:         defaultHeight,
+		StyleProvider:  styleProvider,
 	}
 	dialog.Overlay = true
 	dialog.SetZIndex(100)
@@ -411,15 +419,21 @@ func (d *ComplexityReportDialog) View() string {
 
 			// Determine complexity level style
 			var levelStyle lipgloss.Style
-			switch task.Level {
-			case taskmaster.ComplexityLow:
-				levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
-			case taskmaster.ComplexityMedium:
-				levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("yellow"))
-			case taskmaster.ComplexityHigh:
-				levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("orange"))
-			case taskmaster.ComplexityVeryHigh:
-				levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
+			if d.StyleProvider != nil {
+				// Use the centralized style method for consistent coloring
+				levelStyle = d.StyleProvider.GetComplexityLevelStyle(task.Level)
+			} else {
+				// Fallback to basic styling if StyleProvider not available
+				switch task.Level {
+				case taskmaster.ComplexityLow:
+					levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
+				case taskmaster.ComplexityMedium:
+					levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("yellow"))
+				case taskmaster.ComplexityHigh:
+					levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("orange"))
+				case taskmaster.ComplexityVeryHigh:
+					levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
+				}
 			}
 
 			// Format title for limited width

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/agreen757/tm-tui/internal/taskmaster"
 )
 
 // Color constants from PRD
@@ -19,6 +20,14 @@ const (
 	ColorText      = "#FFFFFF"
 	ColorSubtle    = "#666666"
 	ColorHighlight = "#00FFFF"
+)
+
+// Color constants for complexity levels (cool-to-hot gradient)
+const (
+	ColorComplexityLow      = "#4169E1" // Royal Blue
+	ColorComplexityMedium   = "#00CED1" // Dark Turquoise
+	ColorComplexityHigh     = "#FFA500" // Orange
+	ColorComplexityVeryHigh = "#DC143C" // Crimson
 )
 
 // Styles contains all the lipgloss styles for the TUI
@@ -239,12 +248,20 @@ func GetComplexityLabel(complexity int) string {
 	if complexity <= 0 {
 		return ""
 	}
-	if complexity <= 3 {
+
+	// Use taskmaster.DefaultLevelThresholds() for consistency with GetComplexityStyle
+	thresholds := taskmaster.DefaultLevelThresholds()
+
+	// Determine label based on complexity score matching the threshold logic
+	switch {
+	case complexity <= thresholds.Low:
 		return "LOW"
-	} else if complexity <= 6 {
+	case complexity <= thresholds.Medium:
 		return "MEDIUM"
-	} else {
+	case complexity <= thresholds.High:
 		return "HIGH"
+	default:
+		return "VERY HIGH"
 	}
 }
 
@@ -257,4 +274,53 @@ func GetComplexityIndicator(complexity int) string {
 	}
 	// Format: LEVEL(numeric) e.g., "HIGH(8)"
 	return fmt.Sprintf("%s(%d)", label, complexity)
+}
+
+// GetComplexityStyle returns a lipgloss style for rendering complexity indicators based on numeric score
+func (s *Styles) GetComplexityStyle(complexity int) lipgloss.Style {
+	// Return subtle style for complexity = 0 (no complexity assigned)
+	if complexity == 0 {
+		return s.Subtle
+	}
+
+	// Use taskmaster.DefaultLevelThresholds() to determine score ranges
+	thresholds := taskmaster.DefaultLevelThresholds()
+
+	// Determine color based on complexity score
+	var color string
+	switch {
+	case complexity <= thresholds.Low:
+		color = ColorComplexityLow
+	case complexity <= thresholds.Medium:
+		color = ColorComplexityMedium
+	case complexity <= thresholds.High:
+		color = ColorComplexityHigh
+	default:
+		color = ColorComplexityVeryHigh
+	}
+
+	// Return bold styled text with appropriate foreground color
+	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
+}
+
+// GetComplexityLevelStyle returns a lipgloss style for rendering complexity indicators based on level enum
+func (s *Styles) GetComplexityLevelStyle(level taskmaster.ComplexityLevel) lipgloss.Style {
+	// Determine color based on complexity level
+	var color string
+	switch level {
+	case taskmaster.ComplexityLow:
+		color = ColorComplexityLow
+	case taskmaster.ComplexityMedium:
+		color = ColorComplexityMedium
+	case taskmaster.ComplexityHigh:
+		color = ColorComplexityHigh
+	case taskmaster.ComplexityVeryHigh:
+		color = ColorComplexityVeryHigh
+	default:
+		// Return subtle style for unknown or none
+		return s.Subtle
+	}
+
+	// Return bold styled text with appropriate foreground color
+	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
 }

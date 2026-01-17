@@ -362,7 +362,7 @@ func TestComplexityScoringSorting(t *testing.T) {
 	report := taskmaster.NewComplexityReport(complexities, "all", nil)
 
 	// Create the dialog
-	reportDialog := dialog.NewComplexityReportDialog(report, nil)
+	reportDialog := dialog.NewComplexityReportDialog(report, nil, nil)
 
 	// Test SortByTaskID
 	reportDialog.SortOrder = dialog.SortByTaskID
@@ -425,7 +425,7 @@ func TestComplexityFiltering(t *testing.T) {
 	report := taskmaster.NewComplexityReport(complexities, "all", nil)
 
 	// Create the dialog
-	reportDialog := dialog.NewComplexityReportDialog(report, nil)
+	reportDialog := dialog.NewComplexityReportDialog(report, nil, nil)
 
 	// Test default filters (all levels enabled)
 	if len(reportDialog.FilteredTasks) != 4 {
