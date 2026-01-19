@@ -43,7 +43,7 @@ func TestGenerateCrushPrdPrompt_OnlySummaryMatters(t *testing.T) {
 
 func TestGenerateCrushPrdPrompt_EmptySummary(t *testing.T) {
 	prompt := GenerateCrushPrdPrompt("Title", "", "Scope")
-	
+
 	expected := "create a complete and concise PRD from this summary: "
 	if prompt != expected {
 		t.Errorf("Expected %q, got %q", expected, prompt)
@@ -74,7 +74,7 @@ func TestGenerateCrushPrdPrompt_SpecialCharacters(t *testing.T) {
 
 func TestGenerateCrushPrdPrompt_ReturnType(t *testing.T) {
 	result := GenerateCrushPrdPrompt("Test", "Summary", "")
-	
+
 	if result == "" {
 		t.Error("GenerateCrushPrdPrompt should return a non-empty string")
 	}

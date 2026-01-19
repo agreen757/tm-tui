@@ -1,0 +1,17 @@
+FROM alpine:3.18
+
+# Install basic tools
+RUN apk add --no-cache \
+    make \
+    curl \
+    git
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy test script
+COPY test-apk.sh /test-apk.sh
+RUN chmod +x /test-apk.sh
+
+# Entry point
+CMD ["/test-apk.sh"]

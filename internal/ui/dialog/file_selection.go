@@ -90,12 +90,12 @@ func (d *FileSelectionDialog) logFilters() string {
 	if d.filters == nil {
 		return "none"
 	}
-	
+
 	extensions := make([]string, 0, len(d.filters))
 	for ext := range d.filters {
 		extensions = append(extensions, ext)
 	}
-	
+
 	return fmt.Sprintf("%v", extensions)
 }
 
@@ -109,39 +109,39 @@ func (d *FileSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		if msg.requestID != d.requestID {
 			return d, nil
 		}
-		
+
 		// Always clear the loading state
 		d.loading = false
 		d.err = msg.err
-		
+
 		if msg.err != nil {
 			d.entries = nil
 			return d, nil
 		}
-		
+
 		d.currentPath = msg.path
 		d.entries = msg.entries
-		
+
 		// Critical fix: Force-check for PRD files in the .taskmaster/docs directory
 		if strings.Contains(msg.path, ".taskmaster/docs") && len(d.entries) <= 1 {
 			// If we're in the .taskmaster/docs directory but don't see files,
 			// manually add the PRD files we know exist
 			manualDocsPath := filepath.Join(d.currentPath)
-			
+
 			// Try to read the directory directly
 			if entries, err := os.ReadDir(manualDocsPath); err == nil {
 				for _, entry := range entries {
 					if !entry.IsDir() {
 						name := entry.Name()
 						ext := strings.ToLower(filepath.Ext(name))
-						
+
 						// Check if the extension matches our filters
-						if d.filters == nil || 
-						   ext == ".md" || ext == ".txt" || 
-						   strings.Contains(ext, "md") || strings.Contains(ext, "txt") {
-							
+						if d.filters == nil ||
+							ext == ".md" || ext == ".txt" ||
+							strings.Contains(ext, "md") || strings.Contains(ext, "txt") {
+
 							fullPath := filepath.Join(manualDocsPath, name)
-							
+
 							// Check if this entry is already in our list
 							found := false
 							for _, existingEntry := range d.entries {
@@ -150,12 +150,12 @@ func (d *FileSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 									break
 								}
 							}
-							
+
 							// Only add if not already in the list
 							if !found {
 								d.entries = append(d.entries, fileEntry{
-									Name: name,
-									Path: fullPath,
+									Name:  name,
+									Path:  fullPath,
 									IsDir: false,
 								})
 							}
@@ -164,7 +164,7 @@ func (d *FileSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 				}
 			}
 		}
-		
+
 		if d.selected >= len(d.entries) {
 			d.selected = 0
 		}
@@ -273,37 +273,37 @@ func (d *FileSelectionDialog) renderEntries(width int) string {
 	if strings.Contains(d.currentPath, ".taskmaster/docs") && len(d.entries) <= 1 {
 		if entries, err := os.ReadDir(d.currentPath); err == nil {
 			var newEntries []fileEntry
-			
+
 			// First add parent directory if needed
 			parent := filepath.Dir(d.currentPath)
 			if parent != d.currentPath {
 				parentEntry := fileEntry{Name: "..", Path: parent, IsDir: true, IsParent: true}
 				newEntries = append(newEntries, parentEntry)
 			}
-			
+
 			// Then add all the files that match our filters
 			for _, entry := range entries {
 				name := entry.Name()
 				fullPath := filepath.Join(d.currentPath, name)
-				
+
 				if entry.IsDir() {
 					newEntries = append(newEntries, fileEntry{
-						Name:  name, 
-						Path:  fullPath, 
+						Name:  name,
+						Path:  fullPath,
 						IsDir: true,
 					})
 				} else {
 					ext := strings.ToLower(filepath.Ext(name))
 					if ext == ".md" || ext == ".txt" {
 						newEntries = append(newEntries, fileEntry{
-							Name: name,
-							Path: fullPath,
+							Name:  name,
+							Path:  fullPath,
 							IsDir: false,
 						})
 					}
 				}
 			}
-			
+
 			// If we found entries, update the dialog's entries
 			if len(newEntries) > 0 {
 				d.entries = newEntries
@@ -311,7 +311,7 @@ func (d *FileSelectionDialog) renderEntries(width int) string {
 			}
 		}
 	}
-	
+
 	if len(d.entries) == 0 {
 		if d.loading {
 			return "Loading..."
@@ -391,13 +391,13 @@ func readDirectoryEntries(path string, filters map[string]struct{}) ([]fileEntry
 			filterList = append(filterList, ext)
 		}
 	}
-	
+
 	// CRITICAL FIX: Use absolute path to ensure we can access the directory
 	absPath, err := filepath.Abs(path)
 	if err == nil && absPath != path {
 		path = absPath
 	}
-	
+
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -416,7 +416,7 @@ func readDirectoryEntries(path string, filters map[string]struct{}) ([]fileEntry
 		name := entry.Name()
 		// Note: We don't skip files starting with "." in case we need to access
 		// files in hidden directories like .taskmaster/docs
-		
+
 		fullPath := filepath.Join(path, name)
 		if entry.IsDir() {
 			results = append(results, fileEntry{Name: name, Path: fullPath, IsDir: true})
@@ -426,15 +426,15 @@ func readDirectoryEntries(path string, filters map[string]struct{}) ([]fileEntry
 			results = append(results, fileEntry{Name: name, Path: fullPath})
 			continue
 		}
-		
+
 		// CRITICAL FIX: Ensure extension comparison works properly
 		ext := strings.ToLower(filepath.Ext(name))
-		
+
 		// If file has no extension but we have filters, skip it
 		if ext == "" {
 			continue
 		}
-		
+
 		// Check if the extension is in our filters
 		if _, ok := filters[ext]; ok {
 			// This file matches our filters, add it to results

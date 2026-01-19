@@ -18,7 +18,7 @@ func findTaskmasterRoot(startDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	dir := absDir
 	for {
 		// Check if .taskmaster exists in current directory
@@ -27,15 +27,15 @@ func findTaskmasterRoot(startDir string) (string, error) {
 		if err == nil && info.IsDir() {
 			return dir, nil
 		}
-		
+
 		// Move to parent directory
 		parent := filepath.Dir(dir)
-		
+
 		// Check if we've reached the filesystem root
 		if parent == dir {
 			return "", ErrNotFound
 		}
-		
+
 		dir = parent
 	}
 }

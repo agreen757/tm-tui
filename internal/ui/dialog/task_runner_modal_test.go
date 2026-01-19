@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // setupTestCrushConfig creates a temporary Crush configuration for testing
@@ -24,11 +24,11 @@ func setupTestCrushConfig(t *testing.T, model string) (string, func()) {
 
 	// Create a temporary Crush config file
 	configPath := filepath.Join(tmpDir, ".crush.json")
-	
+
 	// Set the environment variable to point to our test config BEFORE saving
 	origEnv := os.Getenv(config.EnvCrushConfigPath)
 	os.Setenv(config.EnvCrushConfigPath, configPath)
-	
+
 	crushConfig := &config.CrushConfig{
 		Schema:  "https://charm.land/crush.json",
 		Version: "1.0",
@@ -819,10 +819,10 @@ func TestCancellationMessageOutput(t *testing.T) {
 // TestGetTabLabelForCommands tests GetTabLabel with command IDs
 func TestGetTabLabelForCommands(t *testing.T) {
 	tests := []struct {
-		name     string
-		taskID   string
+		name      string
+		taskID    string
 		taskTitle string
-		expected string
+		expected  string
 	}{
 		{
 			name:      "command with title",
@@ -1669,33 +1669,33 @@ func TestConfirmationDialogYesNoNavigation(t *testing.T) {
 func TestStartTasksWithSingleTask(t *testing.T) {
 	_, cleanup := setupTestCrushConfig(t, "test-model")
 	defer cleanup()
-	
+
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	taskIDs := []string{"1"}
 	model := "test-model"
-	
+
 	err := modal.StartTasks(taskIDs, model)
 	if err != nil {
 		t.Fatalf("StartTasks failed: %v", err)
 	}
-	
+
 	// Verify one tab was created
 	if len(modal.tabs) != 1 {
 		t.Errorf("Expected 1 tab, got %d", len(modal.tabs))
 	}
-	
+
 	// Verify active tab is first tab
 	if modal.activeTab != 0 {
 		t.Errorf("Expected activeTab to be 0, got %d", modal.activeTab)
 	}
-	
+
 	// Verify tab details
 	tab := modal.tabs[0]
 	if tab.GetTaskID() != "1" {
 		t.Errorf("Expected task ID '1', got '%s'", tab.GetTaskID())
 	}
-	
+
 	// Verify tab title format
 	expectedTitle := "Task 1"
 	if !strings.Contains(tab.GetTaskTitle(), expectedTitle) {
@@ -1707,34 +1707,34 @@ func TestStartTasksWithSingleTask(t *testing.T) {
 func TestStartTasksWithMultipleTasks(t *testing.T) {
 	_, cleanup := setupTestCrushConfig(t, "test-model")
 	defer cleanup()
-	
+
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	taskIDs := []string{"1", "2", "3", "4", "5"}
 	model := "test-model"
-	
+
 	err := modal.StartTasks(taskIDs, model)
 	if err != nil {
 		t.Fatalf("StartTasks failed: %v", err)
 	}
-	
+
 	// Verify 5 tabs were created
 	if len(modal.tabs) != 5 {
 		t.Errorf("Expected 5 tabs, got %d", len(modal.tabs))
 	}
-	
+
 	// Verify active tab is first tab
 	if modal.activeTab != 0 {
 		t.Errorf("Expected activeTab to be 0, got %d", modal.activeTab)
 	}
-	
+
 	// Verify each tab has correct ID and title format
 	for i, taskID := range taskIDs {
 		tab := modal.tabs[i]
 		if tab.GetTaskID() != taskID {
 			t.Errorf("Tab %d: expected task ID '%s', got '%s'", i, taskID, tab.GetTaskID())
 		}
-		
+
 		expectedTitle := fmt.Sprintf("Task %s", taskID)
 		if !strings.Contains(tab.GetTaskTitle(), expectedTitle) {
 			t.Errorf("Tab %d: expected title to contain '%s', got '%s'", i, expectedTitle, tab.GetTaskTitle())
@@ -1746,22 +1746,22 @@ func TestStartTasksWithMultipleTasks(t *testing.T) {
 func TestStartTasksWithMaximumTasks(t *testing.T) {
 	_, cleanup := setupTestCrushConfig(t, "test-model")
 	defer cleanup()
-	
+
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	taskIDs := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 	model := "test-model"
-	
+
 	err := modal.StartTasks(taskIDs, model)
 	if err != nil {
 		t.Fatalf("StartTasks failed with 9 tasks: %v", err)
 	}
-	
+
 	// Verify 9 tabs were created
 	if len(modal.tabs) != 9 {
 		t.Errorf("Expected 9 tabs, got %d", len(modal.tabs))
 	}
-	
+
 	// Verify active tab is first tab
 	if modal.activeTab != 0 {
 		t.Errorf("Expected activeTab to be 0, got %d", modal.activeTab)
@@ -1771,26 +1771,26 @@ func TestStartTasksWithMaximumTasks(t *testing.T) {
 // TestStartTasksExceedsMaximum tests that >9 tasks returns an error
 func TestStartTasksExceedsMaximum(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Try to create 10 tasks (exceeds limit)
 	taskIDs := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
 	model := "test-model"
-	
+
 	err := modal.StartTasks(taskIDs, model)
 	if err == nil {
 		t.Fatal("Expected error when starting more than 9 tasks, got nil")
 	}
-	
+
 	// Verify error message mentions the limit
 	if !strings.Contains(err.Error(), "9") {
 		t.Errorf("Expected error message to mention limit of 9, got: %v", err)
 	}
-	
+
 	// Verify error message mentions the number of tasks requested
 	if !strings.Contains(err.Error(), "10") {
 		t.Errorf("Expected error message to mention 10 tasks requested, got: %v", err)
 	}
-	
+
 	// Verify no tabs were created
 	if len(modal.tabs) != 0 {
 		t.Errorf("Expected 0 tabs when StartTasks fails, got %d", len(modal.tabs))
@@ -1800,20 +1800,20 @@ func TestStartTasksExceedsMaximum(t *testing.T) {
 // TestStartTasksWithEmptyList tests that empty task list returns an error
 func TestStartTasksWithEmptyList(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	taskIDs := []string{}
 	model := "test-model"
-	
+
 	err := modal.StartTasks(taskIDs, model)
 	if err == nil {
 		t.Fatal("Expected error when starting with empty task list, got nil")
 	}
-	
+
 	// Verify error message
 	if !strings.Contains(err.Error(), "no task IDs") {
 		t.Errorf("Expected error message to mention 'no task IDs', got: %v", err)
 	}
-	
+
 	// Verify no tabs were created
 	if len(modal.tabs) != 0 {
 		t.Errorf("Expected 0 tabs when StartTasks fails, got %d", len(modal.tabs))
@@ -1824,24 +1824,24 @@ func TestStartTasksWithEmptyList(t *testing.T) {
 func TestStartTasksNamingFormat(t *testing.T) {
 	_, cleanup := setupTestCrushConfig(t, "test-model")
 	defer cleanup()
-	
+
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	taskIDs := []string{"1.1", "2.3", "5"}
 	model := "test-model"
-	
+
 	err := modal.StartTasks(taskIDs, model)
 	if err != nil {
 		t.Fatalf("StartTasks failed: %v", err)
 	}
-	
+
 	// Verify naming format for each tab
 	expectedFormats := []string{
 		"Task 1.1",
 		"Task 2.3",
 		"Task 5",
 	}
-	
+
 	for i, expected := range expectedFormats {
 		tab := modal.tabs[i]
 		title := tab.GetTaskTitle()
@@ -1859,9 +1859,9 @@ func TestStartTasksMultipleCalls(t *testing.T) {
 		t.Fatalf("Failed to create temporary directory: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	configPath := filepath.Join(tmpDir, ".crush.json")
-	
+
 	// Set the environment variable BEFORE saving
 	origEnv := os.Getenv(config.EnvCrushConfigPath)
 	os.Setenv(config.EnvCrushConfigPath, configPath)
@@ -1872,7 +1872,7 @@ func TestStartTasksMultipleCalls(t *testing.T) {
 			os.Unsetenv(config.EnvCrushConfigPath)
 		}
 	}()
-	
+
 	crushConfig := &config.CrushConfig{
 		Schema:  "https://charm.land/crush.json",
 		Version: "1.0",
@@ -1887,35 +1887,35 @@ func TestStartTasksMultipleCalls(t *testing.T) {
 			},
 		},
 	}
-	
+
 	err = config.SaveCrushConfig(crushConfig)
 	if err != nil {
 		t.Fatalf("Failed to save test crush config: %v", err)
 	}
-	
+
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// First call: 3 tasks
 	err = modal.StartTasks([]string{"1", "2", "3"}, "model-1")
 	if err != nil {
 		t.Fatalf("First StartTasks failed: %v", err)
 	}
-	
+
 	if len(modal.tabs) != 3 {
 		t.Errorf("After first call, expected 3 tabs, got %d", len(modal.tabs))
 	}
-	
+
 	// Second call: 2 more tasks (total would be 5)
 	err = modal.StartTasks([]string{"4", "5"}, "model-2")
 	if err != nil {
 		t.Fatalf("Second StartTasks failed: %v", err)
 	}
-	
+
 	// Verify total tab count
 	if len(modal.tabs) != 5 {
 		t.Errorf("After second call, expected 5 tabs, got %d", len(modal.tabs))
 	}
-	
+
 	// Verify active tab was reset to 0 by second call
 	if modal.activeTab != 0 {
 		t.Errorf("Expected activeTab to be 0 after second call, got %d", modal.activeTab)
@@ -1925,13 +1925,13 @@ func TestStartTasksMultipleCalls(t *testing.T) {
 // TestExecuteTaskValidation tests that ExecuteTask validates tab existence
 func TestExecuteTaskValidation(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Try to execute a task without creating tabs first
 	_, err := modal.ExecuteTask("nonexistent", "Test Task", "gpt-4", "test prompt", "test-tag")
 	if err == nil {
 		t.Fatal("Expected error when executing task without existing tab, got nil")
 	}
-	
+
 	// Verify error message mentions the task ID
 	if !strings.Contains(err.Error(), "nonexistent") {
 		t.Errorf("Expected error to mention task ID 'nonexistent', got: %v", err)
@@ -1941,15 +1941,15 @@ func TestExecuteTaskValidation(t *testing.T) {
 // TestExecuteTaskWithExistingTab tests successful task execution setup
 func TestExecuteTaskWithExistingTab(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Create a tab first
 	modal.addTab("task-1", "Test Task", "gpt-4")
-	
+
 	// Try to execute the task
 	// Note: We can't actually run the subprocess in tests, but we can verify
 	// that ExecuteTask returns without error and provides a command
 	cmd, err := modal.ExecuteTask("task-1", "Test Task", "gpt-4", "test prompt", "test-tag")
-	
+
 	// Skip this test if Crush binary is not available (expected in CI)
 	if err != nil {
 		if strings.Contains(err.Error(), "crush binary") {
@@ -1957,7 +1957,7 @@ func TestExecuteTaskWithExistingTab(t *testing.T) {
 		}
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	// Verify that a command was returned
 	if cmd == nil {
 		t.Error("Expected ExecuteTask to return a command, got nil")
@@ -1967,18 +1967,18 @@ func TestExecuteTaskWithExistingTab(t *testing.T) {
 // TestExecuteTaskMultipleTasks tests executing multiple tasks concurrently
 func TestExecuteTaskMultipleTasks(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Create multiple tabs
 	taskIDs := []string{"task-1", "task-2", "task-3"}
 	for i, id := range taskIDs {
 		modal.addTab(id, fmt.Sprintf("Task %d", i+1), "gpt-4")
 	}
-	
+
 	// Try to execute all tasks
 	var cmds []tea.Cmd
 	for _, id := range taskIDs {
 		cmd, err := modal.ExecuteTask(id, fmt.Sprintf("Task %s", id), "gpt-4", "test prompt", "test-tag")
-		
+
 		// Skip if Crush binary is not available
 		if err != nil {
 			if strings.Contains(err.Error(), "crush binary") {
@@ -1986,14 +1986,14 @@ func TestExecuteTaskMultipleTasks(t *testing.T) {
 			}
 			t.Fatalf("Unexpected error for task %s: %v", id, err)
 		}
-		
+
 		if cmd == nil {
 			t.Errorf("Expected command for task %s, got nil", id)
 		} else {
 			cmds = append(cmds, cmd)
 		}
 	}
-	
+
 	// Verify we got commands for all tasks
 	if len(cmds) != len(taskIDs) {
 		t.Errorf("Expected %d commands, got %d", len(taskIDs), len(cmds))
@@ -2010,13 +2010,13 @@ func TestExecuteTaskWithoutCrushBinary(t *testing.T) {
 // TestExecuteTaskMessageFlow tests that ExecuteTask generates proper messages
 func TestExecuteTaskMessageFlow(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Create a tab
 	modal.addTab("task-1", "Test Task", "gpt-4")
-	
+
 	// Execute the task
 	cmd, err := modal.ExecuteTask("task-1", "Test Task", "gpt-4", "test prompt", "test-tag")
-	
+
 	// Skip if Crush binary is not available
 	if err != nil {
 		if strings.Contains(err.Error(), "crush binary") {
@@ -2024,14 +2024,14 @@ func TestExecuteTaskMessageFlow(t *testing.T) {
 		}
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	if cmd == nil {
 		t.Fatal("Expected command, got nil")
 	}
-	
+
 	// Execute the command to get the first message
 	msg := cmd()
-	
+
 	// The first message should be a TaskStartedMsg or CrushExecutionSub
 	switch msg.(type) {
 	case TaskStartedMsg:
@@ -2054,11 +2054,11 @@ func TestExecuteTaskMessageFlow(t *testing.T) {
 // TestValidateModelInConfigWithValidModel tests that validation passes for valid models
 func TestValidateModelInConfigWithValidModel(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Note: This test requires a .crush.json file with configured models
 	// For testing, we skip if no Crush config is available
 	err := modal.ValidateModelInConfig("claude-3-5-sonnet-20241022")
-	
+
 	// We expect either:
 	// 1. No error if the model is configured
 	// 2. An error about Crush configuration not being found (which is OK for this test environment)
@@ -2074,14 +2074,14 @@ func TestValidateModelInConfigWithValidModel(t *testing.T) {
 // TestValidateModelInConfigWithInvalidModel tests that validation fails for invalid models
 func TestValidateModelInConfigWithInvalidModel(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	// Test with a model that is unlikely to be configured
 	err := modal.ValidateModelInConfig("nonexistent-model-xyz-12345")
-	
+
 	if err == nil {
 		t.Skip("Skipping: Test requires a configured .crush.json file to properly validate invalid models")
 	}
-	
+
 	// If we do have a config, the error should mention the model is not available
 	if !strings.Contains(err.Error(), "Selected model not available in Crush configuration") {
 		t.Errorf("Expected error about model not available, got: %v", err)
@@ -2091,29 +2091,28 @@ func TestValidateModelInConfigWithInvalidModel(t *testing.T) {
 // TestStartTasksWithInvalidModel tests that StartTasks fails with invalid model
 func TestStartTasksWithInvalidModel(t *testing.T) {
 	modal := NewTaskRunnerModal(80, 30, nil)
-	
+
 	taskIDs := []string{"1"}
 	invalidModel := "nonexistent-model-xyz-12345"
-	
+
 	err := modal.StartTasks(taskIDs, invalidModel)
-	
+
 	// If .crush.json doesn't exist, we'll get a different error, so skip in that case
 	if err == nil {
 		t.Skip("Skipping: Test requires a configured .crush.json file to properly test invalid models")
 	}
-	
+
 	// If we do get an error, it should be about model validation
 	if !strings.Contains(err.Error(), "Selected model not available in Crush configuration") &&
 		!strings.Contains(err.Error(), "failed to load Crush configuration") {
 		t.Errorf("Expected error about model validation, got: %v", err)
 	}
-	
+
 	// Verify no tabs were created due to validation failure
 	if len(modal.tabs) != 0 {
 		t.Errorf("Expected 0 tabs due to validation failure, got %d", len(modal.tabs))
 	}
 }
-
 
 // TestTaskExecutionTabErrorHandling tests error handling in TaskExecutionTab
 func TestTaskExecutionTabErrorHandling(t *testing.T) {

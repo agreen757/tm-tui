@@ -222,10 +222,10 @@ func TestGetCurrentCrushModel(t *testing.T) {
 
 func TestTruncatePrompt(t *testing.T) {
 	tests := []struct {
-		name      string
-		prompt    string
-		maxLen    int
-		expected  string
+		name     string
+		prompt   string
+		maxLen   int
+		expected string
 	}{
 		{
 			name:     "No truncation needed",
@@ -321,14 +321,14 @@ func TestExecuteAdHocCommandGeneratesTaskStartedMsg(t *testing.T) {
 
 	// executeAdHocCommand returns a tea.Cmd that when invoked generates TaskStartedMsg
 	cmd := model.executeAdHocCommand("test-command-id", "This is a test prompt", "")
-	
+
 	if cmd == nil {
 		t.Fatal("executeAdHocCommand should return a tea.Cmd")
 	}
 
 	// Invoke the command to get the message
 	msg := cmd()
-	
+
 	startMsg, ok := msg.(dialog.TaskStartedMsg)
 	if !ok {
 		t.Fatalf("expected TaskStartedMsg, got %T", msg)
@@ -355,7 +355,7 @@ func TestListenForCommandOutput(t *testing.T) {
 
 	// Call listenForCommandOutput to get the subscription command
 	cmd := model.listenForCommandOutput("test-command-1", outputChan)
-	
+
 	if cmd == nil {
 		t.Fatal("listenForCommandOutput should return a tea.Cmd")
 	}
@@ -381,7 +381,7 @@ func TestListenForCommandOutput(t *testing.T) {
 
 func TestCommandManageTagsReturnsCmd(t *testing.T) {
 	model := newTestModel()
-	
+
 	// CommandManageTags now returns a command (like CommandUseTag)
 	cmd := model.dispatchCommand(CommandManageTags)
 	if cmd != nil {
@@ -398,12 +398,12 @@ func TestCommandManageTagsReturnsCmd(t *testing.T) {
 
 func TestOpenUseTagDialogReturnsCmd(t *testing.T) {
 	model := newTestModel()
-	
+
 	cmd := model.openUseTagDialog()
 	if cmd == nil {
 		t.Fatal("openUseTagDialog should return a tea.Cmd")
 	}
-	
+
 	// The command should be executable. In the test environment without a proper taskService,
 	// it will return an ErrorMsg. This is expected behavior.
 	// We skip the actual execution since it requires a real TaskService implementation
@@ -414,7 +414,7 @@ func TestHandleUseTagDialogLoadedWithValidTags(t *testing.T) {
 	model := newTestModel()
 	model.width = 120
 	model.height = 60
-	
+
 	// Create the tag list
 	mockTags := []taskmaster.TagContext{
 		{
@@ -435,14 +435,14 @@ func TestHandleUseTagDialogLoadedWithValidTags(t *testing.T) {
 		},
 	}
 	tagList := &taskmaster.TagList{Tags: mockTags}
-	
+
 	// Clear any existing dialogs
 	model.appState.ClearDialogs()
-	
+
 	// Note: This test will fail at type assertion because we don't have a proper TaskService
 	// but it tests the flow up to that point
 	model.handleUseTagDialogLoaded(tagList)
-	
+
 	// Verify a dialog was added (or error dialog if taskService is not of expected type)
 	dlg := model.appState.ActiveDialog()
 	if dlg != nil {
@@ -456,16 +456,16 @@ func TestHandleUseTagDialogLoadedWithValidTags(t *testing.T) {
 
 func TestHandleUseTagDialogLoadedWithNilTagList(t *testing.T) {
 	model := newTestModel()
-	
+
 	// Should show error when tag list is nil
 	model.appState.ClearDialogs()
 	model.handleUseTagDialogLoaded(nil)
-	
+
 	dlg := model.appState.ActiveDialog()
 	if dlg == nil {
 		t.Error("handleUseTagDialogLoaded should show error dialog for nil TagList")
 	}
-	
+
 	if dlg.Title() != "Switch Tag" {
 		t.Errorf("expected error dialog title 'Switch Tag', got %q", dlg.Title())
 	}
@@ -474,14 +474,14 @@ func TestHandleUseTagDialogLoadedWithNilTagList(t *testing.T) {
 func TestHandleUseTagDialogLoadedWithNilDialogManager(t *testing.T) {
 	model := newTestModel()
 	model.appState = NewAppState(nil, &model.keyMap) // Set to nil dialog manager
-	
+
 	tagList := &taskmaster.TagList{Tags: []taskmaster.TagContext{
 		{Name: "test", Active: true},
 	}}
-	
+
 	// Should handle nil dialog manager gracefully (no panic)
 	model.handleUseTagDialogLoaded(tagList)
-	
+
 	// Should not crash - test passes if no panic
 	t.Log("handleUseTagDialogLoaded handles nil dialog manager gracefully")
 }
@@ -514,19 +514,19 @@ func TestUseTagDialogLoadedMsgStructure(t *testing.T) {
 			expectedLen: 0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tagList := &taskmaster.TagList{Tags: tt.tags}
 			msg := useTagDialogLoadedMsg{TagList: tagList}
-			
+
 			if msg.TagList == nil {
 				t.Error("useTagDialogLoadedMsg.TagList should not be nil")
 			}
 			if len(msg.TagList.Tags) != tt.expectedLen {
 				t.Errorf("expected %d tags, got %d", tt.expectedLen, len(msg.TagList.Tags))
 			}
-			
+
 			// Verify tag names if non-empty
 			for i, tag := range msg.TagList.Tags {
 				if tag.Name == "" {
@@ -550,9 +550,9 @@ func TestUseTagDialogLoadedMsgContent(t *testing.T) {
 			},
 		},
 	}
-	
+
 	msg := useTagDialogLoadedMsg{TagList: tagList}
-	
+
 	tag := msg.TagList.Tags[0]
 	if tag.Name != "feature" {
 		t.Errorf("expected tag name 'feature', got %q", tag.Name)
@@ -574,19 +574,19 @@ func TestGetSelectedTaskReturnsCurrentSelection(t *testing.T) {
 	model := newTestModel()
 	model.width = 120
 	model.height = 60
-	
+
 	// Initially should return nil
 	if model.getSelectedTask() != nil {
 		t.Error("getSelectedTask should return nil when no task is selected")
 	}
-	
+
 	// Set a task and verify it returns
 	task := &taskmaster.Task{
 		ID:    "1",
 		Title: "Test Task",
 	}
 	model.selectedTask = task
-	
+
 	selected := model.getSelectedTask()
 	if selected == nil {
 		t.Error("getSelectedTask should return the selected task")
@@ -671,24 +671,24 @@ func TestOpenUpdateTaskDialogValidation(t *testing.T) {
 			expectDialog: true, // Should have update dialog
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			model := newTestModel()
 			model.width = 120
 			model.height = 60
 			model.appState.ClearDialogs()
-			
+
 			tt.setupModel(&model)
-			
+
 			_ = model.openUpdateTaskDialog()
-			
+
 			activeDialog := model.appState.ActiveDialog()
 			if tt.expectDialog && activeDialog == nil {
 				t.Error("expected a dialog to be opened")
 				return
 			}
-			
+
 			if tt.expectError {
 				// Should be a confirmation/error dialog
 				confDialog, ok := activeDialog.(*dialog.ConfirmationDialog)
@@ -712,7 +712,7 @@ func TestOpenUpdateTaskDialogValidation(t *testing.T) {
 				if !ok {
 					t.Fatalf("expected FormDialog for valid task, got %T", activeDialog)
 				}
-				
+
 				expectedTitle := fmt.Sprintf("Update Task [%s]", model.selectedTask.ID)
 				if formDialog.Title() != expectedTitle {
 					t.Errorf("expected dialog title %q, got %q", expectedTitle, formDialog.Title())
@@ -727,32 +727,32 @@ func TestOpenUpdateTaskDialogWithValidTaskCreatesFormDialog(t *testing.T) {
 	model.width = 120
 	model.height = 60
 	model.appState.ClearDialogs()
-	
+
 	// Setup a valid task
 	task := &taskmaster.Task{
 		ID:    "2.5",
 		Title: "Implement validation",
 	}
 	model.selectedTask = task
-	
+
 	cmd := model.openUpdateTaskDialog()
-	
+
 	// Should return nil (no async command needed)
 	if cmd != nil {
 		t.Errorf("expected nil command, got %v", cmd)
 	}
-	
+
 	// Should have opened update dialog
 	dlg := model.appState.ActiveDialog()
 	if dlg == nil {
 		t.Fatal("expected update dialog to be opened")
 	}
-	
+
 	formDialog, ok := dlg.(*dialog.FormDialog)
 	if !ok {
 		t.Fatalf("expected FormDialog, got %T", dlg)
 	}
-	
+
 	if !strings.Contains(formDialog.Title(), task.ID) {
 		t.Errorf("expected dialog title to contain task ID %q, got %q", task.ID, formDialog.Title())
 	}
@@ -761,15 +761,15 @@ func TestOpenUpdateTaskDialogWithValidTaskCreatesFormDialog(t *testing.T) {
 func TestOpenUpdateTaskDialogWithoutDialogManager(t *testing.T) {
 	model := newTestModel()
 	model.appState = NewAppState(nil, &model.keyMap) // Set nil dialog manager
-	
+
 	task := &taskmaster.Task{
 		ID:    "1",
 		Title: "Test",
 	}
 	model.selectedTask = task
-	
+
 	cmd := model.openUpdateTaskDialog()
-	
+
 	// Should return nil and add log line instead of crashing
 	if cmd != nil {
 		t.Errorf("expected nil command, got %v", cmd)
@@ -778,9 +778,9 @@ func TestOpenUpdateTaskDialogWithoutDialogManager(t *testing.T) {
 
 func TestTaskSelectionValidationEdgeCases(t *testing.T) {
 	tests := []struct {
-		name     string
-		task     *taskmaster.Task
-		valid    bool
+		name  string
+		task  *taskmaster.Task
+		valid bool
 	}{
 		{
 			name:  "task with all flags false",
@@ -803,20 +803,20 @@ func TestTaskSelectionValidationEdgeCases(t *testing.T) {
 			valid: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			model := newTestModel()
 			model.width = 120
 			model.height = 60
 			model.appState.ClearDialogs()
-			
+
 			model.selectedTask = tt.task
 			_ = model.openUpdateTaskDialog()
-			
+
 			dialog := model.appState.ActiveDialog()
 			hasDialog := dialog != nil
-			
+
 			if tt.valid && !hasDialog {
 				// For valid tasks, we should have an update dialog
 				t.Errorf("expected update dialog for valid task, but got none")
@@ -832,22 +832,22 @@ func TestTaskSelectionValidationEdgeCases(t *testing.T) {
 // TestExecuteTaskUpdateGeneratesUniqueID tests that executeTaskUpdate generates unique update IDs
 func TestExecuteTaskUpdateGeneratesUniqueID(t *testing.T) {
 	model := newTestModel()
-	
+
 	// Create a mock task for selection
 	mockTask := &taskmaster.Task{
 		ID:    "1.1",
 		Title: "Test Task",
 	}
 	model.selectedTask = mockTask
-	
+
 	// Test that two calls generate different IDs (based on timestamp)
 	id1 := fmt.Sprintf("update-%s-%d", "1.1", 1000)
 	id2 := fmt.Sprintf("update-%s-%d", "1.1", 2000)
-	
+
 	if id1 == id2 {
 		t.Errorf("expected different update IDs, got same ID")
 	}
-	
+
 	if !strings.Contains(id1, "update-1.1-") {
 		t.Errorf("expected update ID to contain format 'update-taskID-timestamp', got %s", id1)
 	}
@@ -866,14 +866,14 @@ func TestExecuteTaskUpdateDetectsCommandType(t *testing.T) {
 		{"main", "update-task"},
 		{"feature.x", "update-subtask"},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.taskID, func(t *testing.T) {
 			cmdType := "update-task"
 			if strings.Contains(tc.taskID, ".") {
 				cmdType = "update-subtask"
 			}
-			
+
 			if cmdType != tc.expectedType {
 				t.Errorf("expected command type %s for task ID %s, got %s", tc.expectedType, tc.taskID, cmdType)
 			}
@@ -914,7 +914,7 @@ func TestEscapeShellArgForUpdateHandlesSpecialChars(t *testing.T) {
 			desc:     "variables should not expand in single quotes",
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			result := escapeShellArgForUpdate(tc.input)
@@ -960,24 +960,24 @@ func TestUpdateTaskCommandBuildArguments(t *testing.T) {
 			checkPrompt: false,
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			args := []string{fmt.Sprintf("--id=%s", tc.taskID)}
 			if strings.TrimSpace(tc.content) != "" {
 				args = append(args, fmt.Sprintf("--prompt=%s", escapeShellArgForUpdate(tc.content)))
 			}
-			
+
 			if len(args) < tc.minArgs {
 				t.Errorf("expected at least %d args, got %d", tc.minArgs, len(args))
 			}
-			
+
 			if tc.checkIDArg {
 				if !strings.HasPrefix(args[0], "--id=") {
 					t.Errorf("expected first arg to start with --id=, got %s", args[0])
 				}
 			}
-			
+
 			if tc.checkPrompt {
 				if len(args) < 2 || !strings.HasPrefix(args[1], "--prompt=") {
 					t.Errorf("expected prompt arg when content provided")
@@ -1005,7 +1005,7 @@ func TestValidateTaskMasterAvailable(t *testing.T) {
 			errorContains: "not found in PATH",
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Since we can't easily mock exec.LookPath, we'll call the actual function
@@ -1038,14 +1038,14 @@ func TestValidateTaskMasterAvailableErrorMessage(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for nonexistent binary")
 	}
-	
+
 	errMsg := err.Error()
 	expectedParts := []string{
 		"not found in PATH",
 		"npm install",
 		"@cyanheads/task-master-ai",
 	}
-	
+
 	for _, part := range expectedParts {
 		if !strings.Contains(errMsg, part) {
 			t.Errorf("expected error message to contain %q, got %q", part, errMsg)
@@ -1066,29 +1066,29 @@ func validateBinaryAvailable(binaryName string) error {
 // TestOpenUpdateTaskDialogTaskMasterValidation tests that openUpdateTaskDialog validates task-master binary availability
 func TestOpenUpdateTaskDialogTaskMasterValidation(t *testing.T) {
 	cases := []struct {
-		name                string
-		taskSelected        bool
-		expectErrorDialog   bool
-		errorDialogTitle    string
+		name              string
+		taskSelected      bool
+		expectErrorDialog bool
+		errorDialogTitle  string
 	}{
 		{
-			name:                "shows validation when task-master not found",
-			taskSelected:        true,
-			expectErrorDialog:   true,
-			errorDialogTitle:    "Task Master Not Found",
+			name:              "shows validation when task-master not found",
+			taskSelected:      true,
+			expectErrorDialog: true,
+			errorDialogTitle:  "Task Master Not Found",
 		},
 		{
-			name:                "shows error when no task selected and binary available",
-			taskSelected:        false,
-			expectErrorDialog:   true,
-			errorDialogTitle:    "No Task Selected",
+			name:              "shows error when no task selected and binary available",
+			taskSelected:      false,
+			expectErrorDialog: true,
+			errorDialogTitle:  "No Task Selected",
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			model := newTestModel()
-			
+
 			// Create a test task if needed
 			if tc.taskSelected {
 				testTask := &taskmaster.Task{
@@ -1097,15 +1097,15 @@ func TestOpenUpdateTaskDialogTaskMasterValidation(t *testing.T) {
 				}
 				model.selectedTask = testTask
 			}
-			
+
 			// Call openUpdateTaskDialog
 			cmd := model.openUpdateTaskDialog()
-			
+
 			// For a command that returns nil, cmd should be nil
 			if cmd != nil && tc.expectErrorDialog {
 				t.Errorf("expected cmd to be nil when error dialog shown, got %v", cmd)
 			}
-			
+
 			// Verify error dialog was pushed
 			if tc.expectErrorDialog {
 				activeDialog := model.appState.ActiveDialog()
@@ -1123,10 +1123,10 @@ func TestOpenUpdateTaskDialogTaskMasterValidation(t *testing.T) {
 // TestValidateTaskMasterAvailableMethod tests the Model method directly
 func TestValidateTaskMasterAvailableMethod(t *testing.T) {
 	model := newTestModel()
-	
+
 	// Test that the method exists and is callable
 	err := model.validateTaskMasterAvailable()
-	
+
 	// The error will be non-nil since task-master is not installed by default
 	// But the key is that the method is callable and returns an error/nil
 	if err != nil {
@@ -1145,9 +1145,9 @@ func TestValidateTaskMasterAvailableErrorMessageContent(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for nonexistent binary")
 	}
-	
+
 	errMsg := err.Error()
-	
+
 	// Verify key components of error message
 	requiredComponents := []string{
 		"not found in PATH",
@@ -1155,7 +1155,7 @@ func TestValidateTaskMasterAvailableErrorMessageContent(t *testing.T) {
 		"@cyanheads/task-master-ai",
 		"github.com/cyanheads/task-master-ai",
 	}
-	
+
 	for _, component := range requiredComponents {
 		if !strings.Contains(errMsg, component) {
 			t.Errorf("error message missing component: %q\nFull message: %q", component, errMsg)
@@ -1166,9 +1166,9 @@ func TestValidateTaskMasterAvailableErrorMessageContent(t *testing.T) {
 // TestEmptyUpdateResultDetection tests that the callback correctly detects empty update results
 func TestEmptyUpdateResultDetection(t *testing.T) {
 	tests := []struct {
-		name      string
-		result    dialog.UpdateTaskResult
-		isEmpty   bool
+		name    string
+		result  dialog.UpdateTaskResult
+		isEmpty bool
 	}{
 		{
 			name: "empty update",
@@ -1251,25 +1251,25 @@ func TestExecuteTaskUpdateCallback(t *testing.T) {
 // TestExecuteTaskUpdateWithConfirmationFlow tests the confirmation dialog flow
 func TestExecuteTaskUpdateWithConfirmationFlow(t *testing.T) {
 	tests := []struct {
-		name                  string
-		taskID                string
-		updateContent         string
-		confirmationResult    dialog.ConfirmationResult
-		expectsExecution      bool
+		name               string
+		taskID             string
+		updateContent      string
+		confirmationResult dialog.ConfirmationResult
+		expectsExecution   bool
 	}{
 		{
-			name:                  "empty update confirmed",
-			taskID:                "1.1",
-			updateContent:         "",
-			confirmationResult:    dialog.ConfirmationResultYes,
-			expectsExecution:      true,
+			name:               "empty update confirmed",
+			taskID:             "1.1",
+			updateContent:      "",
+			confirmationResult: dialog.ConfirmationResultYes,
+			expectsExecution:   true,
 		},
 		{
-			name:                  "empty update cancelled",
-			taskID:                "1.1",
-			updateContent:         "",
-			confirmationResult:    dialog.ConfirmationResultNo,
-			expectsExecution:      false,
+			name:               "empty update cancelled",
+			taskID:             "1.1",
+			updateContent:      "",
+			confirmationResult: dialog.ConfirmationResultNo,
+			expectsExecution:   false,
 		},
 	}
 
@@ -1289,32 +1289,32 @@ func TestExecuteTaskUpdateWithConfirmationFlow(t *testing.T) {
 // TestHandleRunTasksCommand tests multi-task execution command handler
 func TestHandleRunTasksCommand(t *testing.T) {
 	tests := []struct {
-		name              string
-		selectedTaskIDs   []string
-		expectQueueInit   bool
-		expectError       bool
-		expectDialog      bool
+		name            string
+		selectedTaskIDs []string
+		expectQueueInit bool
+		expectError     bool
+		expectDialog    bool
 	}{
 		{
-			name:              "empty selection returns error",
-			selectedTaskIDs:   []string{},
-			expectQueueInit:   false,
-			expectError:       true,
-			expectDialog:      false,
+			name:            "empty selection returns error",
+			selectedTaskIDs: []string{},
+			expectQueueInit: false,
+			expectError:     true,
+			expectDialog:    false,
 		},
 		{
-			name:              "single task initializes queue",
-			selectedTaskIDs:   []string{"1"},
-			expectQueueInit:   true,
-			expectError:       false,
-			expectDialog:      false,
+			name:            "single task initializes queue",
+			selectedTaskIDs: []string{"1"},
+			expectQueueInit: true,
+			expectError:     false,
+			expectDialog:    false,
 		},
 		{
-			name:              "multiple tasks initializes queue",
-			selectedTaskIDs:   []string{"1", "2", "3"},
-			expectQueueInit:   true,
-			expectError:       false,
-			expectDialog:      false,
+			name:            "multiple tasks initializes queue",
+			selectedTaskIDs: []string{"1", "2", "3"},
+			expectQueueInit: true,
+			expectError:     false,
+			expectDialog:    false,
 		},
 	}
 
@@ -1322,15 +1322,15 @@ func TestHandleRunTasksCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			model := newTestModel()
 			model.appState.ClearDialogs()
-			
+
 			cmd := model.handleRunTasksCommand(tt.selectedTaskIDs)
-			
+
 			if tt.expectQueueInit {
 				if model.executionQueue == nil {
 					t.Errorf("expected executionQueue to be initialized")
 				}
 				if len(model.executionQueue.TaskIDs) != len(tt.selectedTaskIDs) {
-					t.Errorf("expected %d task IDs in queue, got %d", 
+					t.Errorf("expected %d task IDs in queue, got %d",
 						len(tt.selectedTaskIDs), len(model.executionQueue.TaskIDs))
 				}
 				if model.executionQueue.CurrentIndex != 0 {
@@ -1350,18 +1350,18 @@ func TestHandleRunTasksCommand(t *testing.T) {
 func TestHandleRunTasksCommandQueueInitialization(t *testing.T) {
 	model := newTestModel()
 	selectedIDs := []string{"task1", "task2", "task3"}
-	
+
 	model.handleRunTasksCommand(selectedIDs)
-	
+
 	if model.executionQueue == nil {
 		t.Fatal("expected executionQueue to be initialized")
 	}
-	
+
 	// Verify queue structure
 	if len(model.executionQueue.TaskIDs) != len(selectedIDs) {
 		t.Errorf("expected %d tasks, got %d", len(selectedIDs), len(model.executionQueue.TaskIDs))
 	}
-	
+
 	// Verify all task statuses initialized
 	for _, taskID := range selectedIDs {
 		status, exists := model.executionQueue.TaskStatus[taskID]
@@ -1372,12 +1372,12 @@ func TestHandleRunTasksCommandQueueInitialization(t *testing.T) {
 			t.Errorf("expected status 'pending' for task %s, got %s", taskID, status)
 		}
 	}
-	
+
 	// Verify model selections map is initialized
 	if model.executionQueue.ModelSelections == nil {
 		t.Errorf("expected ModelSelections to be initialized")
 	}
-	
+
 	// Verify selection tracking is reset
 	if len(model.taskModelSelectionDone) != 0 {
 		t.Errorf("expected taskModelSelectionDone to be empty")
@@ -1387,8 +1387,8 @@ func TestHandleRunTasksCommandQueueInitialization(t *testing.T) {
 // TestHandleRunTasksCommandIntegration tests full flow with model selection
 func TestHandleRunTasksCommandIntegration(t *testing.T) {
 	tests := []struct {
-		name           string
-		selectedCount  int
+		name          string
+		selectedCount int
 	}{
 		{
 			name:          "single task flow",
@@ -1403,30 +1403,30 @@ func TestHandleRunTasksCommandIntegration(t *testing.T) {
 			selectedCount: 10,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			model := newTestModel()
-			
+
 			// Create selected task IDs
 			selectedIDs := make([]string, tt.selectedCount)
 			for i := 0; i < tt.selectedCount; i++ {
 				selectedIDs[i] = fmt.Sprintf("task%d", i+1)
 			}
-			
+
 			// Initialize command handler
 			model.handleRunTasksCommand(selectedIDs)
-			
+
 			// Verify queue state
 			if model.executionQueue == nil {
 				t.Fatal("execution queue not initialized")
 			}
-			
+
 			if len(model.executionQueue.TaskIDs) != tt.selectedCount {
-				t.Errorf("expected %d tasks in queue, got %d", 
+				t.Errorf("expected %d tasks in queue, got %d",
 					tt.selectedCount, len(model.executionQueue.TaskIDs))
 			}
-			
+
 			// Verify all statuses are "pending"
 			for _, taskID := range model.executionQueue.TaskIDs {
 				if model.executionQueue.TaskStatus[taskID] != "pending" {

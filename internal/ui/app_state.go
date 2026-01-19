@@ -18,12 +18,12 @@ type SavedDialogState struct {
 
 // AppState centralizes references shared across the UI (dialogs, keymap, etc.).
 type AppState struct {
-	dialogManager        *dialog.DialogManager
-	keyMap               *KeyMap
-	nextTaskModalActive  bool
-	nextTaskOutput       []string
-	PrdCreationState     *PrdCreationState
-	SavedDialogStates    []SavedDialogState // Stack of saved states for dialog nesting
+	dialogManager       *dialog.DialogManager
+	keyMap              *KeyMap
+	nextTaskModalActive bool
+	nextTaskOutput      []string
+	PrdCreationState    *PrdCreationState
+	SavedDialogStates   []SavedDialogState // Stack of saved states for dialog nesting
 }
 
 // NewAppState constructs an AppState helper.

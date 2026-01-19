@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/agreen757/tm-tui/internal/ui/dialog"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/agreen757/tm-tui/internal/ui/dialog"
 )
 
 // Message types for the demo application

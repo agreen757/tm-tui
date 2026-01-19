@@ -25,9 +25,9 @@ type TagSelectorResult struct {
 
 // TagItem represents a tag in the selector for display and selection
 type TagItem struct {
-	Tag    taskmaster.TagContext
-	Index  int
-	IsNew  bool
+	Tag   taskmaster.TagContext
+	Index int
+	IsNew bool
 }
 
 // Title returns the title of the tag item
@@ -181,7 +181,7 @@ func (t *TagSelector) Init() tea.Cmd {
 // Update processes messages
 func (t *TagSelector) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	log.Printf("[TagSelector.Update] Received message type: %T", msg)
-	
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		log.Printf("[TagSelector.Update] WindowSizeMsg: %dx%d", msg.Width, msg.Height)
@@ -212,9 +212,9 @@ func (t *TagSelector) View() string {
 
 // renderItems renders the tag list items
 func (t *TagSelector) renderItems(width int) string {
-	log.Printf("[TagSelector.renderItems] Called with width=%d, selectedIndex=%d, viewItems=%d", 
+	log.Printf("[TagSelector.renderItems] Called with width=%d, selectedIndex=%d, viewItems=%d",
 		width, t.selectedIndex, len(t.viewItems))
-	
+
 	if len(t.viewItems) == 0 {
 		return lipgloss.NewStyle().
 			Width(width).
@@ -248,7 +248,7 @@ func (t *TagSelector) renderItems(width int) string {
 		endIdx = len(t.viewItems)
 	}
 
-	log.Printf("[TagSelector.renderItems] Rendering items %d to %d (offset=%d, maxVisible=%d)", 
+	log.Printf("[TagSelector.renderItems] Rendering items %d to %d (offset=%d, maxVisible=%d)",
 		t.offset, endIdx, t.offset, maxVisible)
 
 	for i := t.offset; i < endIdx; i++ {
@@ -269,13 +269,13 @@ func (t *TagSelector) renderItems(width int) string {
 		if endIdx < len(t.viewItems) {
 			scrollInfo += " ↓"
 		}
-		
+
 		scrollStyle := lipgloss.NewStyle().
 			Width(width).
 			Align(lipgloss.Center).
 			Foreground(lipgloss.Color("241")). // Dim gray
 			Italic(true)
-		
+
 		lines = append(lines, "", scrollStyle.Render(scrollInfo))
 	}
 
@@ -285,7 +285,7 @@ func (t *TagSelector) renderItems(width int) string {
 // renderItemLine renders a single tag item
 func (t *TagSelector) renderItemLine(item TagItem, selected bool, width int) string {
 	log.Printf("[TagSelector.renderItemLine] Rendering '%s', selected=%v", item.Title(), selected)
-	
+
 	title := item.Title()
 	description := item.Description()
 
@@ -330,7 +330,7 @@ func (t *TagSelector) renderItemLine(item TagItem, selected bool, width int) str
 	if selected {
 		style = style.
 			Background(lipgloss.Color("62")).  // Blue background
-			Foreground(lipgloss.Color("230")).  // Light yellow foreground
+			Foreground(lipgloss.Color("230")). // Light yellow foreground
 			Bold(true)
 	}
 
@@ -341,9 +341,9 @@ func (t *TagSelector) renderItemLine(item TagItem, selected bool, width int) str
 
 // HandleKey processes keyboard input
 func (t *TagSelector) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
-	log.Printf("[TagSelector.HandleKey] Key pressed: %s, Current selectedIndex: %d, viewItems count: %d", 
+	log.Printf("[TagSelector.HandleKey] Key pressed: %s, Current selectedIndex: %d, viewItems count: %d",
 		msg.String(), t.selectedIndex, len(t.viewItems))
-	
+
 	switch msg.String() {
 	case "up", "k":
 		oldIndex := t.selectedIndex

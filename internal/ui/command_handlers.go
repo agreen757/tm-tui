@@ -99,7 +99,7 @@ func (m *Model) handleExpandTaskCommand() tea.Cmd {
 func (m *Model) handleRunTaskCommand() tea.Cmd {
 	// Log that the command was triggered
 	m.addLogLine("Alt+R pressed - Run Task with AI Agent")
-	
+
 	// Count selected tasks
 	numSelected := 0
 	selectedTaskIDs := []string{}
@@ -109,13 +109,13 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 			selectedTaskIDs = append(selectedTaskIDs, taskID)
 		}
 	}
-	
+
 	// If multiple tasks are selected, use multi-task execution
 	if numSelected > 1 {
 		m.addLogLine(fmt.Sprintf("Running %d selected tasks with AI Agent", numSelected))
 		return m.handleRunTasksCommand(selectedTaskIDs)
 	}
-	
+
 	// Single task execution (existing behavior)
 	// Check if a task is selected
 	if m.selectedTask == nil {
@@ -135,23 +135,23 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 		m.addLogLine(fmt.Sprintf("Error loading agent type, using default: %v", err))
 		agentType = config.GetDefaultAgentType()
 	}
-	
+
 	// Store the agent type
 	m.selectedAgentType = agentType
-	
+
 	// Store task context for model selection
 	m.agentRunPending = true
 	m.agentRunTaskID = m.selectedTask.ID
 	m.agentRunTaskTitle = m.selectedTask.Title
 	m.agentRunTask = m.selectedTask
 
-	m.addLogLine(fmt.Sprintf("Running task %s with %s agent: %s", 
+	m.addLogLine(fmt.Sprintf("Running task %s with %s agent: %s",
 		m.selectedTask.ID, agentType.String(), m.selectedTask.Title))
 
 	// Open model selection dialog directly
 	modelSelectionDialog := dialog.NewModelSelectionDialogSimple()
 	m.appState.PushDialog(modelSelectionDialog)
-	m.addLogLine(fmt.Sprintf("Select AI model for %s agent to run task %s: %s", 
+	m.addLogLine(fmt.Sprintf("Select AI model for %s agent to run task %s: %s",
 		agentType.String(), m.selectedTask.ID, m.selectedTask.Title))
 
 	return nil
@@ -588,7 +588,7 @@ func (m *Model) handleUseTagDialogLoaded(list *taskmaster.TagList) {
 		return
 	}
 	flow := dialog.NewTagEditorFlow(cfg, taskService)
-	
+
 	// Set refresh function to reload tags after creation
 	flow.SetRefreshFunc(func(ctx context.Context) (*taskmaster.TagList, error) {
 		return m.taskService.ListTagContexts(ctx, false)
@@ -596,7 +596,7 @@ func (m *Model) handleUseTagDialogLoaded(list *taskmaster.TagList) {
 
 	// Get the initial selector and add it as a dialog
 	selector := flow.GetInitialSelector()
-	
+
 	// Calculate dimensions
 	width := 60
 	height := 15
@@ -612,12 +612,12 @@ func (m *Model) handleUseTagDialogLoaded(list *taskmaster.TagList) {
 			height = 12
 		}
 	}
-	
+
 	selector.SetRect(width, height, 0, 0)
-	
+
 	// Store the flow in the model for handling state transitions
 	m.tagEditorFlow = flow
-	
+
 	m.appState.AddDialog(selector, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
 			appErr := NewOperationError("Select Tag", "Failed to select tag", err).
@@ -629,20 +629,20 @@ func (m *Model) handleUseTagDialogLoaded(list *taskmaster.TagList) {
 			m.tagEditorFlow = nil
 			return nil
 		}
-		
+
 		result, ok := value.(dialog.TagSelectorResult)
 		if !ok {
 			m.tagEditorFlow = nil
 			return nil
 		}
-		
+
 		// Handle the selector result through the flow
 		if m.tagEditorFlow == nil {
 			return nil
 		}
-		
+
 		shouldContinue, finalResult := m.tagEditorFlow.HandleSelectorResult(result, err == nil && value != nil)
-		
+
 		if !shouldContinue {
 			// Flow completed with selection
 			if len(finalResult.SelectedTags) > 0 {
@@ -655,7 +655,7 @@ func (m *Model) handleUseTagDialogLoaded(list *taskmaster.TagList) {
 			m.tagEditorFlow = nil
 			return nil
 		}
-		
+
 		// User wants to create a new tag - open add tag dialog
 		m.openAddTagDialog()
 		m.useTagFlowPending = true
@@ -959,7 +959,7 @@ func (m *Model) clearExpandTaskRuntimeState() {
 // openCommandRunner opens the command runner dialog
 func (m *Model) openCommandRunner() tea.Cmd {
 	m.addLogLine("Ctrl+B pressed - Open Command Runner")
-	
+
 	// Validate Crush binary is available before opening dialog
 	if err := dialog.ValidateCrushBinary(); err != nil {
 		m.addLogLine(fmt.Sprintf("ERROR: Crush binary not available: %v", err))
@@ -971,7 +971,7 @@ func (m *Model) openCommandRunner() tea.Cmd {
 		m.showAppError(appErr)
 		return nil
 	}
-	
+
 	// Create the command runner dialog
 	cmdDialog := dialog.NewCommandRunnerDialog(dialog.CreateDialogStyleFromAppStyles(
 		ColorBorder,    // border
@@ -984,10 +984,10 @@ func (m *Model) openCommandRunner() tea.Cmd {
 		ColorDone,      // success
 		ColorPending,   // warning
 	))
-	
+
 	// Set the dialog ID so it can be identified in handleDialogResultMsg
 	cmdDialog.BaseDialog.ID = commandRunnerDialogID
-	
+
 	// Add dialog with callback to handle submission
 	m.appState.AddDialog(cmdDialog, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
@@ -999,29 +999,29 @@ func (m *Model) openCommandRunner() tea.Cmd {
 			m.showAppError(appErr)
 			return nil
 		}
-		
+
 		// Handle form cancellation
 		if value == nil {
 			return nil
 		}
-		
+
 		// Extract prompt from result
 		result, ok := value.(dialog.CommandPromptResult)
 		if !ok || result.Prompt == "" {
 			return nil
 		}
-		
+
 		// Execute command
 		return m.handleCommandRunnerSubmission(result)
 	})
-	
+
 	return cmdDialog.Init()
 }
 
 // handleCommandRunnerSubmission handles the result when user submits the command runner form
 func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult) tea.Cmd {
 	m.addLogLine(fmt.Sprintf("Command runner submitted with prompt (length=%d)", len(result.Prompt)))
-	
+
 	// Check if Crush binary is available
 	if err := dialog.ValidateCrushBinary(); err != nil {
 		m.addLogLine(fmt.Sprintf("ERROR: Crush binary not available: %v", err))
@@ -1033,10 +1033,10 @@ func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult)
 		m.showAppError(appErr)
 		return nil
 	}
-	
+
 	// Generate a unique command ID based on timestamp
 	commandID := fmt.Sprintf("cmd-%d", time.Now().UnixNano())
-	
+
 	// Create or show the task runner modal if not already present
 	// Note: Task Runner Modal is managed separately via m.taskRunnerVisible flag,
 	// NOT added to the dialog stack. This prevents modal overlap issues.
@@ -1058,10 +1058,10 @@ func (m *Model) handleCommandRunnerSubmission(result dialog.CommandPromptResult)
 		// DO NOT push to dialog stack - Task Runner is managed separately
 		// m.dialogManager().PushDialog(m.taskRunner) // REMOVED to fix double modal issue
 	}
-	
+
 	// Set visibility flag - Task Runner Modal is rendered independently
 	m.taskRunnerVisible = true
-	
+
 	// Execute the ad-hoc command using RunCommand (no specific model)
 	// Use tea.Sequence to ensure tab is created before execution starts
 	return tea.Sequence(
@@ -1099,9 +1099,9 @@ func (m *Model) continueAdHocCommand(commandID, prompt, model string) tea.Cmd {
 				Message: "Failed to start command",
 			})
 		}
-		
+
 		m.addLogLine(fmt.Sprintf("Started ad-hoc command %s", commandID))
-		
+
 		// Return a message to set up the subscription to the output channel
 		// No conversion needed since RunCommand returns chan tea.Msg directly
 		return dialog.CrushExecutionSub{
@@ -1194,48 +1194,48 @@ func (m *Model) openUpdateTaskDialog() tea.Cmd {
 		m.showErrorDialog("No Task Selected", "Please select a task to update.")
 		return nil
 	}
-	
+
 	if selectedTask.IsCategory || selectedTask.IsRoot {
 		m.showErrorDialog("Invalid Selection", "Please select a task, not a category or root node.")
 		return nil
 	}
-	
+
 	// Create and show update dialog
 	dm := m.dialogManager()
 	if dm == nil {
 		m.addLogLine("Cannot open update dialog: dialog manager unavailable")
 		return nil
 	}
-	
+
 	updateDialog := dialog.NewUpdateTaskDialog(selectedTask.ID, dm.Style)
-	
+
 	// Add dialog with callback to handle form submission
 	m.appState.AddDialog(updateDialog, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
 			m.showErrorDialog("Update Task", err.Error())
 			return nil
 		}
-		
+
 		// Handle form cancellation
 		if value == nil {
 			return nil
 		}
-		
+
 		// Extract result from callback
 		result, ok := value.(dialog.UpdateTaskResult)
 		if !ok {
 			return nil
 		}
-		
+
 		// Check for empty update and show confirmation dialog
 		if result.IsEmpty {
 			return m.executeTaskUpdateWithConfirmation(result.TaskID, result.Update)
 		}
-		
+
 		// Execute update command directly for non-empty updates
 		return m.executeTaskUpdate(result.TaskID, result.Update)
 	})
-	
+
 	return nil
 }
 
@@ -1250,30 +1250,30 @@ func (m *Model) executeTaskUpdateWithConfirmation(taskID, updateContent string) 
 	)
 	confirmDialog.SetYesText("Continue")
 	confirmDialog.SetNoText("Cancel")
-	
+
 	// Add dialog with callback to handle confirmation result
 	m.appState.AddDialog(confirmDialog, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
 			m.showErrorDialog("Confirmation Error", err.Error())
 			return nil
 		}
-		
+
 		// Extract confirmation result
 		result, ok := value.(dialog.ConfirmationMsg)
 		if !ok {
 			return nil
 		}
-		
+
 		// Check if user confirmed
 		if result.Result == dialog.ConfirmationResultYes {
 			// Proceed with empty update
 			return m.executeTaskUpdateInternal(taskID, updateContent)
 		}
-		
+
 		// User cancelled, do nothing
 		return nil
 	})
-	
+
 	return nil
 }
 
@@ -1286,31 +1286,31 @@ func (m *Model) executeTaskUpdate(taskID, updateContent string) tea.Cmd {
 func (m *Model) executeTaskUpdateInternal(taskID, updateContent string) tea.Cmd {
 	// Generate unique update ID using task ID and timestamp
 	updateID := fmt.Sprintf("update-%s-%d", taskID, time.Now().UnixMilli())
-	
+
 	// Ensure Task Runner modal is visible
 	m.ensureTaskRunnerModal()
-	
+
 	// Determine command type based on task ID
 	cmdType := "update-task"
 	if strings.Contains(taskID, ".") {
 		cmdType = "update-subtask"
 	}
-	
+
 	// Build arguments for task-master update command
 	args := []string{fmt.Sprintf("--id=%s", taskID)}
 	if strings.TrimSpace(updateContent) != "" {
 		args = append(args, fmt.Sprintf("--prompt=%s", escapeShellArgForUpdate(updateContent)))
 	}
-	
+
 	// Start task update execution via executor service
 	err := m.execService.Execute(cmdType, args...)
 	if err != nil {
 		m.showErrorDialog("Update Failed", err.Error())
 		return nil
 	}
-	
+
 	m.addLogLine(fmt.Sprintf("Started update task %s: %s", taskID, truncatePrompt(updateContent, 50)))
-	
+
 	// Emit TaskStartedMsg to create tab in Task Runner, then set up output streaming
 	return tea.Sequence(
 		func() tea.Msg {
@@ -1330,7 +1330,7 @@ func (m *Model) listenForTaskMasterUpdateOutput(updateID, taskID string) tea.Cmd
 		// Get output and done channels from executor
 		outputChan := m.execService.GetOutput()
 		doneChan := m.execService.GetDone()
-		
+
 		// Process output until command completes
 		for {
 			select {
@@ -1346,7 +1346,7 @@ func (m *Model) listenForTaskMasterUpdateOutput(updateID, taskID string) tea.Cmd
 			case result := <-doneChan:
 				// Command completed
 				m.addLogLine(fmt.Sprintf("Task update %s completed successfully: %s", updateID, taskID))
-				
+
 				// Reload tasks to show updated information
 				if m.taskService != nil {
 					return tea.Batch(
@@ -1369,7 +1369,7 @@ func (m *Model) listenForTaskMasterUpdateOutput(updateID, taskID string) tea.Cmd
 						WaitForTasksReload(m.taskService),
 					)
 				}
-				
+
 				if result.Success {
 					return dialog.TaskCompletedMsg{
 						TaskID: updateID,

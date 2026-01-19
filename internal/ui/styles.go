@@ -3,8 +3,8 @@ package ui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Color constants from PRD

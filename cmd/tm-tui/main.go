@@ -20,7 +20,7 @@ func main() {
 			log.Printf("=== TUI Debug Session Started ===")
 		}
 	}
-	
+
 	// Initialize Crush configuration before starting TUI
 	// This creates .crush.json with defaults if missing (non-destructive)
 	// Existing configs are never modified or overwritten

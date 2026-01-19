@@ -1,0 +1,421 @@
+package dialog
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	
+	"github.com/agreen757/tm-tui/internal/taskmaster"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// TestFileSelectionUpdatesLogViewer tests that selecting a file in the File Browser
+// correctly updates the Log Viewer with the file's contents
+func TestFileSelectionUpdatesLogViewer(t *testing.T) {
+	// Create a temporary test directory
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.log")
+	testContent := "Test log content\nLine 2\nLine 3"
+	
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	
+	// Create mock task service
+	taskService := &taskmaster.Service{}
+	
+	// Create dialog
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Send FileSelectedMsg
+	msg := FileSelectedMsg{FilePath: testFile}
+	updatedDialog, cmd := dialog.Update(msg)
+	
+	// Verify the dialog was updated
+	d := updatedDialog.(*LogBrowserDialog)
+	
+	// Check that selectedFile was set
+	if d.selectedFile != testFile {
+		t.Errorf("Expected selectedFile to be %s, got %s", testFile, d.selectedFile)
+	}
+	
+	// Check that log viewer loaded the content
+	if d.logViewer.GetFilePath() != testFile {
+		t.Errorf("Expected log viewer file path to be %s, got %s", testFile, d.logViewer.GetFilePath())
+	}
+	
+	// Check that status message is empty (no error)
+	if d.statusMsg != "" {
+		t.Errorf("Expected no error, got status message: %s", d.statusMsg)
+	}
+	
+	// Verify no command was returned (file loading is synchronous)
+	if cmd != nil {
+		t.Error("Expected nil command after file selection")
+	}
+	
+	// Check that dialog title was updated
+	expectedTitle := "Log Browser - test.log"
+	if d.BaseFocusableDialog.TitleText != expectedTitle {
+		t.Errorf("Expected title %q, got %q", expectedTitle, d.BaseFocusableDialog.TitleText)
+	}
+}
+
+// TestFileSelectionWithInvalidFile tests error handling when selecting a non-existent file
+func TestFileSelectionWithInvalidFile(t *testing.T) {
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Send FileSelectedMsg with non-existent file
+	msg := FileSelectedMsg{FilePath: "/nonexistent/file.log"}
+	updatedDialog, _ := dialog.Update(msg)
+	d := updatedDialog.(*LogBrowserDialog)
+	
+	// Check that error message was set
+	if d.statusMsg == "" {
+		t.Error("Expected error message in status bar, got empty string")
+	}
+	
+	// Verify error message contains helpful information
+	if len(d.statusMsg) < 10 {
+		t.Errorf("Expected detailed error message, got: %s", d.statusMsg)
+	}
+}
+
+// TestTagSelectionUpdatesFileBrowser tests that selecting a tag updates the File Browser
+// to show files from that tag's directory
+func TestTagSelectionUpdatesFileBrowser(t *testing.T) {
+	// Create temporary taskmaster structure
+	tmpDir := t.TempDir()
+	taskmasterDir := filepath.Join(tmpDir, ".taskmaster")
+	tagDir := filepath.Join(taskmasterDir, "test-tag")
+	
+	if err := os.MkdirAll(tagDir, 0755); err != nil {
+		t.Fatalf("Failed to create tag directory: %v", err)
+	}
+	
+	// Create a test file in the tag directory
+	testFile := filepath.Join(tagDir, "1.1.log")
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	
+	// Change to temp directory
+	oldDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldDir)
+	
+	// Create dialog
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Send TagSelectedMsg
+	msg := TagSelectedMsg{TagName: "test-tag"}
+	updatedDialog, _ := dialog.Update(msg)
+	d := updatedDialog.(*LogBrowserDialog)
+	
+	// Check that currentTag was updated
+	if d.currentTag != "test-tag" {
+		t.Errorf("Expected currentTag to be 'test-tag', got %s", d.currentTag)
+	}
+	
+	// Check that dialog title was updated
+	expectedTitle := "Log Browser - [test-tag]"
+	if d.BaseFocusableDialog.TitleText != expectedTitle {
+		t.Errorf("Expected title %q, got %q", expectedTitle, d.BaseFocusableDialog.TitleText)
+	}
+	
+	// Verify File Browser was updated (should have the test file)
+	// Note: This is a basic check - actual file loading is tested in log_file_browser_test.go
+	if d.fileBrowser.currentTag != "test-tag" {
+		t.Errorf("Expected file browser tag to be 'test-tag', got %s", d.fileBrowser.currentTag)
+	}
+}
+
+// TestTagSelectionClearsLogViewer tests that switching tags clears the log viewer
+func TestTagSelectionClearsLogViewer(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.log")
+	os.WriteFile(testFile, []byte("test content"), 0644)
+	
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// First, select a file
+	fileMsg := FileSelectedMsg{FilePath: testFile}
+	dialog, _ = dialog.Update(fileMsg).(*LogBrowserDialog)
+	
+	// Verify file was loaded
+	if dialog.selectedFile == "" {
+		t.Error("Expected file to be selected")
+	}
+	
+	// Now switch tags
+	tagMsg := TagSelectedMsg{TagName: "other-tag"}
+	dialog, _ = dialog.Update(tagMsg).(*LogBrowserDialog)
+	
+	// Verify log viewer was cleared (when no last file exists for the tag)
+	if dialog.logViewer.IsLoaded() && dialog.logViewer.GetFilePath() != "" {
+		t.Error("Expected log viewer to be cleared after tag switch")
+	}
+}
+
+// TestStatePreservationAcrossTags tests that the dialog remembers the last selected file for each tag
+func TestStatePreservationAcrossTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	taskmasterDir := filepath.Join(tmpDir, ".taskmaster")
+	tag1Dir := filepath.Join(taskmasterDir, "tag1")
+	tag2Dir := filepath.Join(taskmasterDir, "tag2")
+	
+	os.MkdirAll(tag1Dir, 0755)
+	os.MkdirAll(tag2Dir, 0755)
+	
+	file1 := filepath.Join(tag1Dir, "file1.log")
+	file2 := filepath.Join(tag2Dir, "file2.log")
+	os.WriteFile(file1, []byte("content 1"), 0644)
+	os.WriteFile(file2, []byte("content 2"), 0644)
+	
+	oldDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldDir)
+	
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Select tag1 and file1
+	dialog.currentTag = "tag1"
+	fileMsg1 := FileSelectedMsg{FilePath: file1}
+	dialog, _ = dialog.Update(fileMsg1).(*LogBrowserDialog)
+	
+	// Verify file1 was saved for tag1
+	if dialog.lastFilePerTag["tag1"] != file1 {
+		t.Errorf("Expected last file for tag1 to be %s, got %s", file1, dialog.lastFilePerTag["tag1"])
+	}
+	
+	// Switch to tag2 and select file2
+	tagMsg2 := TagSelectedMsg{TagName: "tag2"}
+	dialog, _ = dialog.Update(tagMsg2).(*LogBrowserDialog)
+	dialog.currentTag = "tag2"
+	fileMsg2 := FileSelectedMsg{FilePath: file2}
+	dialog, _ = dialog.Update(fileMsg2).(*LogBrowserDialog)
+	
+	// Verify file2 was saved for tag2
+	if dialog.lastFilePerTag["tag2"] != file2 {
+		t.Errorf("Expected last file for tag2 to be %s, got %s", file2, dialog.lastFilePerTag["tag2"])
+	}
+	
+	// Switch back to tag1
+	tagMsg1 := TagSelectedMsg{TagName: "tag1"}
+	dialog, _ = dialog.Update(tagMsg1).(*LogBrowserDialog)
+	
+	// Verify file1 is restored
+	if dialog.selectedFile != file1 {
+		t.Errorf("Expected selected file to be restored to %s, got %s", file1, dialog.selectedFile)
+	}
+	
+	// Verify both tags' last files are still remembered
+	if len(dialog.lastFilePerTag) != 2 {
+		t.Errorf("Expected 2 saved last files, got %d", len(dialog.lastFilePerTag))
+	}
+}
+
+// TestFocusPreservation tests that focus state is correctly maintained when switching panels
+func TestFocusPreservation(t *testing.T) {
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Initial state: File Browser should be focused
+	if dialog.focusedPanel != 0 {
+		t.Errorf("Expected initial focus on panel 0, got %d", dialog.focusedPanel)
+	}
+	if !dialog.fileBrowser.focused {
+		t.Error("Expected file browser to be focused initially")
+	}
+	
+	// Press Tab to switch to Tag Selector
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	result, _ := dialog.HandleKey(tabMsg)
+	
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone, got %v", result)
+	}
+	
+	// Verify focus moved to Tag Selector
+	if dialog.focusedPanel != 1 {
+		t.Errorf("Expected focus on panel 1 after Tab, got %d", dialog.focusedPanel)
+	}
+	if dialog.fileBrowser.focused {
+		t.Error("Expected file browser to lose focus after Tab")
+	}
+	if !dialog.tagSelector.focused {
+		t.Error("Expected tag selector to gain focus after Tab")
+	}
+	
+	// Press Tab again to switch to Log Viewer
+	result, _ = dialog.HandleKey(tabMsg)
+	
+	if dialog.focusedPanel != 2 {
+		t.Errorf("Expected focus on panel 2 after second Tab, got %d", dialog.focusedPanel)
+	}
+	if dialog.tagSelector.focused {
+		t.Error("Expected tag selector to lose focus")
+	}
+	if !dialog.logViewer.IsFocused() {
+		t.Error("Expected log viewer to gain focus")
+	}
+	
+	// Press Shift+Tab to go back
+	shiftTabMsg := tea.KeyMsg{Type: tea.KeyShiftTab}
+	result, _ = dialog.HandleKey(shiftTabMsg)
+	
+	if dialog.focusedPanel != 1 {
+		t.Errorf("Expected focus on panel 1 after Shift+Tab, got %d", dialog.focusedPanel)
+	}
+	if dialog.logViewer.IsFocused() {
+		t.Error("Expected log viewer to lose focus")
+	}
+	if !dialog.tagSelector.focused {
+		t.Error("Expected tag selector to gain focus")
+	}
+}
+
+// TestErrorHandlingForMissingDirectory tests error handling when a tag directory doesn't exist
+func TestErrorHandlingForMissingDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldDir)
+	
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Select a tag with no directory
+	msg := TagSelectedMsg{TagName: "nonexistent-tag"}
+	updatedDialog, _ := dialog.Update(msg)
+	d := updatedDialog.(*LogBrowserDialog)
+	
+	// Verify error message was set
+	if d.statusMsg == "" {
+		t.Error("Expected error message for missing directory")
+	}
+	
+	// Verify error message is user-friendly
+	if len(d.statusMsg) < 20 {
+		t.Errorf("Expected detailed error message, got: %s", d.statusMsg)
+	}
+}
+
+// TestErrorHandlingForDeletedFile tests handling when a previously selected file is deleted
+func TestErrorHandlingForDeletedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	taskmasterDir := filepath.Join(tmpDir, ".taskmaster", "test-tag")
+	os.MkdirAll(taskmasterDir, 0755)
+	
+	testFile := filepath.Join(taskmasterDir, "temp.log")
+	os.WriteFile(testFile, []byte("content"), 0644)
+	
+	oldDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldDir)
+	
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Select tag and file
+	dialog.currentTag = "test-tag"
+	fileMsg := FileSelectedMsg{FilePath: testFile}
+	dialog, _ = dialog.Update(fileMsg).(*LogBrowserDialog)
+	
+	// Verify file was saved
+	if dialog.lastFilePerTag["test-tag"] != testFile {
+		t.Error("File not saved in lastFilePerTag")
+	}
+	
+	// Delete the file
+	os.Remove(testFile)
+	
+	// Switch away and back to the tag
+	tagMsg := TagSelectedMsg{TagName: "test-tag"}
+	dialog, _ = dialog.Update(tagMsg).(*LogBrowserDialog)
+	
+	// Verify the deleted file didn't cause a crash and selection was cleared
+	if dialog.selectedFile == testFile {
+		t.Error("Expected selectedFile to be cleared for deleted file")
+	}
+	
+	// Verify no error message (graceful handling)
+	if dialog.statusMsg != "" {
+		t.Logf("Status message (acceptable if informative): %s", dialog.statusMsg)
+	}
+}
+
+// TestEventPropagation tests that messages are properly propagated between panels
+func TestEventPropagation(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.log")
+	os.WriteFile(testFile, []byte("content"), 0644)
+	
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Simulate file selection from File Browser
+	// In real usage, this would come from the File Browser's Update method
+	fileMsg := FileSelectedMsg{FilePath: testFile}
+	updatedDialog, cmd := dialog.Update(fileMsg)
+	d := updatedDialog.(*LogBrowserDialog)
+	
+	// Verify the message was processed
+	if d.selectedFile != testFile {
+		t.Error("FileSelectedMsg was not properly processed")
+	}
+	
+	// Verify command was not returned (synchronous operation)
+	if cmd != nil {
+		t.Error("Expected nil command for synchronous file loading")
+	}
+	
+	// Test tag selection propagation
+	tagMsg := TagSelectedMsg{TagName: "test-tag"}
+	updatedDialog, cmd = d.Update(tagMsg)
+	d = updatedDialog.(*LogBrowserDialog)
+	
+	// Verify the message was processed
+	if d.currentTag != "test-tag" {
+		t.Error("TagSelectedMsg was not properly processed")
+	}
+}
+
+// TestEmptyDirectoryHandling tests UI behavior when a tag directory is empty
+func TestEmptyDirectoryHandling(t *testing.T) {
+	tmpDir := t.TempDir()
+	taskmasterDir := filepath.Join(tmpDir, ".taskmaster")
+	emptyTagDir := filepath.Join(taskmasterDir, "empty-tag")
+	os.MkdirAll(emptyTagDir, 0755)
+	
+	oldDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldDir)
+	
+	taskService := &taskmaster.Service{}
+	dialog := NewLogBrowserDialog(100, 40, taskService)
+	
+	// Select the empty tag
+	msg := TagSelectedMsg{TagName: "empty-tag"}
+	updatedDialog, _ := dialog.Update(msg)
+	d := updatedDialog.(*LogBrowserDialog)
+	
+	// Verify tag was set
+	if d.currentTag != "empty-tag" {
+		t.Error("Tag was not set for empty directory")
+	}
+	
+	// Verify no error message (empty directory is valid, not an error)
+	if d.statusMsg != "" {
+		t.Logf("Status message: %s (acceptable if informative)", d.statusMsg)
+	}
+	
+	// Verify log viewer is cleared
+	if d.selectedFile != "" {
+		t.Error("Expected no file selected in empty directory")
+	}
+}

@@ -1,0 +1,18 @@
+FROM alpine:3.18
+
+# Install basic tools
+RUN apk add --no-cache \
+    make \
+    curl \
+    git \
+    bash
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy test script
+COPY test-nvm.sh /test-nvm.sh
+RUN chmod +x /test-nvm.sh
+
+# Entry point
+CMD ["/bin/bash", "/test-nvm.sh"]

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/agreen757/tm-tui/internal/git"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/agreen757/tm-tui/internal/git"
 )
 
 // branchItem implements the list.Item interface for branch list items
@@ -43,9 +43,9 @@ type BranchSwitchDialog struct {
 	repoPath       string
 	tagName        string
 	switching      bool
-	mu              sync.RWMutex // Protects concurrent access to dialog state
-	currentTaskID  string        // Track current git operation task ID
-	selectedBranch string        // Cache selected branch name during operation
+	mu             sync.RWMutex // Protects concurrent access to dialog state
+	currentTaskID  string       // Track current git operation task ID
+	selectedBranch string       // Cache selected branch name during operation
 }
 
 // NewBranchSwitchDialog creates a new branch switch dialog

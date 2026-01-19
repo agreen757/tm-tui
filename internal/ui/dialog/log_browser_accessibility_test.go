@@ -206,9 +206,9 @@ func TestPanelSizeResponsiveness(t *testing.T) {
 		width  int
 		height int
 	}{
-		{80, 24},   // Minimum
-		{120, 40},  // Normal
-		{200, 60},  // Large
+		{80, 24},  // Minimum
+		{120, 40}, // Normal
+		{200, 60}, // Large
 	}
 
 	for _, size := range sizes {

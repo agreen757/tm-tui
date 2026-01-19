@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // Message types for TaskRunnerModal
@@ -53,18 +53,18 @@ type ModalMinimizedMsg struct {
 
 // TaskRunnerKeyMap defines keybindings for the task runner modal
 type TaskRunnerKeyMap struct {
-	NextTab    key.Binding
-	PrevTab    key.Binding
-	ScrollUp   key.Binding
-	ScrollDown key.Binding
-	PageUp     key.Binding
-	PageDown   key.Binding
-	ScrollTop  key.Binding
+	NextTab      key.Binding
+	PrevTab      key.Binding
+	ScrollUp     key.Binding
+	ScrollDown   key.Binding
+	PageUp       key.Binding
+	PageDown     key.Binding
+	ScrollTop    key.Binding
 	ScrollBottom key.Binding
-	Minimize   key.Binding
-	Cancel     key.Binding
-	Close      key.Binding
-	TabDirect  []key.Binding // 1-9 keys
+	Minimize     key.Binding
+	Cancel       key.Binding
+	Close        key.Binding
+	TabDirect    []key.Binding // 1-9 keys
 }
 
 // DefaultTaskRunnerKeyMap returns the default keybindings
@@ -144,12 +144,12 @@ type TaskRunnerModal struct {
 	tabScrollPos              int // For handling tab bar overflow
 	cancellationConfirmDialog Dialog
 	pendingCancellationTabIdx int
-	longRunningThreshold      int       // milliseconds to consider a task "long-running"
-	autoCloseOnFailure        bool      // automatically close modal when all tasks fail/complete
-	autoCloseDelay            time.Duration // delay before auto-closing
-	closeTimer                *time.Time // tracks when to auto-close
-	gitAutoCloseDelay         time.Duration // delay before auto-closing git operations (default 2s)
-	gitAutoCloseTimers       map[string]*time.Time // tracks git-specific auto-close timers by task ID
+	longRunningThreshold      int                   // milliseconds to consider a task "long-running"
+	autoCloseOnFailure        bool                  // automatically close modal when all tasks fail/complete
+	autoCloseDelay            time.Duration         // delay before auto-closing
+	closeTimer                *time.Time            // tracks when to auto-close
+	gitAutoCloseDelay         time.Duration         // delay before auto-closing git operations (default 2s)
+	gitAutoCloseTimers        map[string]*time.Time // tracks git-specific auto-close timers by task ID
 }
 
 // NewTaskRunnerModal creates a new task runner modal
@@ -159,24 +159,24 @@ func NewTaskRunnerModal(width, height int, style *DialogStyle) *TaskRunnerModal 
 	}
 
 	modal := &TaskRunnerModal{
-		BaseDialog:   NewBaseDialog("Task Runner", width, height, DialogKindCustom),
-		tabs:         []*TaskExecutionTab{},
-		activeTab:    0,
-		minimized:    false,
+		BaseDialog: NewBaseDialog("Task Runner", width, height, DialogKindCustom),
+		tabs:       []*TaskExecutionTab{},
+		activeTab:  0,
+		minimized:  false,
 		preMinimizeState: &PreMinimizeState{
 			activeTab:     0,
 			scrollOffsets: make(map[int]int),
 		},
-		keyMap:                   DefaultTaskRunnerKeyMap(),
-		tabScrollPos:             0,
+		keyMap:                    DefaultTaskRunnerKeyMap(),
+		tabScrollPos:              0,
 		cancellationConfirmDialog: nil,
 		pendingCancellationTabIdx: -1,
-		longRunningThreshold:     5000,               // 5 seconds
-		autoCloseOnFailure:       true,               // auto-close when all tasks stop
-		autoCloseDelay:           3 * time.Second,    // wait 3 seconds before closing
-		closeTimer:               nil,
-		gitAutoCloseDelay:        2 * time.Second,    // git operations auto-close after 2 seconds
-		gitAutoCloseTimers:       make(map[string]*time.Time), // per-task timers for git operations
+		longRunningThreshold:      5000,            // 5 seconds
+		autoCloseOnFailure:        true,            // auto-close when all tasks stop
+		autoCloseDelay:            3 * time.Second, // wait 3 seconds before closing
+		closeTimer:                nil,
+		gitAutoCloseDelay:         2 * time.Second,             // git operations auto-close after 2 seconds
+		gitAutoCloseTimers:        make(map[string]*time.Time), // per-task timers for git operations
 	}
 	modal.Style = style
 	modal.SetFocused(true)
@@ -246,7 +246,7 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		return m, m.checkAutoClose()
 	case TaskFailedMsg:
 		m.setTabStatus(msg.TaskID, TaskFailed)
-		
+
 		// Set error information in the tab
 		if tab := m.getTabByID(msg.TaskID); tab != nil {
 			errorMsg := msg.Error
@@ -259,7 +259,7 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 				tab.AddOutputLine(fmt.Sprintf("\n[ERROR] %s", errorMsg))
 			}
 		}
-		
+
 		// For git tasks, keep the modal open on failure
 		if m.isGitTask(msg.TaskID) {
 			m.handleGitTaskFailure(msg.TaskID)
@@ -466,7 +466,7 @@ func (m *TaskRunnerModal) StartTasks(taskIDs []string, model string) error {
 		// Format: "Task {ID}: {Title}"
 		// For now, use taskID as title - the actual title will be set when TaskStartedMsg arrives
 		taskTitle := fmt.Sprintf("Task %s", taskID)
-		
+
 		tab := NewTaskExecutionTab(taskID, taskTitle, model, tabWidth, tabHeight, m.Style)
 		m.tabs = append(m.tabs, tab)
 	}
@@ -501,7 +501,7 @@ func (m *TaskRunnerModal) ExecuteTask(taskID, taskTitle, model, prompt, tagName 
 	if err := ValidateCrushBinary(); err != nil {
 		return nil, err
 	}
-	
+
 	// Return a batch command that:
 	// 1. Sends TaskStartedMsg to create the tab for this task
 	// 2. Starts the subprocess execution
@@ -546,7 +546,7 @@ func (m *TaskRunnerModal) cleanup() {
 			tab.Cleanup()
 		}
 	}
-	
+
 	// Clear all tabs
 	m.tabs = []*TaskExecutionTab{}
 	m.activeTab = 0
@@ -636,7 +636,7 @@ func (m *TaskRunnerModal) performCancellation(tabIndex int) {
 	}
 
 	tab := m.tabs[tabIndex]
-	
+
 	// Only cancel if task is currently running
 	// This prevents double-cancellation if called multiple times
 	if tab.GetStatus() != TaskRunning {

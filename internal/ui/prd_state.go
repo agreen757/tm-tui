@@ -6,11 +6,11 @@ import "bytes"
 type PrdCreationState struct {
 	Title            string
 	Summary          string
-	Scope            string         // Renamed from ScopeConstraints for consistency
-	Filename         string         // Renamed from OutputFilename for consistency
-	OutputBuffer     *bytes.Buffer  // Buffer for storing process output
-	GeneratedContent string         // Final generated PRD content
-	InProgress       bool           // Flag indicating if PRD creation is in progress
+	Scope            string        // Renamed from ScopeConstraints for consistency
+	Filename         string        // Renamed from OutputFilename for consistency
+	OutputBuffer     *bytes.Buffer // Buffer for storing process output
+	GeneratedContent string        // Final generated PRD content
+	InProgress       bool          // Flag indicating if PRD creation is in progress
 }
 
 // NewPrdCreationState creates a new PRD creation state with initialized OutputBuffer

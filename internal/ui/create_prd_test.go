@@ -57,8 +57,6 @@ func TestStripAnsiCodes(t *testing.T) {
 	}
 }
 
-
-
 func TestStripAnsiCodesWithRealTerminalOutput(t *testing.T) {
 	// Simulate real terminal output with ANSI codes
 	terminalOutput := "\x1b[1mTask Master\x1b[0m\n\x1b[32m✓ PRD generated\x1b[0m\n\x1b[33mWarning: Some issues\x1b[0m"
@@ -183,8 +181,8 @@ func TestWorkspacePathConfigs(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tests := []struct {
-		name   string
-		path   string
+		name    string
+		path    string
 		isValid bool
 	}{
 		{
@@ -221,10 +219,10 @@ func TestWorkspacePathConfigs(t *testing.T) {
 // TestCrushBinaryErrorType tests that CrushBinaryError is properly recognized
 func TestCrushBinaryErrorType(t *testing.T) {
 	tests := []struct {
-		name      string
-		err       error
+		name       string
+		err        error
 		isCrushErr bool
-		desc      string
+		desc       string
 	}{
 		{
 			name:       "crush_binary_error",
@@ -253,8 +251,8 @@ func TestCrushBinaryErrorType(t *testing.T) {
 // TestCrushBinaryErrorMessage tests the error message formatting
 func TestCrushBinaryErrorMessage(t *testing.T) {
 	tests := []struct {
-		name    string
-		message string
+		name     string
+		message  string
 		expected string
 	}{
 		{
@@ -401,11 +399,11 @@ func TestPrdOutputBufferValidation(t *testing.T) {
 // TestFileSystemErrorDetection tests detection of file system error types
 func TestFileSystemErrorDetection(t *testing.T) {
 	tests := []struct {
-		name          string
-		createErr     error
-		isPermission  bool
-		isNotExist    bool
-		desc          string
+		name         string
+		createErr    error
+		isPermission bool
+		isNotExist   bool
+		desc         string
 	}{
 		{
 			name:         "permission_error",
@@ -497,13 +495,13 @@ func TestDirectoryCreationErrors(t *testing.T) {
 // TestPrdErrorRecoveryStatePreservation tests that PRD state is preserved on errors
 func TestPrdErrorRecoveryStatePreservation(t *testing.T) {
 	state := NewPrdCreationState()
-	
+
 	// Set some values
 	state.Title = "Test PRD"
 	state.Summary = "Test Summary"
 	state.Scope = "Test Scope"
 	state.Filename = "test.md"
-	
+
 	// Simulate an error scenario - state should still have values
 	if state.Title != "Test PRD" {
 		t.Errorf("State should preserve Title after error scenario")

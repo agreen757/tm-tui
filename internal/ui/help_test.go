@@ -212,7 +212,7 @@ func TestUpdateTaskHelpInclusion(t *testing.T) {
 	// Check that UpdateTask shortcut is included
 	assert.Contains(t, helpContent, "Update selected task",
 		"Help should include 'Update selected task' description")
-	
+
 	// Check that the shortcut appears in Task Operations section
 	assert.Contains(t, helpContent, "TASK OPERATIONS",
 		"Help should have Task Operations section")
@@ -220,10 +220,10 @@ func TestUpdateTaskHelpInclusion(t *testing.T) {
 
 func TestUpdateTaskShortcutBinding(t *testing.T) {
 	km := DefaultKeyMap()
-	
+
 	// Verify UpdateTask key binding exists
 	require.NotNil(t, km.UpdateTask, "UpdateTask key binding should exist")
-	
+
 	// Verify the key binding has the correct help text
 	help := km.UpdateTask.Help()
 	assert.Equal(t, "update selected task", help.Desc,

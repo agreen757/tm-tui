@@ -343,14 +343,32 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 					m.appState.PopDialog()
 					return nil
 				}
-				
-				m.addLogLine("DEBUG: Validation passed, showing model selection")
-				// Store the selected task IDs in the model
-				m.readyTasksSelectionIDs = selectedTasks
-				// Close the dialog and show model selection
+
+				m.addLogLine("DEBUG: Validation passed, initializing execution queue")
+
+				// Close the ready tasks dialog
 				m.appState.PopDialog()
-				m.ShowModelSelectionDialog()
-				return nil
+
+				// Create execution queue for multi-task execution
+				m.executionQueue = &ExecutionQueue{
+					TaskIDs:         selectedTasks,
+					CurrentIndex:    0,
+					ModelSelections: make(map[string]string),
+					TaskStatus:      make(map[string]string),
+				}
+
+				// Initialize task statuses
+				for _, id := range selectedTasks {
+					m.executionQueue.TaskStatus[id] = "pending"
+				}
+
+				// Reset selection tracking
+				m.taskModelSelectionDone = make(map[string]bool)
+
+				m.addLogLine(fmt.Sprintf("Initialized execution queue with %d tasks, showing TaskModelSelectionDialog", len(selectedTasks)))
+
+				// Show the TaskModelSelectionDialog for the first task
+				return m.showTaskModelDialogCmd()
 			} else {
 				m.addLogLine(fmt.Sprintf("DEBUG: Type assertion failed or empty - ok: %v, len: %d", ok, len(selectedTasks)))
 			}
@@ -365,7 +383,7 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 			if result, ok := msg.Value.(*dialog.ModelSelectionResult); ok {
 				// Close the dialog
 				m.appState.PopDialog()
-				
+
 				// Check if this model selection is for PRD creation
 				if m.prdCreationPending {
 					m.addLogLine("PRD creation detected, starting PRD generation")
@@ -373,46 +391,46 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 					// Execute Crush for PRD creation with selected model
 					return m.executeCrushForPrd(result.Provider, result.ModelID)
 				}
-				
+
 				// Check if this model selection is for an agent run
 				if m.agentRunPending && m.agentRunTask != nil {
 					taskID := m.agentRunTaskID
 					taskTitle := m.agentRunTaskTitle
 					task := m.agentRunTask
-					
+
 					// Clear context
 					m.agentRunPending = false
 					m.agentRunTaskID = ""
 					m.agentRunTaskTitle = ""
 					m.agentRunTask = nil
-					
+
 					// Start the agent run with selected agent type
 					return m.startAgentRun(taskID, taskTitle, task, m.selectedAgentType, result.ModelID)
 				}
-				
+
 				// Check if this model selection is for bulk ready tasks execution
 				if len(m.readyTasksSelectionIDs) > 0 {
 					taskIDs := m.readyTasksSelectionIDs
 					m.readyTasksSelectionIDs = nil // Clear after capturing
-					
+
 					// Validate the model before execution
 					if !m.validateModelExecution(result.ModelID) {
 						// Validation failed - error dialog was shown
 						return nil
 					}
-					
+
 					m.addLogLine(fmt.Sprintf("Starting concurrent execution of %d tasks with model %s", len(taskIDs), result.ModelID))
-					
+
 					// Create model selections map with the same model for all tasks
 					modelSelections := make(map[string]string)
 					for _, taskID := range taskIDs {
 						modelSelections[taskID] = result.ModelID
 					}
-					
+
 					// Execute the selected tasks concurrently
 					return m.executeMultipleTasks(taskIDs, modelSelections)
 				}
-				
+
 				m.addLogLine(fmt.Sprintf("Model selected: %s (provider: %s)", result.ModelID, result.Provider))
 				return nil
 			}
@@ -433,7 +451,7 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 			m.appState.PopDialog()
 			return nil
 		}
-		
+
 		if msg.Button == "confirm" {
 			// Get current task ID from execution queue
 			taskID := m.executionQueue.CurrentTask()
@@ -443,7 +461,7 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 				m.appState.PopDialog()
 				return nil
 			}
-			
+
 			// Extract modelID from message value with type assertion
 			modelID, ok := msg.Value.(string)
 			if !ok {
@@ -452,27 +470,27 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 				m.appState.PopDialog()
 				return nil
 			}
-			
+
 			// Store model selection in execution queue
 			m.executionQueue.SetModelSelection(taskID, modelID)
-			
+
 			// Mark task as having model selection
 			if m.taskModelSelectionDone == nil {
 				m.taskModelSelectionDone = make(map[string]bool)
 			}
 			m.taskModelSelectionDone[taskID] = true
-			
+
 			// Update task status to "ready"
 			m.executionQueue.TaskStatus[taskID] = "ready"
-			
-			// Move to next task in queue
-			m.executionQueue.Next()
-			
+
 			// Close current dialog
 			m.appState.PopDialog()
-			
-			// Show next task dialog if there are more tasks, otherwise execute all tasks
+
+			// Check if there are more tasks to configure BEFORE advancing
 			if m.executionQueue.HasNext() {
+				// Move to next task in queue
+				m.executionQueue.Next()
+				// Show dialog for the next task
 				return m.showTaskModelDialogCmd()
 			} else {
 				// All tasks have models - start execution
@@ -481,7 +499,7 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 				for _, id := range m.executionQueue.TaskIDs {
 					taskIDs = append(taskIDs, id)
 				}
-				
+
 				// Pass the entire model selections map to executeMultipleTasks
 				return m.executeMultipleTasks(taskIDs, m.executionQueue.ModelSelections)
 			}
@@ -495,16 +513,16 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 				m.showErrorDialog("Skip Task", "No current task to skip")
 				return nil
 			}
-			
+
 			// Mark task status as "skipped"
 			m.executionQueue.TaskStatus[taskID] = "skipped"
-			
+
 			// Skip this task (removes from queue)
 			m.executionQueue.Skip()
-			
+
 			// Close current dialog
 			m.appState.PopDialog()
-			
+
 			// Show next task dialog if there are more tasks
 			if m.executionQueue.HasNext() {
 				return m.showTaskModelDialogCmd()
@@ -516,7 +534,7 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 						taskIDs = append(taskIDs, id)
 					}
 				}
-				
+
 				if len(taskIDs) > 0 {
 					// Create model selections map with only selected tasks
 					modelSelections := make(map[string]string)
@@ -525,7 +543,7 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 					}
 					return m.executeMultipleTasks(taskIDs, modelSelections)
 				}
-				
+
 				// No tasks with model selections
 				m.cleanupExecutionQueue()
 				m.addLogLine("No tasks selected for execution")
@@ -539,10 +557,10 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 		} else if msg.Button == "cancel" {
 			// Cancel entire queue - reset all state
 			m.cleanupExecutionQueue()
-			
+
 			// Close dialog
 			m.appState.PopDialog()
-			
+
 			// Return nil to halt flow
 			return nil
 		} else {
@@ -603,12 +621,12 @@ func (m *Model) validateTaskSelection(taskIDs []string) string {
 	if len(taskIDs) == 0 {
 		return "No tasks selected. Please select at least one task."
 	}
-	
+
 	// Check for max task limit
 	if len(taskIDs) > maxConcurrentTasks {
 		return fmt.Sprintf("Too many tasks selected (%d). Maximum concurrent tasks is %d. Please select fewer tasks.", len(taskIDs), maxConcurrentTasks)
 	}
-	
+
 	return ""
 }
 
@@ -619,7 +637,7 @@ func (m *Model) validateModelSelection(modelID string) string {
 	if modelID == "" {
 		return "No model selected. Please select a model before executing tasks."
 	}
-	
+
 	return ""
 }
 
@@ -630,46 +648,46 @@ func (m *Model) validateTaskDependencies(taskIDs []string) string {
 		// Can't validate without task service
 		return ""
 	}
-	
+
 	taskSvc, ok := m.taskService.(*taskmaster.Service)
 	if !ok {
 		// Can't validate with non-standard service
 		return ""
 	}
-	
+
 	// Check each task's dependencies - they should either be done OR in the selection
 	selectedIDMap := make(map[string]bool)
 	for _, id := range taskIDs {
 		selectedIDMap[id] = true
 	}
-	
+
 	for _, taskID := range taskIDs {
 		task, found := taskSvc.GetTaskByID(taskID)
 		if !found || task == nil {
 			continue
 		}
-		
+
 		// Check if task has unmet dependencies
 		for _, depID := range task.Dependencies {
 			// Skip if dependency is in the selection (will be executed together)
 			if selectedIDMap[depID] {
 				continue
 			}
-			
+
 			// Check if dependency is already done
 			depTask, depFound := taskSvc.GetTaskByID(depID)
 			if !depFound || depTask == nil {
 				// Dependency not found - skip validation for this one
 				continue
 			}
-			
+
 			// If dependency is not done AND not in selection, that's an error
 			if depTask.Status != taskmaster.StatusDone {
 				return fmt.Sprintf("Task %s has an incomplete dependency: %s (status: %s). Complete the dependency first or add it to your selection.", taskID, depID, depTask.Status)
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -682,13 +700,13 @@ func (m *Model) validateReadyTasksExecution(taskIDs []string) bool {
 		m.showErrorDialog("Task Selection Validation", errMsg)
 		return false
 	}
-	
+
 	// Validate dependencies
 	if errMsg := m.validateTaskDependencies(taskIDs); errMsg != "" {
 		m.showErrorDialog("Dependency Validation", errMsg)
 		return false
 	}
-	
+
 	return true
 }
 
@@ -701,6 +719,6 @@ func (m *Model) validateModelExecution(modelID string) bool {
 		m.showErrorDialog("Model Validation", errMsg)
 		return false
 	}
-	
+
 	return true
 }

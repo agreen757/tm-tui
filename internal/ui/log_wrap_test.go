@@ -11,10 +11,10 @@ import (
 // TestLogPanelLayoutWidthConstraints tests that LogWidth is properly constrained
 func TestLogPanelLayoutWidthConstraints(t *testing.T) {
 	tests := []struct {
-		name          string
-		width         int
-		expectedMax   int // LogWidth should not exceed this
-		expectedMin   int // LogWidth should not be less than this
+		name        string
+		width       int
+		expectedMax int // LogWidth should not exceed this
+		expectedMin int // LogWidth should not be less than this
 	}{
 		{
 			name:        "Normal terminal width",
@@ -106,7 +106,7 @@ func TestViewportWidthAfterLayoutUpdate(t *testing.T) {
 
 			// Viewport width should be constrained
 			if m.logViewport.Width < tt.expectedMinVPW {
-				t.Errorf("Viewport width %d is less than minimum %d (terminal width %d)", 
+				t.Errorf("Viewport width %d is less than minimum %d (terminal width %d)",
 					m.logViewport.Width, tt.expectedMinVPW, tt.width)
 			}
 
@@ -517,24 +517,24 @@ func TestUpdateLogViewportSetsContent(t *testing.T) {
 // TestUpdateLogViewportResponectsViewportWidthConstraint tests that updateLogViewport respects viewport width
 func TestUpdateLogViewportRespectViewportWidthConstraint(t *testing.T) {
 	tests := []struct {
-		name        string
+		name          string
 		viewportWidth int
-		longLine    string
+		longLine      string
 	}{
 		{
-			name:         "Small viewport",
+			name:          "Small viewport",
 			viewportWidth: 30,
-			longLine:     "This is a moderately long line that needs to be wrapped",
+			longLine:      "This is a moderately long line that needs to be wrapped",
 		},
 		{
-			name:         "Medium viewport",
+			name:          "Medium viewport",
 			viewportWidth: 60,
-			longLine:     strings.Repeat("word ", 20),
+			longLine:      strings.Repeat("word ", 20),
 		},
 		{
-			name:         "Large viewport",
+			name:          "Large viewport",
 			viewportWidth: 100,
-			longLine:     strings.Repeat("word ", 30),
+			longLine:      strings.Repeat("word ", 30),
 		},
 	}
 
@@ -1337,23 +1337,23 @@ func TestRenderLogMultipleConsecutiveEmptyLinesEdgeCase(t *testing.T) {
 // Ensures no panics and that minimum wrapWidth of 20 is enforced
 func TestRenderLogVerySmallViewportWidthEdgeCase(t *testing.T) {
 	tests := []struct {
-		name        string
+		name          string
 		viewportWidth int
 	}{
 		{
-			name:        "Viewport width of 0",
+			name:          "Viewport width of 0",
 			viewportWidth: 0,
 		},
 		{
-			name:        "Viewport width of 1",
+			name:          "Viewport width of 1",
 			viewportWidth: 1,
 		},
 		{
-			name:        "Viewport width of 5",
+			name:          "Viewport width of 5",
 			viewportWidth: 5,
 		},
 		{
-			name:        "Viewport width of 24 (< 20 + 4 padding)",
+			name:          "Viewport width of 24 (< 20 + 4 padding)",
 			viewportWidth: 24,
 		},
 	}
@@ -1405,7 +1405,7 @@ func TestRenderLogVeryLongWordEdgeCase(t *testing.T) {
 
 	// The long word should be preserved exactly as-is (not hyphenated or broken)
 	if lines[0] != longWord {
-		t.Errorf("Expected long word to remain intact, got: %s (original length: %d, result length: %d)", 
+		t.Errorf("Expected long word to remain intact, got: %s (original length: %d, result length: %d)",
 			lines[0], len(longWord), len(lines[0]))
 	}
 

@@ -5,6 +5,154 @@ All notable changes to Task Master TUI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Memory Leak Analysis & Fixes (PRD)
+
+**Memory Leak Fixes** - Comprehensive analysis and PRD for addressing 14 identified memory leaks across the codebase.
+
+#### Added
+
+- **Memory Leak Analysis Report**: Identified 14 potential memory leaks with severity classification
+  - 5 High Severity: Goroutine leaks, uncancellable command contexts
+  - 5 Medium Severity: Channel leaks, missing timeouts, timer allocation in hot paths
+  - 4 Low Severity: Unbounded maps, missing cache eviction
+- **Memory Leak Fixes PRD**: `.taskmaster/docs/memory-leak-fixes-prd.md` with:
+  - Detailed analysis of each issue with exact file locations and line numbers
+  - Code examples showing current patterns and required fixes
+  - Acceptance criteria and success metrics for each fix
+  - 4-phase implementation plan spanning 4 weeks
+  - Comprehensive testing requirements and risk mitigations
+
+#### Technical Details
+
+- **High Priority Issues**: Progress forwarding goroutines, debounce timer callbacks, uncancellable external commands
+- **Medium Priority Issues**: Channel cleanup, WaitGroup timeouts, timer allocation optimization
+- **Low Priority Issues**: Unbounded command history, lastCheckTime map cleanup, task cache eviction
+
+## [v0.1.25] - 2026-01-19
+
+### Installation & Dependencies, Concurrent Task Execution, and Enterprise Features
+
+**Installation Improvements, Multi-task Execution, and Production-Ready Features** - Comprehensive enhancements including streamlined installation, concurrent task execution support, advanced task management, and memory system integration.
+
+#### Added
+
+- **Multi-Task Execution Support**:
+  - Run up to 9 tasks concurrently in separate tabs within the Task Runner modal
+  - Use `Tab`/`Shift+Tab` to switch between active task tabs
+  - Press `1-9` to jump directly to specific task tabs
+  - Real-time streaming output for each concurrent task
+  - Automatic logging of all task outputs to `.taskmaster/logs/crush-run-<task-id>-<timestamp>.log`
+  - Independent cancellation of individual running tasks
+
+- **Installation Targets**:
+  - `make install-all`: Install all binaries (tm-tui, memory, task-master, crush, gemini) in one command
+  - `make install-task-master`: Standalone Task Master AI CLI installation via npm
+  - `make check-task-master`: Verify Task Master CLI is properly installed
+  - `make check-deps`: Verify all runtime dependencies are available
+
+- **Test Targets**:
+  - `make test-coverage`: Run tests with coverage report generation
+  - `make test-unit`: Run unit tests only
+  - `make test-integration`: Run integration tests only
+  - `make test-ci`: Run tests optimized for CI/CD pipelines
+  - `make test-suite`: Run full test suite with coverage verification (target: >80%)
+
+- **Comprehensive Troubleshooting Guide** (2000+ lines in README):
+  - "Task Master CLI Not Found" - 10 solutions with verification steps
+  - "Permission Errors During Installation" - 3 methods (nvm, npm fix, sudo)
+  - "Node.js Not Installed or Wrong Version" - Platform-specific installation
+  - "Multiple Node.js Installations" - Conflict resolution for nvm/Homebrew/system
+  - "Platform-Specific Installation Notes" - macOS, Ubuntu/Debian, Alpine, Windows
+  - "Edge Cases and Known Issues" - Network errors, disk space, npm version
+
+- **Ready Tasks List Dialog**: Pre-fetches upcoming tasks to reduce waiting time during task selection
+- **Execution Queue System**: Manages concurrent task execution with proper resource handling
+- **Memory System Integration**: BadgerDB-backed persistent storage for cross-session context
+
+#### Changed
+
+- **Makefile**: Completely restructured with 500+ lines of documentation
+  - Added 15+ new targets with clear descriptions
+  - Enhanced error handling and user feedback
+  - Consistent formatting and best practices
+
+- **README.md**: Extensive expansion with new sections:
+  - Multi-task execution workflows
+  - Concurrent task management
+  - Memory system documentation (BadgerDB integration)
+  - Enhanced installation verification
+
+- **Task Runner Modal**: Enhanced for multi-task support
+  - Separate tabs for each running task
+  - Per-task output streams and status
+  - Individual task cancellation controls
+
+#### Test Coverage
+
+- Full test suite verifies installation targets work correctly
+- Build verification confirms all changes compile without errors
+- 3500+ new test lines for ready tasks list functionality
+- 777+ new test lines for execution queue validation
+- 706+ new test lines for task runner modal enhancements
+- Help text validation ensures all targets appear in make help
+- Code review confirms Makefile follows best practices
+
+#### Docker & Platform Testing
+
+- Comprehensive Docker-based testing for Linux (Ubuntu, Alpine)
+- Windows testing infrastructure using Docker Git Bash simulation
+- Installation verification for all major Node.js installation methods
+- Edge case testing framework for network, permissions, and disk issues
+- Platform-specific test reports and findings documentation
+
+#### User Experience
+
+- Faster, more reliable installation with `make install-all`
+- Concurrent task execution enables parallel development workflows
+- Clear error messages guide users to solutions
+- Comprehensive documentation reduces support burden
+- Platform-specific guidance eliminates guesswork
+- Pre-fetching and execution queue improve overall responsiveness
+
+## [v0.1.24] - 2026-01-16
+
+### Task Score Highlighting
+
+**Enhanced Complexity Visualization** - Improved visual representation of task complexity scores with consistent color-coding and enhanced accessibility support.
+
+#### Added
+
+- **Color-coded Complexity System**: Standardized color scheme for complexity levels
+  - Low complexity: Royal Blue (#4169E1)
+  - Medium complexity: Dark Turquoise (#00CED1)
+  - High complexity: Orange (#FFA500)
+  - Very High complexity: Crimson (#DC143C)
+- **Accessibility Improvements**: Text-based alternatives for color-coded indicators
+  - `GetComplexityLabel()`: Returns text representation (LOW, MEDIUM, HIGH, VERY HIGH)
+  - `GetComplexityIndicator()`: Combined format with both text and numeric score
+  - Consistent labeling across all UI components
+- **Complexity Style Functions**:
+  - `GetComplexityStyle()`: Style based on numeric complexity scores
+  - `GetComplexityLevelStyle()`: Style based on complexity level enums
+  - Consistent bold formatting and color application
+
+#### Changed
+
+- **internal/ui/styles.go**: Enhanced with complexity styling constants and functions
+- **internal/ui/styles_test.go** (213 lines): Comprehensive test coverage for complexity styling
+- **internal/ui/complexity.go**: Updated for consistent level representation
+- **internal/ui/dialog/complexity_report.go**: Enhanced report dialog with new styling
+- **internal/ui/app.go**: Updated complexity rendering
+
+#### Test Coverage
+
+- **200+ new test lines** focusing on complexity style consistency
+- Tests for color constants and their correct hex values
+- Tests for style application based on complexity thresholds
+- Boundary testing for complexity level transitions
+
 ## [v0.1.24] - 2026-01-16
 
 ### Task Score Highlighting

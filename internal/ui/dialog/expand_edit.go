@@ -12,22 +12,22 @@ import (
 
 // SubtaskEditDialog allows editing of proposed subtasks before application
 type SubtaskEditDialog struct {
-	title            string
-	drafts           []taskmaster.SubtaskDraft
-	editingIndex     int
-	selectedIndex    int
-	editingMode      bool // true if editing a subtask, false if navigating list
-	editTitleInput   textinput.Model
-	editDescInput    textinput.Model
-	scrollOffset     int
-	width            int
-	height           int
-	style            *DialogStyle
-	focused          bool
-	cancelCallback   func()
-	confirmCallback  func([]taskmaster.SubtaskDraft)
-	maxHeight        int
-	editFieldFocus   int // 0=title, 1=description
+	title           string
+	drafts          []taskmaster.SubtaskDraft
+	editingIndex    int
+	selectedIndex   int
+	editingMode     bool // true if editing a subtask, false if navigating list
+	editTitleInput  textinput.Model
+	editDescInput   textinput.Model
+	scrollOffset    int
+	width           int
+	height          int
+	style           *DialogStyle
+	focused         bool
+	cancelCallback  func()
+	confirmCallback func([]taskmaster.SubtaskDraft)
+	maxHeight       int
+	editFieldFocus  int // 0=title, 1=description
 }
 
 // NewSubtaskEditDialog creates a dialog for editing proposed subtasks
@@ -266,7 +266,7 @@ func (d *SubtaskEditDialog) renderListMode() string {
 		Foreground(d.style.TitleColor).
 		Bold(true)
 	title := titleStyle.Render(d.title)
-	
+
 	descStyle := lipgloss.NewStyle().
 		Foreground(d.style.TextColor).
 		PaddingBottom(1)
@@ -305,12 +305,12 @@ func (d *SubtaskEditDialog) renderListMode() string {
 	lines = append(lines, footer)
 
 	content := strings.Join(lines, "\n")
-	
+
 	borderColor := d.style.BorderColor
 	if d.focused {
 		borderColor = d.style.FocusedBorderColor
 	}
-	
+
 	style := lipgloss.NewStyle().
 		Padding(0, 1).
 		BorderStyle(d.style.Border).
@@ -319,7 +319,7 @@ func (d *SubtaskEditDialog) renderListMode() string {
 		Height(d.height).
 		Background(d.style.BackgroundColor).
 		Foreground(d.style.TextColor)
-	
+
 	return style.Render(content)
 }
 
@@ -352,7 +352,7 @@ func (d *SubtaskEditDialog) renderEditMode() string {
 	footerStyle := lipgloss.NewStyle().
 		Foreground(d.style.TextColor).
 		PaddingTop(1)
-	
+
 	lines := []string{
 		title,
 		"",
@@ -366,12 +366,12 @@ func (d *SubtaskEditDialog) renderEditMode() string {
 	}
 
 	content := strings.Join(lines, "\n")
-	
+
 	borderColor := d.style.BorderColor
 	if d.focused {
 		borderColor = d.style.FocusedBorderColor
 	}
-	
+
 	style := lipgloss.NewStyle().
 		Padding(0, 1).
 		BorderStyle(d.style.Border).
@@ -380,7 +380,7 @@ func (d *SubtaskEditDialog) renderEditMode() string {
 		Height(d.height).
 		Background(d.style.BackgroundColor).
 		Foreground(d.style.TextColor)
-	
+
 	return style.Render(content)
 }
 

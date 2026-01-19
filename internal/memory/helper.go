@@ -16,7 +16,7 @@ const (
 	MetadataKey   = "metadata"
 	ContextPrefix = "context:"
 	LogPrefix     = "log:"
-	
+
 	// Default path for the BadgerDB database
 	DefaultDBPath = ".taskmaster/memory"
 )
@@ -40,7 +40,7 @@ func DefaultHelper() (*Helper, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Try BadgerDB first (primary backend)
 	var store Memory
 	badgerPath := filepath.Join(cwd, DefaultDBPath)
@@ -48,13 +48,13 @@ func DefaultHelper() (*Helper, error) {
 	if err != nil {
 		// Fallback to InMemoryStorage on error
 		memoryFilePath := filepath.Join(cwd, ".taskmaster", "memory.json")
-		
+
 		// Ensure the directory exists
 		err = os.MkdirAll(filepath.Dir(memoryFilePath), 0755)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		store, err = NewInMemoryStorage(memoryFilePath)
 		if err != nil {
 			return nil, err
@@ -62,7 +62,7 @@ func DefaultHelper() (*Helper, error) {
 	} else {
 		store = badgerStore
 	}
-	
+
 	return NewHelper(store), nil
 }
 
@@ -72,7 +72,7 @@ func (h *Helper) StoreJSON(ctx context.Context, key string, value interface{}) e
 	if err != nil {
 		return err
 	}
-	
+
 	return h.Store.Store(ctx, key, data)
 }
 
@@ -82,7 +82,7 @@ func (h *Helper) RetrieveJSON(ctx context.Context, key string, value interface{}
 	if err != nil {
 		return err
 	}
-	
+
 	return json.Unmarshal(data, value)
 }
 
@@ -99,21 +99,21 @@ func (h *Helper) GetTaskInfo(ctx context.Context, taskID string, info interface{
 // LogTaskActivity logs activity for a specific task
 func (h *Helper) LogTaskActivity(ctx context.Context, taskID, activity string) error {
 	key := LogPrefix + taskID
-	
+
 	// Get existing logs if any
 	var logs []string
 	existingData, err := h.Store.Retrieve(ctx, key)
 	if err != nil && !errors.Is(err, ErrKeyNotFound) {
 		return err
 	}
-	
+
 	if existingData != nil {
 		if err := json.Unmarshal(existingData, &logs); err != nil {
 			// If unmarshal fails, start fresh
 			logs = []string{}
 		}
 	}
-	
+
 	// Add new activity and store
 	logs = append(logs, activity)
 	return h.StoreJSON(ctx, key, logs)
@@ -129,7 +129,7 @@ func (h *Helper) GetTaskLogs(ctx context.Context, taskID string) ([]string, erro
 		}
 		return nil, err
 	}
-	
+
 	return logs, nil
 }
 
@@ -144,7 +144,7 @@ func (h *Helper) GetReadme(ctx context.Context, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(data), nil
 }
 
@@ -154,13 +154,13 @@ func (h *Helper) ListReadmes(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Strip the prefix
 	readmes := make([]string, 0, len(keys))
 	for _, key := range keys {
 		readmes = append(readmes, key[len(ReadmePrefix):])
 	}
-	
+
 	return readmes, nil
 }
 

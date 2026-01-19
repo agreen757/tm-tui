@@ -140,14 +140,14 @@ func TestSwitchBranch(t *testing.T) {
 		t.Fatalf("failed to create test branch: %v", err)
 	}
 
-	// Get current branch 
+	// Get current branch
 	cmd = exec.Command("git", "branch", "--show-current")
 	cmd.Dir = tempDir
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("failed to get current branch: %v", err)
 	}
-	
+
 	currentBranch := string(output)
 	if len(currentBranch) > 0 && currentBranch[len(currentBranch)-1] == '\n' {
 		currentBranch = currentBranch[:len(currentBranch)-1]
@@ -158,7 +158,7 @@ func TestSwitchBranch(t *testing.T) {
 	if currentBranch == "main" || currentBranch == "master" {
 		mainBranch = "main"
 	}
-	
+
 	switchOutput, err := SwitchBranch(ctx, tempDir, mainBranch)
 
 	if err != nil {

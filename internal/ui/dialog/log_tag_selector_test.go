@@ -426,7 +426,7 @@ func TestNavigationKeys(t *testing.T) {
 
 	// Test down navigation
 	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'\n'}}) // fake down
-	_ = result // Just to use it
+	_ = result                                                                           // Just to use it
 
 	// Verify list is not nil and usable
 	assert.NotNil(t, selector.list)

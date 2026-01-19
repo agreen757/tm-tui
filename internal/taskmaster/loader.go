@@ -16,12 +16,12 @@ import (
 // and if that's not found, uses the first available tag.
 func LoadTasksFromFile(rootDir string, tag string) ([]Task, error) {
 	tasksPath := filepath.Join(rootDir, ".taskmaster", "tasks", "tasks.json")
-	
+
 	data, err := os.ReadFile(tasksPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read tasks file: %w", err)
 	}
-	
+
 	// Try to determine the format by unmarshaling to a generic map first
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -32,13 +32,13 @@ func LoadTasksFromFile(rootDir string, tag string) ([]Task, error) {
 		}
 		return tasks, nil
 	}
-	
+
 	// Determine which tag to use
 	targetTag := tag
 	if targetTag == "" {
 		targetTag = "master"
 	}
-	
+
 	// Try the requested/default tag first
 	if tagData, ok := raw[targetTag]; ok {
 		if tagMap, ok := tagData.(map[string]interface{}); ok {
@@ -47,7 +47,7 @@ func LoadTasksFromFile(rootDir string, tag string) ([]Task, error) {
 			}
 		}
 	}
-	
+
 	// If requested tag not found, try "master" if we didn't already
 	if targetTag != "master" {
 		if tagData, ok := raw["master"]; ok {
@@ -58,7 +58,7 @@ func LoadTasksFromFile(rootDir string, tag string) ([]Task, error) {
 			}
 		}
 	}
-	
+
 	// If still not found, try to use the first available tag
 	for key, value := range raw {
 		if key == "tasks" {
@@ -72,12 +72,12 @@ func LoadTasksFromFile(rootDir string, tag string) ([]Task, error) {
 			}
 		}
 	}
-	
+
 	// Check for direct tasks array format: { "tasks": [...] }
 	if tasksData, ok := raw["tasks"]; ok {
 		return parseTasksData(tasksData)
 	}
-	
+
 	return nil, fmt.Errorf("unrecognized tasks.json format or no tasks found")
 }
 
@@ -87,15 +87,15 @@ func parseTasksData(tasksData interface{}) ([]Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to re-marshal tasks: %w", err)
 	}
-	
+
 	var tasks []Task
 	if err := json.Unmarshal(tasksJSON, &tasks); err != nil {
 		return nil, fmt.Errorf("failed to parse tasks array: %w", err)
 	}
-	
+
 	// Normalize subtask IDs to use proper dotted notation
 	normalizeSubtaskIDs(tasks)
-	
+
 	return tasks, nil
 }
 

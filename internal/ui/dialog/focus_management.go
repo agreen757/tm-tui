@@ -6,11 +6,11 @@ import (
 
 // FocusIndicatorStyle provides styling for focus indicators that work across all themes
 type FocusIndicatorStyle struct {
-	BorderColor      lipgloss.Color
-	HighlightColor   lipgloss.Color
-	CursorCharacter  string
-	UnderlineActive  bool
-	BoldActive       bool
+	BorderColor     lipgloss.Color
+	HighlightColor  lipgloss.Color
+	CursorCharacter string
+	UnderlineActive bool
+	BoldActive      bool
 }
 
 // DefaultFocusIndicatorStyle returns a focus indicator style with high contrast defaults

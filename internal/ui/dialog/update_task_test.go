@@ -264,10 +264,10 @@ func TestHandleUpdateTaskSubmit_Update(t *testing.T) {
 
 func TestUpdateTaskResult_String(t *testing.T) {
 	tests := []struct {
-		name     string
-		taskID   string
-		update   string
-		isEmpty  bool
+		name    string
+		taskID  string
+		update  string
+		isEmpty bool
 	}{
 		{
 			name:    "normal update result",
@@ -317,7 +317,7 @@ func TestHandleUpdateTaskSubmit_DifferentButtons(t *testing.T) {
 	values := map[string]interface{}{"update": "Some text"}
 
 	tests := []struct {
-		button string
+		button  string
 		wantNil bool
 	}{
 		{"Update", false},
@@ -353,7 +353,7 @@ func TestNewUpdateTaskDialog_WithTaskIDFormatting(t *testing.T) {
 		t.Run(tt.taskID, func(t *testing.T) {
 			dialog := NewUpdateTaskDialog(tt.taskID, nil)
 			title := dialog.Title()
-			
+
 			// Check if title contains expected substring
 			found := false
 			for i := 0; i < len(title)-len(tt.expectedInTitle)+1; i++ {
@@ -362,7 +362,7 @@ func TestNewUpdateTaskDialog_WithTaskIDFormatting(t *testing.T) {
 					break
 				}
 			}
-			
+
 			if !found {
 				t.Errorf("Title() = %q, expected to contain %q", title, tt.expectedInTitle)
 			}

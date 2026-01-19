@@ -1,4 +1,4 @@
-.PHONY: build run test clean install help install-memory install-crush install-task-master install-gemini check-gemini check-crush check-project-setup init-crush-config install-all test-init
+.PHONY: build run test clean install help install-memory install-crush install-task-master install-gemini check-gemini check-crush check-task-master check-deps check-project-setup init-crush-config install-all test-init
 
 # Binary name
 BINARY_NAME=tm-tui
@@ -149,6 +149,13 @@ check-task-master: ## Check if Task Master CLI is installed
 		echo "Run 'make install-task-master' to install"; \
 		exit 1; \
 	fi
+
+check-deps: ## Verify runtime dependencies
+	@echo "Checking runtime dependencies..."
+	@command -v task-master >/dev/null 2>&1 || \
+		(echo "⚠ Warning: task-master not found. The TUI requires Task Master AI."; \
+		 echo "  Install: make install-task-master")
+	@echo "✓ Dependency check complete"
 
 vet: ## Run go vet
 	@echo "Running go vet..."

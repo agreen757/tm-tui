@@ -173,7 +173,7 @@ func TestFileExtensionMatching(t *testing.T) {
 
 	// Setup a test directory with files
 	tempDir := t.TempDir()
-	
+
 	// Create test files
 	testFiles := []string{
 		"document.txt",
@@ -181,14 +181,14 @@ func TestFileExtensionMatching(t *testing.T) {
 		"script.js",
 		"image.png",
 	}
-	
+
 	for _, filename := range testFiles {
 		filepath := filepath.Join(tempDir, filename)
 		if err := os.WriteFile(filepath, []byte("test content"), 0644); err != nil {
 			t.Fatalf("Failed to create test file %s: %v", filename, err)
 		}
 	}
-	
+
 	// Test with various filter combinations
 	testCases := []struct {
 		name       string
@@ -221,18 +221,18 @@ func TestFileExtensionMatching(t *testing.T) {
 			expected:   3, // document.txt, readme.md, and script.js
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create dialog with test extensions
 			dialog := NewFileSelectionDialog("Test", tempDir, 50, 20, tc.extensions)
-			
+
 			// Get entries directly using the dialog's filter map
 			entries, err := readDirectoryEntries(tempDir, dialog.filters)
 			if err != nil {
 				t.Fatalf("Error reading directory: %v", err)
 			}
-			
+
 			// Filter out directories
 			fileCount := 0
 			for _, entry := range entries {
@@ -240,19 +240,19 @@ func TestFileExtensionMatching(t *testing.T) {
 					fileCount++
 				}
 			}
-			
+
 			// Check if we have the expected number of files
 			if fileCount != tc.expected {
-				t.Errorf("Expected %d files, got %d with filters %v", 
+				t.Errorf("Expected %d files, got %d with filters %v",
 					tc.expected, fileCount, tc.extensions)
-				
+
 				// Log the file entries for debugging
 				for _, entry := range entries {
 					if !entry.IsDir {
 						t.Logf("Found file: %s", entry.Name)
 					}
 				}
-				
+
 				// Log the normalized filters
 				filtersStr := "nil"
 				if dialog.filters != nil {

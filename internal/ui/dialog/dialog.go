@@ -292,17 +292,17 @@ func (d BaseDialog) RenderBorder(content string) string {
 		lines := strings.Split(renderer, "\n")
 		if len(lines) > 0 {
 			firstLine := lines[0]
-			
+
 			// Use ansi.Cut to properly extract parts of the ANSI-styled line
 			// Get the left part (from 0 to titlePos)
 			leftPart := ansi.Cut(firstLine, 0, titlePos)
-			
+
 			// Get the right part (from titlePos + titleWidth to end)
 			rightStart := titlePos + titleWidth
 			lineWidth := ansi.StringWidth(firstLine)
 			if rightStart <= lineWidth {
 				rightPart := ansi.Cut(firstLine, rightStart, lineWidth)
-				
+
 				// Combine: left + styled title + right
 				newFirstLine := leftPart + titleRendered + rightPart
 				lines[0] = newFirstLine
@@ -397,29 +397,29 @@ func (e dialogEntry) ZIndex() int {
 // - Visible focus indicators across all themes
 // - Support for nested dialog stacking with proper focus recovery
 type DialogManager struct {
-	dialogs         []dialogEntry
-	termWidth       int
-	termHeight      int
-	activeDialog    int
-	Style           *DialogStyle
-	positioningCfg  PositioningConfig
-	lastWindowWidth int // Track last terminal width for detecting changes
-	lastWindowHeight int // Track last terminal height for detecting changes
-	focusHistory    []int // Track focus indices for nested dialogs
+	dialogs          []dialogEntry
+	termWidth        int
+	termHeight       int
+	activeDialog     int
+	Style            *DialogStyle
+	positioningCfg   PositioningConfig
+	lastWindowWidth  int   // Track last terminal width for detecting changes
+	lastWindowHeight int   // Track last terminal height for detecting changes
+	focusHistory     []int // Track focus indices for nested dialogs
 }
 
 // NewDialogManager creates a new dialog manager
 func NewDialogManager(termWidth, termHeight int) *DialogManager {
 	return &DialogManager{
-		dialogs:         []dialogEntry{},
-		termWidth:       termWidth,
-		termHeight:      termHeight,
-		activeDialog:    -1,
-		Style:           DefaultDialogStyle(),
-		positioningCfg:  DefaultPositioningConfig(),
-		lastWindowWidth: termWidth,
+		dialogs:          []dialogEntry{},
+		termWidth:        termWidth,
+		termHeight:       termHeight,
+		activeDialog:     -1,
+		Style:            DefaultDialogStyle(),
+		positioningCfg:   DefaultPositioningConfig(),
+		lastWindowWidth:  termWidth,
 		lastWindowHeight: termHeight,
-		focusHistory:    []int{},
+		focusHistory:     []int{},
 	}
 }
 
@@ -588,9 +588,9 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 
 		// Special handling for key messages - check if dialog handles or closes
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			log.Printf("[DialogManager.HandleMsg] KeyMsg received: %s, Active dialog type: %T", 
+			log.Printf("[DialogManager.HandleMsg] KeyMsg received: %s, Active dialog type: %T",
 				keyMsg.String(), activeDialog)
-			
+
 			// First call Update() to allow normal text input processing
 			log.Printf("[DialogManager.HandleMsg] Calling Update() on dialog...")
 			updatedDialog, cmd := activeDialog.Update(msg)

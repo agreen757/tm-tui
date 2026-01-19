@@ -350,9 +350,9 @@ func TestFormatTaskRow_Header(t *testing.T) {
 func TestFormatTaskRowWithCheckbox_Unchecked(t *testing.T) {
 	dialog := NewReadyTasksDialog()
 	task := ReadyTaskItem{
-		ID:        "1.1",
-		TaskTitle: "Test Task",
-		Priority:  "high",
+		ID:         "1.1",
+		TaskTitle:  "Test Task",
+		Priority:   "high",
 		Complexity: 5,
 	}
 
@@ -372,9 +372,9 @@ func TestFormatTaskRowWithCheckbox_Unchecked(t *testing.T) {
 func TestFormatTaskRowWithCheckbox_Checked(t *testing.T) {
 	dialog := NewReadyTasksDialog()
 	task := ReadyTaskItem{
-		ID:        "1.1",
-		TaskTitle: "Test Task",
-		Priority:  "high",
+		ID:         "1.1",
+		TaskTitle:  "Test Task",
+		Priority:   "high",
 		Complexity: 5,
 	}
 
@@ -394,9 +394,9 @@ func TestFormatTaskRowWithCheckbox_Checked(t *testing.T) {
 func TestFormatTaskRowWithCheckbox_Focused(t *testing.T) {
 	dialog := NewReadyTasksDialog()
 	task := ReadyTaskItem{
-		ID:        "1.1",
-		TaskTitle: "Test Task",
-		Priority:  "high",
+		ID:         "1.1",
+		TaskTitle:  "Test Task",
+		Priority:   "high",
 		Complexity: 5,
 	}
 
@@ -416,9 +416,9 @@ func TestFormatTaskRowWithCheckbox_Focused(t *testing.T) {
 func TestFormatTaskRowWithCheckbox_TruncatedTitle(t *testing.T) {
 	dialog := NewReadyTasksDialog()
 	task := ReadyTaskItem{
-		ID:        "1.1",
-		TaskTitle: "This is a very long task title that should be truncated when displayed in the UI",
-		Priority:  "high",
+		ID:         "1.1",
+		TaskTitle:  "This is a very long task title that should be truncated when displayed in the UI",
+		Priority:   "high",
 		Complexity: 5,
 	}
 
@@ -823,8 +823,8 @@ func TestIntegration_EdgeCase_ManyTasks(t *testing.T) {
 	var tasks []map[string]interface{}
 	for i := 1; i <= 50; i++ {
 		tasks = append(tasks, map[string]interface{}{
-			"id":    fmt.Sprintf("%d.%d", i/10+1, i%10+1),
-			"title": fmt.Sprintf("Task %d", i),
+			"id":       fmt.Sprintf("%d.%d", i/10+1, i%10+1),
+			"title":    fmt.Sprintf("Task %d", i),
 			"priority": []string{"low", "medium", "high"}[i%3],
 		})
 	}
@@ -1366,7 +1366,6 @@ func TestLineClassification_Malformed(t *testing.T) {
 	}
 }
 
-
 // Tests for Column Boundary Detection (Task 2.2)
 
 func TestExtractColumnBoundaries_StandardHeader(t *testing.T) {
@@ -1527,17 +1526,17 @@ func TestParseList_CommaSeparated(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseList(tt.input)
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("parseList(%q) length = %d, want %d", tt.input, len(result), len(tt.expected))
 				return
 			}
-			
+
 			if tt.expected == nil && result != nil {
 				t.Errorf("parseList(%q) = %v, want nil", tt.input, result)
 				return
 			}
-			
+
 			for i, exp := range tt.expected {
 				if result[i] != exp {
 					t.Errorf("parseList(%q)[%d] = %q, want %q", tt.input, i, result[i], exp)
@@ -1549,7 +1548,7 @@ func TestParseList_CommaSeparated(t *testing.T) {
 
 func TestParseTasksFromTable_SingleTask(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	tableOutput := `┌───────┬──────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────┐
 │ ID    │ Title                        │ Status     │ Priority │ Dependencies │ Blocks       │ Complex… │
 ├───────┼──────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────┤
@@ -1558,33 +1557,33 @@ func TestParseTasksFromTable_SingleTask(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┴──────────┴──────────────┴──────────────┴──────────┘`
 
 	dialog.SetContent(tableOutput)
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Fatalf("Expected 1 task, got %d", len(dialog.tasks))
 	}
-	
+
 	task := dialog.tasks[0]
-	
+
 	if task.ID != "2" {
 		t.Errorf("ID = %q, want '2'", task.ID)
 	}
-	
+
 	if task.TaskTitle != "Implement CLI Output Parser" {
 		t.Errorf("TaskTitle = %q, want 'Implement CLI Output Parser'", task.TaskTitle)
 	}
-	
+
 	if task.Status != "in-progress" {
 		t.Errorf("Status = %q, want 'in-progress'", task.Status)
 	}
-	
+
 	if task.Priority != "high" {
 		t.Errorf("Priority = %q, want 'high'", task.Priority)
 	}
-	
+
 	if len(task.Dependencies) != 1 || task.Dependencies[0] != "1" {
 		t.Errorf("Dependencies = %v, want ['1']", task.Dependencies)
 	}
-	
+
 	expectedBlocks := []string{"3", "8", "9", "10"}
 	if len(task.Blocks) != len(expectedBlocks) {
 		t.Errorf("Blocks length = %d, want %d", len(task.Blocks), len(expectedBlocks))
@@ -1595,7 +1594,7 @@ func TestParseTasksFromTable_SingleTask(t *testing.T) {
 			}
 		}
 	}
-	
+
 	if task.Complexity != 8 {
 		t.Errorf("Complexity = %d, want 8", task.Complexity)
 	}
@@ -1603,7 +1602,7 @@ func TestParseTasksFromTable_SingleTask(t *testing.T) {
 
 func TestParseTasksFromTable_MultipleTasks(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	tableOutput := `┌───────┬──────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────┐
 │ ID    │ Title                        │ Status     │ Priority │ Dependencies │ Blocks       │ Complex… │
 ├───────┼──────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────┤
@@ -1614,11 +1613,11 @@ func TestParseTasksFromTable_MultipleTasks(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┴──────────┴──────────────┴──────────────┴──────────┘`
 
 	dialog.SetContent(tableOutput)
-	
+
 	if len(dialog.tasks) != 2 {
 		t.Fatalf("Expected 2 tasks, got %d", len(dialog.tasks))
 	}
-	
+
 	// Check first task
 	task1 := dialog.tasks[0]
 	if task1.ID != "2" {
@@ -1627,7 +1626,7 @@ func TestParseTasksFromTable_MultipleTasks(t *testing.T) {
 	if task1.Priority != "high" {
 		t.Errorf("Task 1 Priority = %q, want 'high'", task1.Priority)
 	}
-	
+
 	// Check second task
 	task2 := dialog.tasks[1]
 	if task2.ID != "5" {
@@ -1639,7 +1638,7 @@ func TestParseTasksFromTable_MultipleTasks(t *testing.T) {
 	if task2.Priority != "medium" {
 		t.Errorf("Task 2 Priority = %q, want 'medium'", task2.Priority)
 	}
-	
+
 	expectedDeps := []string{"1", "2", "3", "4"}
 	if len(task2.Dependencies) != len(expectedDeps) {
 		t.Errorf("Task 2 Dependencies length = %d, want %d", len(task2.Dependencies), len(expectedDeps))
@@ -1648,7 +1647,7 @@ func TestParseTasksFromTable_MultipleTasks(t *testing.T) {
 
 func TestParseTasksFromTable_EmptyFields(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	tableOutput := `┌───────┬──────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────┐
 │ ID    │ Title                        │ Status     │ Priority │ Dependencies │ Blocks       │ Complex… │
 ├───────┼──────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────┤
@@ -1656,29 +1655,29 @@ func TestParseTasksFromTable_EmptyFields(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┴──────────┴──────────────┴──────────────┴──────────┘`
 
 	dialog.SetContent(tableOutput)
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Fatalf("Expected 1 task, got %d", len(dialog.tasks))
 	}
-	
+
 	task := dialog.tasks[0]
-	
+
 	if task.ID != "1" {
 		t.Errorf("ID = %q, want '1'", task.ID)
 	}
-	
+
 	if task.Priority != "" {
 		t.Errorf("Priority should be empty, got %q", task.Priority)
 	}
-	
+
 	if task.Dependencies != nil {
 		t.Errorf("Dependencies should be nil, got %v", task.Dependencies)
 	}
-	
+
 	if task.Blocks != nil {
 		t.Errorf("Blocks should be nil, got %v", task.Blocks)
 	}
-	
+
 	if task.Complexity != 0 {
 		t.Errorf("Complexity should be 0, got %d", task.Complexity)
 	}
@@ -1686,7 +1685,7 @@ func TestParseTasksFromTable_EmptyFields(t *testing.T) {
 
 func TestParseTasksFromTable_VaryingFieldLengths(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	tableOutput := `┌───────┬──────────────────────────────┬────────────┬──────────┬──────────────┬──────────────┬──────────┐
 │ ID    │ Title                        │ Status     │ Priority │ Dependencies │ Blocks       │ Complex… │
 ├───────┼──────────────────────────────┼────────────┼──────────┼──────────────┼──────────────┼──────────┤
@@ -1696,21 +1695,21 @@ func TestParseTasksFromTable_VaryingFieldLengths(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┴──────────┴──────────────┴──────────────┴──────────┘`
 
 	dialog.SetContent(tableOutput)
-	
+
 	if len(dialog.tasks) != 2 {
 		t.Fatalf("Expected 2 tasks, got %d", len(dialog.tasks))
 	}
-	
+
 	// Short ID
 	if dialog.tasks[0].ID != "1.1" {
 		t.Errorf("Task 1 ID = %q, want '1.1'", dialog.tasks[0].ID)
 	}
-	
+
 	// Long ID with subtask notation
 	if dialog.tasks[1].ID != "2.3.4" {
 		t.Errorf("Task 2 ID = %q, want '2.3.4'", dialog.tasks[1].ID)
 	}
-	
+
 	// Check long dependencies list parsed correctly
 	if len(dialog.tasks[1].Dependencies) != 4 {
 		t.Errorf("Task 2 should have 4 dependencies, got %d", len(dialog.tasks[1].Dependencies))
@@ -1719,7 +1718,7 @@ func TestParseTasksFromTable_VaryingFieldLengths(t *testing.T) {
 
 func TestParseTasksFromTable_RealCLIOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Actual output from task-master list --ready
 	realOutput := `🏷  tag: concurrent-task-execution
 Listing tasks from: /Users/adriangreen/Work/taskmaster-crush-fork/.taskmaster/tasks/tasks.json
@@ -1733,12 +1732,12 @@ Listing tasks from: /Users/adriangreen/Work/taskmaster-crush-fork/.taskmaster/ta
 └───────┴──────────────────────────────┴────────────┴──────────┴──────────────┴──────────────┴──────────┘`
 
 	dialog.SetContent(realOutput)
-	
+
 	// Should parse 2 tasks
 	if len(dialog.tasks) != 2 {
 		t.Fatalf("Expected 2 tasks from real output, got %d", len(dialog.tasks))
 	}
-	
+
 	// Verify first task
 	task1 := dialog.tasks[0]
 	if task1.ID != "2" {
@@ -1753,7 +1752,7 @@ Listing tasks from: /Users/adriangreen/Work/taskmaster-crush-fork/.taskmaster/ta
 	if task1.Complexity != 8 {
 		t.Errorf("Task 1 Complexity = %d, want 8", task1.Complexity)
 	}
-	
+
 	// Verify second task
 	task2 := dialog.tasks[1]
 	if task2.ID != "5" {
@@ -1766,7 +1765,7 @@ Listing tasks from: /Users/adriangreen/Work/taskmaster-crush-fork/.taskmaster/ta
 
 func TestParseTasksFromTable_ContinuationLines(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	tableOutput := `┌───────┬──────────────────────────────┬────────────┐
 │ ID    │ Title                        │ Status     │
 ├───────┼──────────────────────────────┼────────────┤
@@ -1776,18 +1775,18 @@ func TestParseTasksFromTable_ContinuationLines(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(tableOutput)
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Fatalf("Expected 1 task, got %d", len(dialog.tasks))
 	}
-	
+
 	task := dialog.tasks[0]
-	
+
 	// Title should include both lines
 	if !contains(task.TaskTitle, "First Line") && !contains(task.TaskTitle, "Continuation") {
 		t.Errorf("Title should contain continuation text, got %q", task.TaskTitle)
 	}
-	
+
 	// Status should be reconstructed from truncated parts
 	if task.Status != "in-progress" {
 		t.Errorf("Status should be 'in-progress' (reconstructed), got %q", task.Status)
@@ -1796,14 +1795,14 @@ func TestParseTasksFromTable_ContinuationLines(t *testing.T) {
 
 func TestParseTasksFromTable_EmptyTable(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	tableOutput := `┌───────┬──────────────────────────────┬────────────┐
 │ ID    │ Title                        │ Status     │
 ├───────┼──────────────────────────────┼────────────┤
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(tableOutput)
-	
+
 	// Empty table should result in no tasks
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Empty table should result in 0 tasks, got %d", len(dialog.tasks))
@@ -1817,7 +1816,7 @@ func TestParseTasksFromTable_EmptyTable(t *testing.T) {
 // TestIntegration_ErrorHandling_ValidOutput tests successful parsing without errors
 func TestIntegration_ErrorHandling_ValidOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	validTableOutput := `┌───────┬──────────────────────────────┬────────────┬──────────┐
 │ ID    │ Title                        │ Status     │ Priority │
 ├───────┼──────────────────────────────┼────────────┼──────────┤
@@ -1825,16 +1824,16 @@ func TestIntegration_ErrorHandling_ValidOutput(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┴──────────┘`
 
 	dialog.SetContent(validTableOutput)
-	
+
 	// Should parse successfully without error
 	if dialog.parseError != nil {
 		t.Errorf("Valid output should not produce parseError, got: %v", dialog.parseError)
 	}
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Errorf("Expected 1 task from valid output, got %d", len(dialog.tasks))
 	}
-	
+
 	if dialog.tasks[0].ID != "1" {
 		t.Errorf("Task ID should be '1', got %q", dialog.tasks[0].ID)
 	}
@@ -1843,7 +1842,7 @@ func TestIntegration_ErrorHandling_ValidOutput(t *testing.T) {
 // TestIntegration_ErrorHandling_MissingHeader tests error when header is missing
 func TestIntegration_ErrorHandling_MissingHeader(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Table without header
 	noHeaderOutput := `┌───────┬──────────────────────────────┬────────────┐
 ├───────┼──────────────────────────────┼────────────┤
@@ -1851,12 +1850,12 @@ func TestIntegration_ErrorHandling_MissingHeader(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(noHeaderOutput)
-	
+
 	// Should set parseError since no header found
 	if dialog.parseError == nil {
 		t.Error("Missing header should set parseError")
 	}
-	
+
 	// Should still attempt to parse but fail
 	if len(dialog.tasks) > 0 {
 		t.Errorf("Missing header should result in no tasks, got %d", len(dialog.tasks))
@@ -1866,7 +1865,7 @@ func TestIntegration_ErrorHandling_MissingHeader(t *testing.T) {
 // TestIntegration_ErrorHandling_MalformedRows tests handling of malformed data rows
 func TestIntegration_ErrorHandling_MalformedRows(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Table with malformed row (missing pipes)
 	malformedOutput := `┌───────┬──────────────────────────────┬────────────┐
 │ ID    │ Title                        │ Status     │
@@ -1877,12 +1876,12 @@ This is a malformed row without pipes
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(malformedOutput)
-	
+
 	// Should parse valid rows and skip malformed ones
 	if dialog.parseError != nil {
 		t.Logf("ParseError (expected for malformed data): %v", dialog.parseError)
 	}
-	
+
 	// Should successfully parse the valid tasks
 	if len(dialog.tasks) != 2 {
 		t.Errorf("Expected 2 valid tasks despite malformed row, got %d", len(dialog.tasks))
@@ -1892,20 +1891,20 @@ This is a malformed row without pipes
 // TestIntegration_ErrorHandling_EmptyOutput tests handling of completely empty output
 func TestIntegration_ErrorHandling_EmptyOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Completely empty string
 	dialog.SetContent("")
-	
+
 	// Should set parseError for empty output
 	if dialog.parseError == nil {
 		t.Error("Empty output should set parseError")
 	}
-	
+
 	// Should have no tasks
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Empty output should result in 0 tasks, got %d", len(dialog.tasks))
 	}
-	
+
 	// Verify view shows error
 	view := dialog.View()
 	if !contains(view, "Error") {
@@ -1916,7 +1915,7 @@ func TestIntegration_ErrorHandling_EmptyOutput(t *testing.T) {
 // TestIntegration_ErrorHandling_BoundaryErrors tests column boundary edge cases
 func TestIntegration_ErrorHandling_BoundaryErrors(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Table with misaligned pipes (boundary errors)
 	boundaryErrorOutput := `┌───────┬──────────────────────────────┬────────────┐
 │ ID    │ Title                        │ Status     │
@@ -1925,13 +1924,13 @@ func TestIntegration_ErrorHandling_BoundaryErrors(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(boundaryErrorOutput)
-	
+
 	// Parser should handle misaligned pipes gracefully
 	// It should either parse successfully or set error, but not crash
 	if dialog.parseError != nil {
 		t.Logf("ParseError for boundary issue (acceptable): %v", dialog.parseError)
 	}
-	
+
 	// Verify no panic occurred
 	if len(dialog.tasks) > 0 {
 		task := dialog.tasks[0]
@@ -1944,7 +1943,7 @@ func TestIntegration_ErrorHandling_BoundaryErrors(t *testing.T) {
 // TestIntegration_ErrorHandling_TruncatedTitle tests detection of truncated titles
 func TestIntegration_ErrorHandling_TruncatedTitle(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Table with truncated title (ends with ...)
 	truncatedOutput := `┌───────┬──────────────────────────────┬────────────┐
 │ ID    │ Title                        │ Status     │
@@ -1953,34 +1952,34 @@ func TestIntegration_ErrorHandling_TruncatedTitle(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(truncatedOutput)
-	
+
 	// Should parse successfully
 	if dialog.parseError != nil {
 		t.Errorf("Truncated title should not cause parseError, got: %v", dialog.parseError)
 	}
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Fatalf("Expected 1 task, got %d", len(dialog.tasks))
 	}
-	
+
 	task := dialog.tasks[0]
-	
+
 	// Should detect truncation
 	if !task.TitleTruncated {
 		t.Error("Title truncation should be detected")
 	}
-	
+
 	// Title should have '...' removed
 	if contains(task.TaskTitle, "...") {
 		t.Errorf("Truncated title should have '...' removed, got: %q", task.TaskTitle)
 	}
-	
+
 	// GetTruncatedTaskIDs should return this task
 	truncatedIDs := dialog.GetTruncatedTaskIDs()
 	if len(truncatedIDs) != 1 || truncatedIDs[0] != "1" {
 		t.Errorf("GetTruncatedTaskIDs() should return [1], got %v", truncatedIDs)
 	}
-	
+
 	// HasTruncatedTitles should return true
 	if !dialog.HasTruncatedTitles() {
 		t.Error("HasTruncatedTitles() should return true")
@@ -1990,19 +1989,19 @@ func TestIntegration_ErrorHandling_TruncatedTitle(t *testing.T) {
 // TestIntegration_ErrorHandling_UnrecognizedFormat tests error when format is unrecognized
 func TestIntegration_ErrorHandling_UnrecognizedFormat(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Content that is neither JSON, table, nor text format
 	unrecognizedOutput := `This is some random text
 that doesn't match any known format
 and shouldn't parse as tasks`
 
 	dialog.SetContent(unrecognizedOutput)
-	
+
 	// Should set parseError for unrecognized format
 	if dialog.parseError == nil {
 		t.Error("Unrecognized format should set parseError")
 	}
-	
+
 	// Should have no tasks
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Unrecognized format should result in 0 tasks, got %d", len(dialog.tasks))
@@ -2012,7 +2011,7 @@ and shouldn't parse as tasks`
 // TestIntegration_ErrorHandling_PartiallyValidJSON tests handling of malformed JSON
 func TestIntegration_ErrorHandling_PartiallyValidJSON(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// JSON that starts valid but is incomplete
 	partialJSON := `[
 		{"id": "1", "title": "Task 1"},
@@ -2020,7 +2019,7 @@ func TestIntegration_ErrorHandling_PartiallyValidJSON(t *testing.T) {
 	]`
 
 	dialog.SetContent(partialJSON)
-	
+
 	// JSON parsing should fail, fall back to text parsing
 	// Since text parsing won't find task format, should set error
 	if dialog.parseError == nil {
@@ -2031,7 +2030,7 @@ func TestIntegration_ErrorHandling_PartiallyValidJSON(t *testing.T) {
 // TestIntegration_ErrorHandling_MixedValidAndInvalid tests parsing with mixed content
 func TestIntegration_ErrorHandling_MixedValidAndInvalid(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Output with both valid table and extraneous content
 	mixedOutput := `Some random text before the table
 ┌───────┬──────────────────────────────┬────────────┐
@@ -2042,12 +2041,12 @@ func TestIntegration_ErrorHandling_MixedValidAndInvalid(t *testing.T) {
 Some random text after the table`
 
 	dialog.SetContent(mixedOutput)
-	
+
 	// Should parse the valid table portion
 	if len(dialog.tasks) != 1 {
 		t.Errorf("Expected 1 task from mixed content, got %d", len(dialog.tasks))
 	}
-	
+
 	// May or may not set error (acceptable either way)
 	if dialog.parseError != nil {
 		t.Logf("ParseError for mixed content (acceptable): %v", dialog.parseError)
@@ -2057,7 +2056,7 @@ Some random text after the table`
 // TestIntegration_ErrorHandling_NoTasks tests table with header but no data
 func TestIntegration_ErrorHandling_NoTasks(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Valid table structure with header but no data rows
 	noTasksOutput := `┌───────┬──────────────────────────────┬────────────┐
 │ ID    │ Title                        │ Status     │
@@ -2065,12 +2064,12 @@ func TestIntegration_ErrorHandling_NoTasks(t *testing.T) {
 └───────┴──────────────────────────────┴────────────┘`
 
 	dialog.SetContent(noTasksOutput)
-	
+
 	// Should detect valid header but no tasks
 	if dialog.parseError == nil {
 		t.Error("Table with header but no tasks should set parseError")
 	}
-	
+
 	// Should have no tasks
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Expected 0 tasks, got %d", len(dialog.tasks))
@@ -2080,18 +2079,18 @@ func TestIntegration_ErrorHandling_NoTasks(t *testing.T) {
 // TestIntegration_ErrorHandling_OnlyMetadata tests output with only metadata
 func TestIntegration_ErrorHandling_OnlyMetadata(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Output with only metadata, no actual table
 	metadataOnly := `🏷  tag: concurrent-task-execution
 Listing tasks from: /Users/test/.taskmaster/tasks/tasks.json`
 
 	dialog.SetContent(metadataOnly)
-	
+
 	// Should set parseError since no tasks found
 	if dialog.parseError == nil {
 		t.Error("Metadata-only output should set parseError")
 	}
-	
+
 	// Should have no tasks
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Expected 0 tasks from metadata-only output, got %d", len(dialog.tasks))
@@ -2101,23 +2100,23 @@ Listing tasks from: /Users/test/.taskmaster/tasks/tasks.json`
 // TestIntegration_ErrorHandling_RecoveryFromError tests that dialog recovers after error
 func TestIntegration_ErrorHandling_RecoveryFromError(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// First, set invalid content
 	dialog.SetContent("invalid content")
-	
+
 	if dialog.parseError == nil {
 		t.Error("Invalid content should set parseError")
 	}
-	
+
 	// Now set valid content
 	validOutput := `[{"id": "1", "title": "Valid Task"}]`
 	dialog.SetContent(validOutput)
-	
+
 	// Should clear error and parse successfully
 	if dialog.parseError != nil {
 		t.Errorf("Valid content should clear parseError, got: %v", dialog.parseError)
 	}
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Errorf("Expected 1 task after recovery, got %d", len(dialog.tasks))
 	}
@@ -2131,27 +2130,27 @@ func TestGetSelectionCount(t *testing.T) {
 		{ID: "2", TaskTitle: "Task 2"},
 		{ID: "3", TaskTitle: "Task 3"},
 	}
-	
+
 	// Initialize items
 	items := make([]ListItem, len(dialog.tasks))
 	for i := range dialog.tasks {
 		items[i] = dialog.tasks[i]
 	}
 	dialog.ListDialog.SetItems(items)
-	
+
 	// Test initial state (no selections)
 	selected, total := dialog.GetSelectionCount()
 	if selected != 0 || total != 3 {
 		t.Errorf("Initial: GetSelectionCount() = (%d, %d), want (0, 3)", selected, total)
 	}
-	
+
 	// Select first item
 	dialog.ListDialog.selectedItems[0] = true
 	selected, total = dialog.GetSelectionCount()
 	if selected != 1 || total != 3 {
 		t.Errorf("After selecting 1: GetSelectionCount() = (%d, %d), want (1, 3)", selected, total)
 	}
-	
+
 	// Select all items
 	dialog.ListDialog.selectedItems[1] = true
 	dialog.ListDialog.selectedItems[2] = true
@@ -2168,25 +2167,25 @@ func TestAllSelected(t *testing.T) {
 		{ID: "1", TaskTitle: "Task 1"},
 		{ID: "2", TaskTitle: "Task 2"},
 	}
-	
+
 	// Initialize items
 	items := make([]ListItem, len(dialog.tasks))
 	for i := range dialog.tasks {
 		items[i] = dialog.tasks[i]
 	}
 	dialog.ListDialog.SetItems(items)
-	
+
 	// Test initial state
 	if dialog.AllSelected() {
 		t.Error("AllSelected() should return false initially")
 	}
-	
+
 	// Select first item
 	dialog.ListDialog.selectedItems[0] = true
 	if dialog.AllSelected() {
 		t.Error("AllSelected() should return false with only partial selection")
 	}
-	
+
 	// Select all
 	dialog.ListDialog.selectedItems[1] = true
 	if !dialog.AllSelected() {
@@ -2202,32 +2201,32 @@ func TestSelectAll(t *testing.T) {
 		{ID: "2", TaskTitle: "Task 2"},
 		{ID: "3", TaskTitle: "Task 3"},
 	}
-	
+
 	// Initialize items
 	items := make([]ListItem, len(dialog.tasks))
 	for i := range dialog.tasks {
 		items[i] = dialog.tasks[i]
 	}
 	dialog.ListDialog.SetItems(items)
-	
+
 	// Ensure selectedItems map is initialized
 	if dialog.ListDialog.selectedItems == nil {
 		dialog.ListDialog.selectedItems = make(map[int]bool)
 	}
-	
+
 	// Select all
 	dialog.SelectAll(true)
 	selected, total := dialog.GetSelectionCount()
 	if selected != total {
-		t.Errorf("After SelectAll(true): GetSelectionCount() = (%d, %d), expected (%d, %d)", 
+		t.Errorf("After SelectAll(true): GetSelectionCount() = (%d, %d), expected (%d, %d)",
 			selected, total, total, total)
 	}
-	
+
 	// Deselect all
 	dialog.SelectAll(false)
 	selected, total = dialog.GetSelectionCount()
 	if selected != 0 {
-		t.Errorf("After SelectAll(false): GetSelectionCount() = (%d, %d), expected (0, %d)", 
+		t.Errorf("After SelectAll(false): GetSelectionCount() = (%d, %d), expected (0, %d)",
 			selected, total, total)
 	}
 }
@@ -2241,25 +2240,25 @@ func TestFormatTaskRowWithCheckbox_Updated(t *testing.T) {
 		Priority:   "high",
 		Complexity: 5,
 	}
-	
+
 	// Test unchecked checkbox
 	row := dialog.formatTaskRowWithCheckbox(task, false, false)
 	if !strings.Contains(row, "[ ]") {
 		t.Errorf("Unchecked row should contain '[ ]', got: %s", row)
 	}
-	
+
 	// Test checked checkbox with checkmark
 	row = dialog.formatTaskRowWithCheckbox(task, false, true)
 	if !strings.Contains(row, "[✓]") {
 		t.Errorf("Checked row should contain '[✓]', got: %s", row)
 	}
-	
+
 	// Test focused row indicator
 	row = dialog.formatTaskRowWithCheckbox(task, true, false)
 	if !strings.Contains(row, "►") {
 		t.Errorf("Focused row should contain '►', got: %s", row)
 	}
-	
+
 	// Test both focused and checked
 	row = dialog.formatTaskRowWithCheckbox(task, true, true)
 	if !strings.Contains(row, "►") || !strings.Contains(row, "[✓]") {
@@ -2275,39 +2274,39 @@ func TestHandleKey_AltA(t *testing.T) {
 		{ID: "2", TaskTitle: "Task 2"},
 		{ID: "3", TaskTitle: "Task 3"},
 	}
-	
+
 	// Initialize items
 	items := make([]ListItem, len(dialog.tasks))
 	for i := range dialog.tasks {
 		items[i] = dialog.tasks[i]
 	}
 	dialog.ListDialog.SetItems(items)
-	
+
 	if dialog.ListDialog.selectedItems == nil {
 		dialog.ListDialog.selectedItems = make(map[int]bool)
 	}
-	
+
 	// Test Alt+A with no selections - should select all
 	msg := tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'a'},
 		Alt:   true,
 	}
-	
+
 	result, _ := dialog.HandleKey(msg)
-	
+
 	if result != DialogResultNone {
 		t.Errorf("HandleKey(Alt+A) should return DialogResultNone, got %v", result)
 	}
-	
+
 	selected, _ := dialog.GetSelectionCount()
 	if selected != 3 {
 		t.Errorf("After Alt+A with no selections: expected 3 selected, got %d", selected)
 	}
-	
+
 	// Test Alt+A again - should deselect all
 	result, _ = dialog.HandleKey(msg)
-	
+
 	selected, _ = dialog.GetSelectionCount()
 	if selected != 0 {
 		t.Errorf("After second Alt+A: expected 0 selected, got %d", selected)
@@ -2322,18 +2321,18 @@ func TestReadyTasksDialog_KeyboardNavigation(t *testing.T) {
 		{ID: "2", TaskTitle: "Task 2"},
 		{ID: "3", TaskTitle: "Task 3"},
 	}
-	
+
 	// Initialize items
 	items := make([]ListItem, len(dialog.tasks))
 	for i := range dialog.tasks {
 		items[i] = dialog.tasks[i]
 	}
 	dialog.ListDialog.SetItems(items)
-	
+
 	if dialog.ListDialog.selectedItems == nil {
 		dialog.ListDialog.selectedItems = make(map[int]bool)
 	}
-	
+
 	// ListDialog already handles ↑/↓ navigation, so we verify initial state
 	if dialog.ListDialog.selectedIndex != 0 {
 		t.Errorf("Initial selected index should be 0, got %d", dialog.ListDialog.selectedIndex)
@@ -2346,7 +2345,7 @@ func TestReadyTasksDialog_KeyboardNavigation(t *testing.T) {
 
 func TestExtractTitleFromOutput_TableFormat(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Sample output from task-master show
 	output := `┌────────────────────────────────────────────────────────────────────────────────┐
 │ Task: #9.1 - Implement Truncation Detection and Async Fetching Logic           │
@@ -2358,7 +2357,7 @@ func TestExtractTitleFromOutput_TableFormat(t *testing.T) {
 └────────────────────┴────────────────────────────────────────────────────────────────────────────┘`
 
 	title := dialog.extractTitleFromOutput(output)
-	
+
 	if !contains(title, "Truncation") || !contains(title, "Async") {
 		t.Errorf("extractTitleFromOutput should extract title with key words, got %q", title)
 	}
@@ -2366,9 +2365,9 @@ func TestExtractTitleFromOutput_TableFormat(t *testing.T) {
 
 func TestExtractTitleFromOutput_EmptyOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	title := dialog.extractTitleFromOutput("")
-	
+
 	if title != "" {
 		t.Errorf("Empty output should return empty string, got %q", title)
 	}
@@ -2376,13 +2375,13 @@ func TestExtractTitleFromOutput_EmptyOutput(t *testing.T) {
 
 func TestExtractTitleFromOutput_NoTitleField(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	output := `No title here
 Just some random content
 Without any field markers`
 
 	title := dialog.extractTitleFromOutput(output)
-	
+
 	if title != "" {
 		t.Errorf("Output without title field should return empty string, got %q", title)
 	}
@@ -2390,20 +2389,20 @@ Without any field markers`
 
 func TestGetTruncatedTaskIDs_WithTruncation(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "1", TaskTitle: "Full Title", TitleTruncated: false},
 		{ID: "2", TaskTitle: "Truncated Title", TitleTruncated: true},
 		{ID: "3", TaskTitle: "Another Truncated", TitleTruncated: true},
 		{ID: "4", TaskTitle: "Full Again", TitleTruncated: false},
 	}
-	
+
 	truncatedIDs := dialog.GetTruncatedTaskIDs()
-	
+
 	if len(truncatedIDs) != 2 {
 		t.Fatalf("Expected 2 truncated IDs, got %d", len(truncatedIDs))
 	}
-	
+
 	if truncatedIDs[0] != "2" || truncatedIDs[1] != "3" {
 		t.Errorf("Expected [2, 3], got %v", truncatedIDs)
 	}
@@ -2411,14 +2410,14 @@ func TestGetTruncatedTaskIDs_WithTruncation(t *testing.T) {
 
 func TestGetTruncatedTaskIDs_NoTruncation(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "1", TaskTitle: "Full Title 1", TitleTruncated: false},
 		{ID: "2", TaskTitle: "Full Title 2", TitleTruncated: false},
 	}
-	
+
 	truncatedIDs := dialog.GetTruncatedTaskIDs()
-	
+
 	if len(truncatedIDs) != 0 {
 		t.Errorf("No truncated tasks should return empty slice, got %v", truncatedIDs)
 	}
@@ -2426,12 +2425,12 @@ func TestGetTruncatedTaskIDs_NoTruncation(t *testing.T) {
 
 func TestHasTruncatedTitles_True(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "1", TaskTitle: "Full Title", TitleTruncated: false},
 		{ID: "2", TaskTitle: "Truncated", TitleTruncated: true},
 	}
-	
+
 	if !dialog.HasTruncatedTitles() {
 		t.Error("HasTruncatedTitles should return true when truncated tasks exist")
 	}
@@ -2439,12 +2438,12 @@ func TestHasTruncatedTitles_True(t *testing.T) {
 
 func TestHasTruncatedTitles_False(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "1", TaskTitle: "Full Title", TitleTruncated: false},
 		{ID: "2", TaskTitle: "Another Full", TitleTruncated: false},
 	}
-	
+
 	if dialog.HasTruncatedTitles() {
 		t.Error("HasTruncatedTitles should return false when no truncated tasks exist")
 	}
@@ -2452,9 +2451,9 @@ func TestHasTruncatedTitles_False(t *testing.T) {
 
 func TestHasTruncatedTitles_EmptyTasks(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.tasks = []ReadyTaskItem{}
-	
+
 	if dialog.HasTruncatedTitles() {
 		t.Error("HasTruncatedTitles should return false for empty task list")
 	}
@@ -2462,16 +2461,16 @@ func TestHasTruncatedTitles_EmptyTasks(t *testing.T) {
 
 func TestFetchAllTruncatedTaskDetails_NoTruncation(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// All tasks have full titles
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "1", TaskTitle: "Full Task 1", TitleTruncated: false},
 		{ID: "2", TaskTitle: "Full Task 2", TitleTruncated: false},
 	}
-	
+
 	// Should not attempt to fetch anything
 	dialog.FetchAllTruncatedTaskDetails()
-	
+
 	// Tasks should remain unchanged
 	if dialog.tasks[0].TaskTitle != "Full Task 1" {
 		t.Errorf("Task 1 title changed unexpectedly: %q", dialog.tasks[0].TaskTitle)
@@ -2480,7 +2479,7 @@ func TestFetchAllTruncatedTaskDetails_NoTruncation(t *testing.T) {
 
 func TestSetContent_TriggersFetch(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	jsonContent := `[
 		{
 			"id": "1",
@@ -2489,14 +2488,14 @@ func TestSetContent_TriggersFetch(t *testing.T) {
 			"priority": "high"
 		}
 	]`
-	
+
 	// This should not panic and should call FetchAllTruncatedTaskDetails
 	dialog.SetContent(jsonContent)
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Fatalf("Expected 1 task, got %d", len(dialog.tasks))
 	}
-	
+
 	if dialog.tasks[0].ID != "1" {
 		t.Errorf("Task ID should be '1', got %q", dialog.tasks[0].ID)
 	}
@@ -2516,15 +2515,15 @@ func TestDetectTitleTruncation_WithEllipsis(t *testing.T) {
 		{"ellipsis at start", "...Title", "...Title", false},
 		{"ellipsis in middle", "Title...More", "Title...More", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			title, isTruncated := detectTitleTruncation(tt.input)
-			
+
 			if title != tt.expected {
 				t.Errorf("Title = %q, want %q", title, tt.expected)
 			}
-			
+
 			if isTruncated != tt.truncated {
 				t.Errorf("isTruncated = %v, want %v", isTruncated, tt.truncated)
 			}
@@ -2534,7 +2533,7 @@ func TestDetectTitleTruncation_WithEllipsis(t *testing.T) {
 
 func TestSetContent_JSON_WithTruncation(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	jsonContent := `[
 		{
 			"id": "1",
@@ -2542,20 +2541,20 @@ func TestSetContent_JSON_WithTruncation(t *testing.T) {
 			"status": "pending"
 		}
 	]`
-	
+
 	dialog.SetContent(jsonContent)
-	
+
 	if len(dialog.tasks) != 1 {
 		t.Fatalf("Expected 1 task, got %d", len(dialog.tasks))
 	}
-	
+
 	task := dialog.tasks[0]
-	
+
 	// Title should have ellipsis removed
 	if contains(task.TaskTitle, "...") {
 		t.Errorf("Task title should not contain ellipsis, got %q", task.TaskTitle)
 	}
-	
+
 	// TitleTruncated flag should be set
 	if !task.TitleTruncated {
 		t.Error("TitleTruncated flag should be true")
@@ -2565,17 +2564,16 @@ func TestSetContent_JSON_WithTruncation(t *testing.T) {
 // Concurrent access tests
 func TestFetchAllTruncatedTaskDetails_MutexProtection(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "1", TaskTitle: "Truncated 1", TitleTruncated: true},
 		{ID: "2", TaskTitle: "Truncated 2", TitleTruncated: true},
 	}
-	
-	
+
 	// This test verifies the mutex is properly initialized and used
 	// By calling the fetch function which uses the mutex
 	dialog.FetchAllTruncatedTaskDetails()
-	
+
 	// Should not panic - mutex prevents race conditions
 	if dialog == nil {
 		t.Error("Dialog should not be nil")
@@ -2590,59 +2588,59 @@ func TestReadyTasksDialog_ConfirmationFlow(t *testing.T) {
 		{"id": "1.2", "title": "Task 2", "priority": "low"},
 		{"id": "1.3", "title": "Task 3", "priority": "medium"}
 	]`
-	
+
 	dialog.SetContent(jsonContent)
-	
+
 	// Select tasks 1 and 3
 	dialog.ListDialog.selectedItems[0] = true
 	dialog.ListDialog.selectedItems[2] = true
-	
+
 	// Simulate Enter key press via HandleKey (the new flow)
 	enterKey := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := dialog.HandleKey(enterKey)
-	
+
 	// HandleKey should return DialogResultNone (not Confirm) because it emits a command
 	// that triggers the result, allowing the message to flow properly
 	if result != DialogResultNone {
 		t.Errorf("Expected DialogResultNone, got %v", result)
 	}
-	
+
 	if cmd == nil {
 		t.Error("Command should not be nil when confirmed")
 		return
 	}
-	
+
 	// Execute the command to get the result message
 	resultMsg := cmd()
-	
+
 	// Verify it's a DialogResultMsg
 	dialogResultMsg, ok := resultMsg.(DialogResultMsg)
 	if !ok {
 		t.Errorf("Expected DialogResultMsg, got %T", resultMsg)
 		return
 	}
-	
+
 	// Verify the message content
 	if dialogResultMsg.ID != "ready_tasks_dialog" {
 		t.Errorf("Expected dialog ID 'ready_tasks_dialog', got %q", dialogResultMsg.ID)
 	}
-	
+
 	if dialogResultMsg.Button != "confirm" {
 		t.Errorf("Expected button 'confirm', got %q", dialogResultMsg.Button)
 	}
-	
+
 	// Verify the selected task IDs
 	selectedTasks, ok := dialogResultMsg.Value.([]string)
 	if !ok {
 		t.Errorf("Expected []string for Value, got %T", dialogResultMsg.Value)
 		return
 	}
-	
+
 	if len(selectedTasks) != 2 {
 		t.Errorf("Expected 2 selected tasks, got %d", len(selectedTasks))
 		return
 	}
-	
+
 	if selectedTasks[0] != "1.1" || selectedTasks[1] != "1.3" {
 		t.Errorf("Expected ['1.1', '1.3'], got %v", selectedTasks)
 	}
@@ -2655,19 +2653,19 @@ func TestReadyTasksDialog_CancellationWithNoSelection(t *testing.T) {
 		{"id": "1.1", "title": "Task 1", "priority": "high"},
 		{"id": "1.2", "title": "Task 2", "priority": "low"}
 	]`
-	
+
 	dialog.SetContent(jsonContent)
-	
+
 	// Don't select any tasks
 	// Simulate Enter key press via HandleKey (the new flow)
 	enterKey := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := dialog.HandleKey(enterKey)
-	
+
 	// With no tasks selected, HandleKey should return DialogResultCancel
 	if result != DialogResultCancel {
 		t.Errorf("Expected DialogResultCancel for empty selection, got %v", result)
 	}
-	
+
 	// Command should be nil when cancelled via DialogResultCancel
 	if cmd != nil {
 		t.Error("Command should be nil for cancellation via DialogResultCancel")
@@ -2678,7 +2676,7 @@ func TestReadyTasksDialog_CancellationWithNoSelection(t *testing.T) {
 
 func TestParseTaskDetails_CompleteOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	output := `┌────────────────────────────────────────────┐
 │ Task: #9.1 - Implement Async Fetching    │
 ╰────────────────────────────────────────────╯
@@ -2691,37 +2689,37 @@ func TestParseTaskDetails_CompleteOutput(t *testing.T) {
 │ Dependencies:│ 1, 2, 3                                    │
 │ Blocks:      │ 4, 5                                       │
 └──────────────┴────────────────────────────────────────────┘`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details == nil {
 		t.Fatal("ParseTaskDetails should not return nil for valid output")
 	}
-	
+
 	if details.ID != "9.1" {
 		t.Errorf("ID = %q, want '9.1'", details.ID)
 	}
-	
+
 	if !strings.Contains(details.Title, "Async") {
 		t.Errorf("Title should contain 'Async', got %q", details.Title)
 	}
-	
+
 	if details.Status != "pending" {
 		t.Errorf("Status = %q, want 'pending'", details.Status)
 	}
-	
+
 	if details.Priority != "high" {
 		t.Errorf("Priority = %q, want 'high'", details.Priority)
 	}
-	
+
 	if details.Complexity != 7 {
 		t.Errorf("Complexity = %d, want 7", details.Complexity)
 	}
-	
+
 	if len(details.Dependencies) != 3 {
 		t.Errorf("Dependencies length = %d, want 3", len(details.Dependencies))
 	}
-	
+
 	if len(details.Blocks) != 2 {
 		t.Errorf("Blocks length = %d, want 2", len(details.Blocks))
 	}
@@ -2729,22 +2727,22 @@ func TestParseTaskDetails_CompleteOutput(t *testing.T) {
 
 func TestParseTaskDetails_MinimalOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	output := `┌──────────────┬────────────────────────┐
 │ ID:          │ 1.1                    │
 │ Title:       │ Simple Task            │
 └──────────────┴────────────────────────┘`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details == nil {
 		t.Fatal("ParseTaskDetails should handle minimal output")
 	}
-	
+
 	if details.ID != "1.1" {
 		t.Errorf("ID = %q, want '1.1'", details.ID)
 	}
-	
+
 	if details.Title != "Simple Task" {
 		t.Errorf("Title = %q, want 'Simple Task'", details.Title)
 	}
@@ -2752,9 +2750,9 @@ func TestParseTaskDetails_MinimalOutput(t *testing.T) {
 
 func TestParseTaskDetails_EmptyOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	details := dialog.ParseTaskDetails("")
-	
+
 	if details != nil {
 		t.Errorf("ParseTaskDetails should return nil for empty output, got %+v", details)
 	}
@@ -2762,13 +2760,13 @@ func TestParseTaskDetails_EmptyOutput(t *testing.T) {
 
 func TestParseTaskDetails_OnlyDecorative(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	output := `┌──────────────┬────────────────────┐
 ├──────────────┼────────────────────┤
 └──────────────┴────────────────────┘`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details != nil {
 		t.Errorf("ParseTaskDetails should return nil for decorative-only output, got %+v", details)
 	}
@@ -2776,19 +2774,19 @@ func TestParseTaskDetails_OnlyDecorative(t *testing.T) {
 
 func TestParseTaskDetails_WithStatusSymbols(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	output := `┌──────────────┬────────────────────┐
 │ ID:          │ 2.1                │
 │ Title:       │ Task Title         │
 │ Status:      │ ▶ in-progress      │
 └──────────────┴────────────────────┘`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details == nil {
 		t.Fatal("Should parse status with symbols")
 	}
-	
+
 	if details.Status != "in-progress" {
 		t.Errorf("Status = %q, want 'in-progress' (symbol removed)", details.Status)
 	}
@@ -2796,12 +2794,12 @@ func TestParseTaskDetails_WithStatusSymbols(t *testing.T) {
 
 func TestParseTaskDetails_NoFields(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	output := `No recognizable fields here
 Just plain text without structure`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details != nil {
 		t.Errorf("ParseTaskDetails should return nil for unstructured output, got %+v", details)
 	}
@@ -2809,20 +2807,20 @@ Just plain text without structure`
 
 func TestParseTaskDetails_LongTitle(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	longTitle := "This is a very long task title that contains multiple words and spans across the output"
 	output := `┌──────────────┬──────────────────────────────────────────────────────────────────┐
 │ ID:          │ 3.1                                                                  │
 │ Title:       │ ` + longTitle + ` │
 │ Status:      │ ○ done                                                               │
 └──────────────┴──────────────────────────────────────────────────────────────────────┘`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details == nil {
 		t.Fatal("Should parse long title")
 	}
-	
+
 	if !strings.Contains(details.Title, longTitle) {
 		t.Errorf("Title should contain full long title, got %q", details.Title)
 	}
@@ -2830,29 +2828,29 @@ func TestParseTaskDetails_LongTitle(t *testing.T) {
 
 func TestParseTaskDetails_OptionalFields(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Output with some fields missing
 	output := `┌──────────────┬────────────────────┐
 │ ID:          │ 4.1                │
 │ Title:       │ Task without all   │
 │ Status:      │ ○ pending          │
 └──────────────┴────────────────────┘`
-	
+
 	details := dialog.ParseTaskDetails(output)
-	
+
 	if details == nil {
 		t.Fatal("Should parse with missing optional fields")
 	}
-	
+
 	// These should be zero/empty values
 	if details.Priority != "" {
 		t.Errorf("Priority should be empty, got %q", details.Priority)
 	}
-	
+
 	if details.Complexity != 0 {
 		t.Errorf("Complexity should be 0, got %d", details.Complexity)
 	}
-	
+
 	if len(details.Dependencies) != 0 {
 		t.Errorf("Dependencies should be empty, got %v", details.Dependencies)
 	}
@@ -2862,9 +2860,9 @@ func TestParseTaskDetails_OptionalFields(t *testing.T) {
 
 func TestGetCachedTaskDetails_NotFound(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	details := dialog.GetCachedTaskDetails("9.1")
-	
+
 	if details != nil {
 		t.Errorf("GetCachedTaskDetails should return nil for non-existent cache entry, got %v", details)
 	}
@@ -2872,21 +2870,21 @@ func TestGetCachedTaskDetails_NotFound(t *testing.T) {
 
 func TestGetCachedTaskDetails_Found(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Manually add to cache
 	expectedDetails := &TaskDetails{
-		ID:    "9.1",
-		Title: "Implement Truncation Detection",
+		ID:     "9.1",
+		Title:  "Implement Truncation Detection",
 		Status: "done",
 	}
 	dialog.cache["9.1"] = expectedDetails
-	
+
 	details := dialog.GetCachedTaskDetails("9.1")
-	
+
 	if details == nil {
 		t.Fatal("GetCachedTaskDetails should return cached details")
 	}
-	
+
 	if details.ID != expectedDetails.ID || details.Title != expectedDetails.Title {
 		t.Errorf("GetCachedTaskDetails returned incorrect details, got %v", details)
 	}
@@ -2894,19 +2892,19 @@ func TestGetCachedTaskDetails_Found(t *testing.T) {
 
 func TestInvalidateCache_SingleTask(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Add items to cache
 	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Task 1"}
 	dialog.cache["9.2"] = &TaskDetails{ID: "9.2", Title: "Task 2"}
-	
+
 	// Invalidate one task
 	dialog.InvalidateCache("9.1")
-	
+
 	// Check that 9.1 is gone but 9.2 remains
 	if dialog.GetCachedTaskDetails("9.1") != nil {
 		t.Errorf("Invalidated cache entry should be nil")
 	}
-	
+
 	if dialog.GetCachedTaskDetails("9.2") == nil {
 		t.Errorf("Other cache entries should not be affected")
 	}
@@ -2914,25 +2912,25 @@ func TestInvalidateCache_SingleTask(t *testing.T) {
 
 func TestClearCache_RemovesAll(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Add multiple items to cache
 	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Task 1"}
 	dialog.cache["9.2"] = &TaskDetails{ID: "9.2", Title: "Task 2"}
 	dialog.cache["9.3"] = &TaskDetails{ID: "9.3", Title: "Task 3"}
-	
+
 	initialSize := dialog.GetCacheSize()
 	if initialSize != 3 {
 		t.Errorf("Initial cache size should be 3, got %d", initialSize)
 	}
-	
+
 	// Clear cache
 	dialog.ClearCache()
-	
+
 	// Check that cache is empty
 	if dialog.GetCacheSize() != 0 {
 		t.Errorf("Cache should be empty after ClearCache, got size %d", dialog.GetCacheSize())
 	}
-	
+
 	// Verify all entries are gone
 	if dialog.GetCachedTaskDetails("9.1") != nil {
 		t.Errorf("Cache should be completely cleared")
@@ -2941,22 +2939,22 @@ func TestClearCache_RemovesAll(t *testing.T) {
 
 func TestGetCacheSize_ReflectsEntries(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	if dialog.GetCacheSize() != 0 {
 		t.Errorf("Initial cache size should be 0, got %d", dialog.GetCacheSize())
 	}
-	
+
 	// Add entries
 	dialog.cache["1"] = &TaskDetails{ID: "1", Title: "Task 1"}
 	if dialog.GetCacheSize() != 1 {
 		t.Errorf("Cache size should be 1, got %d", dialog.GetCacheSize())
 	}
-	
+
 	dialog.cache["2"] = &TaskDetails{ID: "2", Title: "Task 2"}
 	if dialog.GetCacheSize() != 2 {
 		t.Errorf("Cache size should be 2, got %d", dialog.GetCacheSize())
 	}
-	
+
 	// Remove entry
 	delete(dialog.cache, "1")
 	if dialog.GetCacheSize() != 1 {
@@ -2966,23 +2964,23 @@ func TestGetCacheSize_ReflectsEntries(t *testing.T) {
 
 func TestFetchFullTaskDetails_ChecksCacheFirst(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Pre-populate cache
 	cachedDetails := &TaskDetails{
-		ID:    "9.1",
-		Title: "Cached Full Title",
+		ID:     "9.1",
+		Title:  "Cached Full Title",
 		Status: "done",
 	}
 	dialog.cache["9.1"] = cachedDetails
-	
+
 	// This should return the cached title without executing the command
 	// (which would fail since we don't have a real task-master)
 	title, err := dialog.FetchFullTaskDetails("9.1")
-	
+
 	if err != nil {
 		t.Errorf("FetchFullTaskDetails should not error when using cache, got %v", err)
 	}
-	
+
 	if title != cachedDetails.Title {
 		t.Errorf("FetchFullTaskDetails should return cached title, got %q", title)
 	}
@@ -2990,32 +2988,32 @@ func TestFetchFullTaskDetails_ChecksCacheFirst(t *testing.T) {
 
 func TestFetchFullTaskDetails_CachesResult(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Cache should be empty initially
 	if dialog.GetCacheSize() != 0 {
 		t.Errorf("Cache should be empty initially, got size %d", dialog.GetCacheSize())
 	}
-	
+
 	// Note: We can't test actual fetching without mocking exec.CommandContext
 	// But we can test the cache logic by manually storing and retrieving
 	details := &TaskDetails{
-		ID:    "test-id",
-		Title: "Test Task",
-		Status: "pending",
+		ID:       "test-id",
+		Title:    "Test Task",
+		Status:   "pending",
 		Priority: "high",
 	}
-	
+
 	// Simulate cache storage by directly testing the caching mechanism
 	dialog.mu.Lock()
 	dialog.cache["test-id"] = details
 	dialog.mu.Unlock()
-	
+
 	// Verify it's cached
 	cached := dialog.GetCachedTaskDetails("test-id")
 	if cached == nil {
 		t.Fatal("Task should be cached after storage")
 	}
-	
+
 	if cached.Title != details.Title {
 		t.Errorf("Cached data should match original, got %v", cached)
 	}
@@ -3023,17 +3021,17 @@ func TestFetchFullTaskDetails_CachesResult(t *testing.T) {
 
 func TestUpdateUIAfterFetch_UpdatesListItems(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Add some tasks with truncated titles
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "9.1", TaskTitle: "Impl...", TitleTruncated: true},
 		{ID: "9.2", TaskTitle: "Create Task...", TitleTruncated: true},
 	}
-	
+
 	// Cache the full details
 	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Implement Truncation Detection"}
 	dialog.cache["9.2"] = &TaskDetails{ID: "9.2", Title: "Create Task Details Parser"}
-	
+
 	// Update the task items with cached data
 	dialog.mu.Lock()
 	for i, task := range dialog.tasks {
@@ -3043,15 +3041,15 @@ func TestUpdateUIAfterFetch_UpdatesListItems(t *testing.T) {
 		}
 	}
 	dialog.mu.Unlock()
-	
+
 	// Call updateUIAfterFetch
 	dialog.updateUIAfterFetch()
-	
+
 	// Verify the UI was updated
 	if len(dialog.ListDialog.items) != 2 {
 		t.Errorf("ListDialog should have 2 items, got %d", len(dialog.ListDialog.items))
 	}
-	
+
 	// Check first item
 	if item, ok := dialog.ListDialog.items[0].(ReadyTaskItem); ok {
 		if item.TitleTruncated {
@@ -3062,32 +3060,32 @@ func TestUpdateUIAfterFetch_UpdatesListItems(t *testing.T) {
 
 func TestUpdateUIWithCachedDetails_AppliesCachedData(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Setup tasks with truncated titles
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "9.1", TaskTitle: "Impl...", TitleTruncated: true},
 		{ID: "9.2", TaskTitle: "Create...", TitleTruncated: true},
 		{ID: "9.3", TaskTitle: "Add Caching...", TitleTruncated: true},
 	}
-	
+
 	// Pre-populate cache
 	dialog.cache["9.1"] = &TaskDetails{Title: "Implement Truncation Detection and Async Fetching Logic"}
 	dialog.cache["9.2"] = &TaskDetails{Title: "Create Task Details Parser Implementation"}
 	// Note: 9.3 not cached to test selective update
-	
+
 	// Update UI with cached details
 	truncatedIDs := []string{"9.1", "9.2", "9.3"}
 	dialog.updateUIWithCachedDetails(truncatedIDs)
-	
+
 	// Verify tasks were updated from cache
 	if dialog.tasks[0].TaskTitle != "Implement Truncation Detection and Async Fetching Logic" {
 		t.Errorf("First task should be updated with cached title, got %q", dialog.tasks[0].TaskTitle)
 	}
-	
+
 	if dialog.tasks[1].TaskTitle != "Create Task Details Parser Implementation" {
 		t.Errorf("Second task should be updated with cached title, got %q", dialog.tasks[1].TaskTitle)
 	}
-	
+
 	if dialog.tasks[0].TitleTruncated {
 		t.Errorf("First task should not be marked as truncated after update")
 	}
@@ -3095,28 +3093,28 @@ func TestUpdateUIWithCachedDetails_AppliesCachedData(t *testing.T) {
 
 func TestFetchAllTruncatedTaskDetails_SkipsCachedTasks(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Setup with a mix of cached and non-cached truncated tasks
 	dialog.tasks = []ReadyTaskItem{
 		{ID: "9.1", TaskTitle: "Task 1...", TitleTruncated: true},
 		{ID: "9.2", TaskTitle: "Task 2...", TitleTruncated: true},
 	}
-	
+
 	// Pre-cache 9.1
 	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Full Task 1"}
-	
+
 	// Count initial cache size
 	initialCacheSize := dialog.GetCacheSize()
-	
+
 	// Call FetchAllTruncatedTaskDetails
 	// Since we can't mock the actual fetch, we just verify the logic
 	truncatedIDs := dialog.GetTruncatedTaskIDs()
-	
+
 	// Verify we have truncated tasks
 	if len(truncatedIDs) != 2 {
 		t.Errorf("Should have 2 truncated tasks, got %d", len(truncatedIDs))
 	}
-	
+
 	// Check the logic that filters out cached tasks
 	var tasksToPrefetch []string
 	dialog.mu.Lock()
@@ -3126,16 +3124,16 @@ func TestFetchAllTruncatedTaskDetails_SkipsCachedTasks(t *testing.T) {
 		}
 	}
 	dialog.mu.Unlock()
-	
+
 	// Should only prefetch 9.2 since 9.1 is cached
 	if len(tasksToPrefetch) != 1 {
 		t.Errorf("Should only prefetch 1 task (9.2), got %d", len(tasksToPrefetch))
 	}
-	
+
 	if len(tasksToPrefetch) > 0 && tasksToPrefetch[0] != "9.2" {
 		t.Errorf("Should prefetch task 9.2, got %s", tasksToPrefetch[0])
 	}
-	
+
 	// Cache size should not have changed (no actual fetch)
 	if dialog.GetCacheSize() != initialCacheSize {
 		t.Errorf("Cache size should remain unchanged, was %d, now %d", initialCacheSize, dialog.GetCacheSize())
@@ -3144,10 +3142,10 @@ func TestFetchAllTruncatedTaskDetails_SkipsCachedTasks(t *testing.T) {
 
 func TestCacheConcurrency_ThreadSafe(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Test concurrent reads and writes with proper mutex usage
 	done := make(chan bool, 10)
-	
+
 	// Writer goroutines using mutex-protected operations
 	for i := 0; i < 5; i++ {
 		go func(id int) {
@@ -3161,7 +3159,7 @@ func TestCacheConcurrency_ThreadSafe(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Reader goroutines
 	for i := 0; i < 5; i++ {
 		go func() {
@@ -3172,12 +3170,12 @@ func TestCacheConcurrency_ThreadSafe(t *testing.T) {
 			done <- true
 		}()
 	}
-	
+
 	// Wait for all goroutines
 	for i := 0; i < 10; i++ {
 		<-done
 	}
-	
+
 	// If we got here without panicking, concurrency is working
 	if dialog.GetCacheSize() == 0 {
 		t.Errorf("Cache should have entries after concurrent writes")
@@ -3187,24 +3185,24 @@ func TestCacheConcurrency_ThreadSafe(t *testing.T) {
 // TestSetContent_ParseError_WithRawOutputFallback tests that parsing errors trigger raw output display
 func TestSetContent_ParseError_WithRawOutputFallback(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Malformed output that won't parse as table or regex
 	malformedContent := `This is completely invalid task output
 	!@#$%^&*()
 	Not a task format at all`
-	
+
 	dialog.SetContent(malformedContent)
-	
+
 	// Should have a parse error
 	if dialog.parseError == nil {
 		t.Error("Expected parseError to be set for malformed content")
 	}
-	
+
 	// Should flag raw output display
 	if !dialog.showRawOutput {
 		t.Error("Expected showRawOutput to be true for parse error")
 	}
-	
+
 	// Should have no tasks parsed
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Expected 0 tasks from malformed content, got %d", len(dialog.tasks))
@@ -3214,19 +3212,19 @@ func TestSetContent_ParseError_WithRawOutputFallback(t *testing.T) {
 // TestSetContent_EmptyResult_WithMessage tests empty result handling
 func TestSetContent_EmptyResult_WithMessage(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.SetContent("")
-	
+
 	// Should have a parse error
 	if dialog.parseError == nil {
 		t.Error("Expected parseError for empty content")
 	}
-	
+
 	// Should have empty message set
 	if dialog.emptyResultMessage != "No ready tasks available" {
 		t.Errorf("Expected empty message, got %q", dialog.emptyResultMessage)
 	}
-	
+
 	// Should be empty
 	if !dialog.IsEmpty() {
 		t.Error("Expected dialog to be empty")
@@ -3236,19 +3234,19 @@ func TestSetContent_EmptyResult_WithMessage(t *testing.T) {
 // TestSetContent_EmptyJSONArray tests empty JSON array handling
 func TestSetContent_EmptyJSONArray(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.SetContent("[]")
-	
+
 	// Should have a parse error set
 	if dialog.parseError == nil {
 		t.Error("Expected parseError for empty JSON array")
 	}
-	
+
 	// Should have empty message set
 	if dialog.emptyResultMessage != "No ready tasks available" {
 		t.Errorf("Expected empty message, got %q", dialog.emptyResultMessage)
 	}
-	
+
 	// No tasks should be parsed
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Expected 0 tasks from empty JSON array, got %d", len(dialog.tasks))
@@ -3258,20 +3256,20 @@ func TestSetContent_EmptyJSONArray(t *testing.T) {
 // TestCLIExecutionError tests CLI execution error handling
 func TestCLIExecutionError(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	testError := fmt.Errorf("task-master command failed")
 	dialog.SetCLIExecutionError(testError)
-	
+
 	// Should have CLI execution error set
 	if dialog.cliExecutionError == nil {
 		t.Error("Expected cliExecutionError to be set")
 	}
-	
+
 	// Should have parse error (wrapping the CLI error)
 	if dialog.parseError == nil {
 		t.Error("Expected parseError to be set from CLI error")
 	}
-	
+
 	// Should flag raw output
 	if !dialog.showRawOutput {
 		t.Error("Expected showRawOutput to be true for CLI error")
@@ -3281,13 +3279,13 @@ func TestCLIExecutionError(t *testing.T) {
 // TestIsEmpty_WithTasks checks IsEmpty returns false when tasks are present
 func TestIsEmpty_WithTasks(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	jsonContent := `[
 		{"id": "1.1", "title": "Task 1", "status": "pending"}
 	]`
-	
+
 	dialog.SetContent(jsonContent)
-	
+
 	if dialog.IsEmpty() {
 		t.Error("Expected IsEmpty to return false when tasks are present")
 	}
@@ -3296,9 +3294,9 @@ func TestIsEmpty_WithTasks(t *testing.T) {
 // TestIsEmpty_WithoutTasks checks IsEmpty returns true when no tasks
 func TestIsEmpty_WithoutTasks(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.SetContent("")
-	
+
 	if !dialog.IsEmpty() {
 		t.Error("Expected IsEmpty to return true when no tasks are present")
 	}
@@ -3307,9 +3305,9 @@ func TestIsEmpty_WithoutTasks(t *testing.T) {
 // TestHasParseError_WithError checks HasParseError returns true when error exists
 func TestHasParseError_WithError(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	dialog.SetContent("invalid content that won't parse")
-	
+
 	if !dialog.HasParseError() {
 		t.Error("Expected HasParseError to return true when parseError is set")
 	}
@@ -3318,13 +3316,13 @@ func TestHasParseError_WithError(t *testing.T) {
 // TestHasParseError_WithoutError checks HasParseError returns false when no error
 func TestHasParseError_WithoutError(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	jsonContent := `[
 		{"id": "1.1", "title": "Task 1", "status": "pending"}
 	]`
-	
+
 	dialog.SetContent(jsonContent)
-	
+
 	if dialog.HasParseError() {
 		t.Error("Expected HasParseError to return false when no parseError")
 	}
@@ -3333,19 +3331,19 @@ func TestHasParseError_WithoutError(t *testing.T) {
 // TestSetShowRawOutput tests SetShowRawOutput functionality
 func TestSetShowRawOutput(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	if dialog.showRawOutput {
 		t.Error("Expected showRawOutput to be false initially")
 	}
-	
+
 	dialog.SetShowRawOutput(true)
-	
+
 	if !dialog.showRawOutput {
 		t.Error("Expected showRawOutput to be true after SetShowRawOutput(true)")
 	}
-	
+
 	dialog.SetShowRawOutput(false)
-	
+
 	if dialog.showRawOutput {
 		t.Error("Expected showRawOutput to be false after SetShowRawOutput(false)")
 	}
@@ -3354,10 +3352,10 @@ func TestSetShowRawOutput(t *testing.T) {
 // TestSetEmptyResultMessage tests custom empty result message
 func TestSetEmptyResultMessage(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	customMsg := "No tasks ready for execution at this time"
 	dialog.SetEmptyResultMessage(customMsg)
-	
+
 	if dialog.emptyResultMessage != customMsg {
 		t.Errorf("Expected empty message to be %q, got %q", customMsg, dialog.emptyResultMessage)
 	}
@@ -3366,21 +3364,21 @@ func TestSetEmptyResultMessage(t *testing.T) {
 // TestRenderRawOutput_WithParseError tests that raw output is displayed on parse error
 func TestRenderRawOutput_WithParseError(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	rawContent := `Error: invalid task format
 Line 2 of malformed output
 More error details`
-	
+
 	dialog.SetContent(rawContent)
 	dialog.showRawOutput = true // Ensure we show raw output
-	
+
 	view := dialog.View()
-	
+
 	// Should contain error indicator
 	if !strings.Contains(view, "Error") && !strings.Contains(view, "parse") {
 		t.Error("View should contain error information")
 	}
-	
+
 	// Should contain some of the raw output
 	if !strings.Contains(view, "Error") && !strings.Contains(view, "malformed") {
 		t.Error("View should contain raw output content")
@@ -3390,29 +3388,29 @@ More error details`
 // TestMalformedOutput_FallbackToRaw tests fallback to raw output for malformed content
 func TestMalformedOutput_FallbackToRaw(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Content that's not JSON and doesn't match any parsing pattern
 	malformedContent := `This is some random text
 	that doesn't match task format
 	at all whatsoever`
-	
+
 	dialog.SetContent(malformedContent)
-	
+
 	// Should have parse error
 	if dialog.parseError == nil {
 		t.Fatal("Expected parseError to be set")
 	}
-	
+
 	// Should flag to show raw output
 	if !dialog.showRawOutput {
 		t.Error("Expected showRawOutput flag to be set for malformed content")
 	}
-	
+
 	// No tasks should be parsed
 	if len(dialog.tasks) != 0 {
 		t.Errorf("Expected 0 tasks, got %d", len(dialog.tasks))
 	}
-	
+
 	// View should display raw output
 	view := dialog.View()
 	if !strings.Contains(view, "Error") && !strings.Contains(view, "random") {
@@ -3427,24 +3425,24 @@ func TestUpdateListItems_Concurrency(t *testing.T) {
 		{"id": "1.1", "title": "Task 1", "status": "pending"},
 		{"id": "1.2", "title": "Task 2", "status": "pending"}
 	]`)
-	
+
 	// Simulate concurrent updates
 	done := make(chan bool, 2)
-	
+
 	go func() {
 		dialog.UpdateListItems()
 		done <- true
 	}()
-	
+
 	go func() {
 		dialog.UpdateListItems()
 		done <- true
 	}()
-	
+
 	// Wait for completion
 	<-done
 	<-done
-	
+
 	// Should not panic and items should still be available
 	if dialog.ListDialog.items == nil {
 		t.Error("ListDialog items should not be nil after concurrent updates")
@@ -3454,14 +3452,14 @@ func TestUpdateListItems_Concurrency(t *testing.T) {
 // TestReadyTasksDialog_SelectionCountDisplay tests the display of selection count in "Selected: X task(s)" format
 func TestReadyTasksDialog_SelectionCountDisplay(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Set up test tasks
 	dialog.SetContent(`[
 		{"id": "1", "title": "Task 1", "priority": "high", "complexity": 3},
 		{"id": "2", "title": "Task 2", "priority": "medium", "complexity": 5},
 		{"id": "3", "title": "Task 3", "priority": "low", "complexity": 2}
 	]`)
-	
+
 	// Test 1: No tasks selected - display should show "Selected: 0 task(s)"
 	selected, total := dialog.GetSelectionCount()
 	if selected != 0 || total != 3 {
@@ -3471,7 +3469,7 @@ func TestReadyTasksDialog_SelectionCountDisplay(t *testing.T) {
 	if !strings.Contains(view, "Selected: 0 task(s)") {
 		t.Errorf("View should contain 'Selected: 0 task(s)', got:\n%s", view)
 	}
-	
+
 	// Test 2: Select one task - display should show "Selected: 1 task(s)"
 	dialog.ListDialog.selectedItems[0] = true
 	selected, total = dialog.GetSelectionCount()
@@ -3482,7 +3480,7 @@ func TestReadyTasksDialog_SelectionCountDisplay(t *testing.T) {
 	if !strings.Contains(view, "Selected: 1 task(s)") {
 		t.Errorf("View should contain 'Selected: 1 task(s)', got:\n%s", view)
 	}
-	
+
 	// Test 3: Select all tasks - display should show "Selected: 3 task(s)"
 	dialog.ListDialog.selectedItems[1] = true
 	dialog.ListDialog.selectedItems[2] = true
@@ -3499,18 +3497,18 @@ func TestReadyTasksDialog_SelectionCountDisplay(t *testing.T) {
 // TestReadyTasksDialog_ConfigurationMessage tests the configuration message when confirming multiple tasks
 func TestReadyTasksDialog_ConfigurationMessage(t *testing.T) {
 	dialog := NewReadyTasksDialog()
-	
+
 	// Test 1: Initial status message is empty
 	if dialog.GetStatusMessage() != "" {
 		t.Errorf("Initial status message should be empty, got: %q", dialog.GetStatusMessage())
 	}
-	
+
 	// Test 2: Set status message using SetStatusMessage
 	dialog.SetStatusMessage("Configuring models for 2 tasks...")
 	if dialog.GetStatusMessage() != "Configuring models for 2 tasks..." {
 		t.Errorf("Status message not set correctly, got: %q", dialog.GetStatusMessage())
 	}
-	
+
 	// Test 3: Set content first, then set status message - status message should appear in view
 	dialog.SetContent(`[
 		{"id": "1", "title": "Task 1", "priority": "high", "complexity": 3},
@@ -3521,13 +3519,13 @@ func TestReadyTasksDialog_ConfigurationMessage(t *testing.T) {
 	if !strings.Contains(view, "Configuring models for 2 tasks...") {
 		t.Errorf("View should contain status message, got:\n%s", view)
 	}
-	
+
 	// Test 4: Clear status message
 	dialog.ClearStatusMessage()
 	if dialog.GetStatusMessage() != "" {
 		t.Errorf("Status message should be cleared, got: %q", dialog.GetStatusMessage())
 	}
-	
+
 	// Test 5: Status message is reset when SetContent is called
 	dialog.SetStatusMessage("Test message")
 	if dialog.GetStatusMessage() != "Test message" {
@@ -3547,33 +3545,31 @@ func TestReadyTasksDialog_ConfigurationMessageOnMultipleTaskConfirmation(t *test
 		{"id": "2", "title": "Task 2", "priority": "medium"},
 		{"id": "3", "title": "Task 3", "priority": "low"}
 	]`)
-	
+
 	// Select multiple tasks
 	dialog.ListDialog.selectedItems[0] = true
 	dialog.ListDialog.selectedItems[1] = true
-	
+
 	// Simulate Enter key press via HandleKey (the new flow)
 	enterKey := tea.KeyMsg{Type: tea.KeyEnter}
 	result, cmd := dialog.HandleKey(enterKey)
-	
+
 	// HandleKey should return DialogResultNone with a command
 	if result != DialogResultNone {
 		t.Errorf("Expected DialogResultNone, got %v", result)
 	}
-	
+
 	// The command should be a function that returns DialogResultMsg
 	if cmd == nil {
 		t.Fatal("Expected command to be set")
 	}
-	
+
 	// Check that status message was set for multiple tasks
 	if dialog.GetStatusMessage() == "" {
 		t.Error("Status message should be set for multiple task confirmation")
 	}
-	
+
 	if !strings.Contains(dialog.GetStatusMessage(), "Configuring models for 2 tasks") {
 		t.Errorf("Status message should mention 2 tasks, got: %q", dialog.GetStatusMessage())
 	}
 }
-
-

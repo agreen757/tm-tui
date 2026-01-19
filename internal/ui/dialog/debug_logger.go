@@ -27,11 +27,11 @@ func InitDebugLogger(filename string) error {
 	}
 
 	debugLogger = &DebugLogger{file: file}
-	
+
 	// Write header
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	debugLogger.Logf("=== Debug session started at %s ===\n", timestamp)
-	
+
 	return nil
 }
 
@@ -40,7 +40,7 @@ func (d *DebugLogger) Log(message string) {
 	if d.file == nil {
 		return
 	}
-	
+
 	timestamp := time.Now().Format("15:04:05.000")
 	fmt.Fprintf(d.file, "[%s] %s\n", timestamp, message)
 }
@@ -50,7 +50,7 @@ func (d *DebugLogger) Logf(format string, args ...interface{}) {
 	if d.file == nil {
 		return
 	}
-	
+
 	message := fmt.Sprintf(format, args...)
 	d.Log(message)
 }

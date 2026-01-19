@@ -669,11 +669,11 @@ func TestSimpleListItem(t *testing.T) {
 // mockDialog is a test mock that implements the Dialog interface
 // Used to verify that HandleMsg calls both Update() and HandleKey() for key messages
 type mockDialog struct {
-	updateCalled     bool
-	handleKeyCalled  bool
-	lastKeyMsg       tea.KeyMsg
-	updateReturnCmd  tea.Cmd
-	handleKeyResult  DialogResult
+	updateCalled       bool
+	handleKeyCalled    bool
+	lastKeyMsg         tea.KeyMsg
+	updateReturnCmd    tea.Cmd
+	handleKeyResult    DialogResult
 	handleKeyReturnCmd tea.Cmd
 }
 
@@ -731,28 +731,28 @@ func (m *mockDialog) IsCancellable() bool {
 // TestHandleMsg_KeyMessage verifies that HandleMsg calls both Update() and HandleKey()
 func TestHandleMsg_KeyMessage(t *testing.T) {
 	manager := NewDialogManager(100, 50)
-	
+
 	mockDialog := &mockDialog{
 		updateReturnCmd:    nil,
 		handleKeyResult:    DialogResultNone,
 		handleKeyReturnCmd: nil,
 	}
-	
+
 	manager.PushDialog(mockDialog)
-	
+
 	// Send a key message
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	manager.HandleMsg(keyMsg)
-	
+
 	// Verify both Update() and HandleKey() were called
 	if !mockDialog.updateCalled {
 		t.Error("Expected Update() to be called for key message")
 	}
-	
+
 	if !mockDialog.handleKeyCalled {
 		t.Error("Expected HandleKey() to be called for key message")
 	}
-	
+
 	if mockDialog.lastKeyMsg.Type != keyMsg.Type {
 		t.Error("Expected last key message type to match")
 	}
@@ -761,32 +761,32 @@ func TestHandleMsg_KeyMessage(t *testing.T) {
 // TestHandleMsg_KeyMessage_WithCommand verifies that commands from both methods are combined
 func TestHandleMsg_KeyMessage_WithCommand(t *testing.T) {
 	manager := NewDialogManager(100, 50)
-	
+
 	testCmd := tea.Cmd(func() tea.Msg {
 		return nil
 	})
-	
+
 	mockDialog := &mockDialog{
 		updateReturnCmd:    testCmd,
 		handleKeyResult:    DialogResultNone,
 		handleKeyReturnCmd: testCmd,
 	}
-	
+
 	manager.PushDialog(mockDialog)
-	
+
 	// Send a key message
 	keyMsg := tea.KeyMsg{Type: tea.KeyTab}
 	cmd := manager.HandleMsg(keyMsg)
-	
+
 	// Verify both methods were called
 	if !mockDialog.updateCalled {
 		t.Error("Expected Update() to be called")
 	}
-	
+
 	if !mockDialog.handleKeyCalled {
 		t.Error("Expected HandleKey() to be called")
 	}
-	
+
 	// Verify a command was returned (batched commands)
 	if cmd == nil {
 		t.Error("Expected command to be returned from HandleMsg")
@@ -796,41 +796,41 @@ func TestHandleMsg_KeyMessage_WithCommand(t *testing.T) {
 // TestHandleMsg_KeyMessage_SpecialKeys tests special keys like Enter and Esc
 func TestHandleMsg_KeyMessage_SpecialKeys(t *testing.T) {
 	tests := []struct {
-		name    string
-		keyType tea.KeyType
-		result  DialogResult
+		name         string
+		keyType      tea.KeyType
+		result       DialogResult
 		expectResult bool
 	}{
 		{"Enter key", tea.KeyEnter, DialogResultNone, false},
 		{"Tab key", tea.KeyTab, DialogResultNone, false},
 		{"Escape closes dialog", tea.KeyEsc, DialogResultCancel, true},
 	}
-	
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			manager := NewDialogManager(100, 50)
-			
+
 			mockDialog := &mockDialog{
 				updateReturnCmd:    nil,
 				handleKeyResult:    test.result,
 				handleKeyReturnCmd: nil,
 			}
-			
+
 			manager.PushDialog(mockDialog)
-			
+
 			// Send a key message
 			keyMsg := tea.KeyMsg{Type: test.keyType}
 			_ = manager.HandleMsg(keyMsg)
-			
+
 			// Verify both methods were called
 			if !mockDialog.updateCalled {
 				t.Error("Expected Update() to be called for key message")
 			}
-			
+
 			if !mockDialog.handleKeyCalled {
 				t.Error("Expected HandleKey() to be called for key message")
 			}
-			
+
 			// For DialogResultCancel, dialog should be popped
 			if test.expectResult && test.result == DialogResultCancel {
 				// Dialog should be removed after result handling
@@ -845,24 +845,24 @@ func TestHandleMsg_KeyMessage_SpecialKeys(t *testing.T) {
 // TestHandleMsg_NonKeyMessage tests that non-key messages are handled correctly
 func TestHandleMsg_NonKeyMessage(t *testing.T) {
 	manager := NewDialogManager(100, 50)
-	
+
 	mockDialog := &mockDialog{
 		updateReturnCmd:    nil,
 		handleKeyResult:    DialogResultNone,
 		handleKeyReturnCmd: nil,
 	}
-	
+
 	manager.PushDialog(mockDialog)
-	
+
 	// Send a non-key message (e.g., WindowSizeMsg)
 	msg := tea.WindowSizeMsg{Width: 120, Height: 60}
 	_ = manager.HandleMsg(msg)
-	
+
 	// For non-key messages, Update() should be called but NOT HandleKey()
 	if !mockDialog.updateCalled {
 		t.Error("Expected Update() to be called for non-key message")
 	}
-	
+
 	if mockDialog.handleKeyCalled {
 		t.Error("Expected HandleKey() NOT to be called for non-key message")
 	}
@@ -871,24 +871,24 @@ func TestHandleMsg_NonKeyMessage(t *testing.T) {
 // TestHandleMsg_BothMethodsReceiveMessage verifies both methods process the key message
 func TestHandleMsg_BothMethodsReceiveMessage(t *testing.T) {
 	manager := NewDialogManager(100, 50)
-	
+
 	mockDialog := &mockDialog{
 		updateReturnCmd:    nil,
 		handleKeyResult:    DialogResultNone,
 		handleKeyReturnCmd: nil,
 	}
-	
+
 	manager.PushDialog(mockDialog)
-	
+
 	// Send a key message with specific rune content
 	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
 	manager.HandleMsg(keyMsg)
-	
+
 	// Verify HandleKey received the key message
 	if mockDialog.lastKeyMsg.Type != tea.KeyRunes {
 		t.Errorf("Expected HandleKey to receive KeyRunes type, got %v", mockDialog.lastKeyMsg.Type)
 	}
-	
+
 	if len(mockDialog.lastKeyMsg.Runes) != 1 || mockDialog.lastKeyMsg.Runes[0] != 'a' {
 		t.Error("Expected HandleKey to receive correct rune 'a'")
 	}
@@ -897,38 +897,38 @@ func TestHandleMsg_BothMethodsReceiveMessage(t *testing.T) {
 // TestHandleMsg_CommandBatching tests that multiple commands are properly batched
 func TestHandleMsg_CommandBatching(t *testing.T) {
 	manager := NewDialogManager(100, 50)
-	
+
 	// Count how many commands were executed
 	updateCmdCount := 0
 	handleKeyCmdCount := 0
-	
+
 	updateCmd := tea.Cmd(func() tea.Msg {
 		updateCmdCount++
 		return nil
 	})
-	
+
 	handleKeyCmd := tea.Cmd(func() tea.Msg {
 		handleKeyCmdCount++
 		return nil
 	})
-	
+
 	mockDialog := &mockDialog{
 		updateReturnCmd:    updateCmd,
 		handleKeyResult:    DialogResultNone,
 		handleKeyReturnCmd: handleKeyCmd,
 	}
-	
+
 	manager.PushDialog(mockDialog)
-	
+
 	// Send a key message
 	keyMsg := tea.KeyMsg{Type: tea.KeySpace}
 	cmd := manager.HandleMsg(keyMsg)
-	
+
 	// Verify both methods were called
 	if !mockDialog.updateCalled || !mockDialog.handleKeyCalled {
 		t.Error("Expected both Update() and HandleKey() to be called")
 	}
-	
+
 	// Verify a batched command was returned
 	if cmd == nil {
 		t.Error("Expected a command from HandleMsg")
@@ -938,28 +938,28 @@ func TestHandleMsg_CommandBatching(t *testing.T) {
 // TestHandleMsg_NilCommands tests handling of nil commands from Update/HandleKey
 func TestHandleMsg_NilCommands(t *testing.T) {
 	manager := NewDialogManager(100, 50)
-	
+
 	mockDialog := &mockDialog{
 		updateReturnCmd:    nil, // nil command from Update
 		handleKeyResult:    DialogResultNone,
 		handleKeyReturnCmd: nil, // nil command from HandleKey
 	}
-	
+
 	manager.PushDialog(mockDialog)
-	
+
 	// Send a key message
 	keyMsg := tea.KeyMsg{Type: tea.KeyEnter}
 	cmd := manager.HandleMsg(keyMsg)
-	
+
 	// Both methods should still be called even with nil commands
 	if !mockDialog.updateCalled {
 		t.Error("Expected Update() to be called even when returning nil command")
 	}
-	
+
 	if !mockDialog.handleKeyCalled {
 		t.Error("Expected HandleKey() to be called even when returning nil command")
 	}
-	
+
 	// When both return nil, cmd should be nil (no nil commands added to cmds slice)
 	if cmd != nil {
 		t.Error("Expected nil command when both Update and HandleKey return nil")

@@ -160,10 +160,10 @@ func TestUncommittedChangesError(t *testing.T) {
 // TestAheadBehindError tests AheadBehindError functionality
 func TestAheadBehindError(t *testing.T) {
 	err := &AheadBehindError{
-		Message:     "Your branch is ahead of 'origin/main' by 3 commits.",
-		AheadCount:  3,
-		BranchName:  "main",
-		RemoteName:  "origin",
+		Message:    "Your branch is ahead of 'origin/main' by 3 commits.",
+		AheadCount: 3,
+		BranchName: "main",
+		RemoteName: "origin",
 	}
 
 	if err.ErrorType() != "AheadBehindError" {

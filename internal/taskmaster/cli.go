@@ -11,7 +11,7 @@ import (
 // ExecuteCommand executes a task-master CLI command
 func (s *Service) ExecuteCommand(args ...string) (string, error) {
 	cmd := exec.Command("task-master", args...)
-	
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -92,19 +92,19 @@ func (s *Service) GetTaskDetails(taskID string) (string, error) {
 	b.WriteString(fmt.Sprintf("Task %s: %s\n", task.ID, task.Title))
 	b.WriteString(fmt.Sprintf("Status: %s\n", task.Status))
 	b.WriteString(fmt.Sprintf("Priority: %s\n", task.Priority))
-	
+
 	if len(task.Dependencies) > 0 {
 		b.WriteString(fmt.Sprintf("Dependencies: %s\n", strings.Join(task.Dependencies, ", ")))
 	}
-	
+
 	if task.Description != "" {
 		b.WriteString(fmt.Sprintf("\nDescription:\n%s\n", task.Description))
 	}
-	
+
 	if task.Details != "" {
 		b.WriteString(fmt.Sprintf("\nDetails:\n%s\n", task.Details))
 	}
-	
+
 	if task.TestStrategy != "" {
 		b.WriteString(fmt.Sprintf("\nTest Strategy:\n%s\n", task.TestStrategy))
 	}
@@ -120,13 +120,13 @@ func (s *Service) GetTaskFromCLI(taskID string) (*Task, error) {
 	if tag == "" {
 		tag = "master"
 	}
-	
+
 	// Read tasks from file for the specific tag
 	tasks, err := LoadTasksFromFile(s.RootDir, tag)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load tasks from file: %w", err)
 	}
-	
+
 	// Search for the task recursively
 	var findTask func(tasks []Task) *Task
 	findTask = func(tasks []Task) *Task {
@@ -142,12 +142,12 @@ func (s *Service) GetTaskFromCLI(taskID string) (*Task, error) {
 		}
 		return nil
 	}
-	
+
 	task := findTask(tasks)
 	if task == nil {
 		return nil, fmt.Errorf("task not found: %s", taskID)
 	}
-	
+
 	return task, nil
 }
 
@@ -169,10 +169,10 @@ func copyTask(task *Task) *Task {
 		CreatedAt:      task.CreatedAt,
 		UpdatedAt:      task.UpdatedAt,
 	}
-	
+
 	// Deep copy dependencies
 	copy(taskCopy.Dependencies, task.Dependencies)
-	
+
 	// Deep copy metadata if present
 	if task.Metadata != nil {
 		taskCopy.Metadata = make(map[string]string)
@@ -180,18 +180,18 @@ func copyTask(task *Task) *Task {
 			taskCopy.Metadata[k] = v
 		}
 	}
-	
+
 	// Deep copy notes if present
 	if task.Notes != nil {
 		taskCopy.Notes = make([]string, len(task.Notes))
 		copy(taskCopy.Notes, task.Notes)
 	}
-	
+
 	// Deep copy tags if present
 	if task.Tags != nil {
 		taskCopy.Tags = make([]string, len(task.Tags))
 		copy(taskCopy.Tags, task.Tags)
 	}
-	
+
 	return taskCopy
 }

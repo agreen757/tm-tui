@@ -54,9 +54,9 @@ type TaskExecutionTab struct {
 	cancelFunc   context.CancelFunc
 	cancelReason string // Optional reason for cancellation
 	// Error handling
-	error              string        // Error message if task failed
-	executionTimeout   time.Duration // Timeout for task execution (0 = no timeout)
-	lastActivityTime   time.Time     // Last time output was received
+	error            string        // Error message if task failed
+	executionTimeout time.Duration // Timeout for task execution (0 = no timeout)
+	lastActivityTime time.Time     // Last time output was received
 }
 
 // NewTaskExecutionTab creates a new task execution tab
@@ -70,18 +70,18 @@ func NewTaskExecutionTab(taskID, taskTitle, model string, width, height int, sty
 
 	now := time.Now()
 	return &TaskExecutionTab{
-		taskID:    taskID,
-		taskTitle: taskTitle,
-		status:    TaskRunning,
-		output:    []string{},
-		viewport:  vp,
-		startTime: now,
-		endTime:   nil,
-		model:     model,
-		style:     style,
-		error:              "",
-		executionTimeout:   0, // No timeout by default
-		lastActivityTime:   now,
+		taskID:           taskID,
+		taskTitle:        taskTitle,
+		status:           TaskRunning,
+		output:           []string{},
+		viewport:         vp,
+		startTime:        now,
+		endTime:          nil,
+		model:            model,
+		style:            style,
+		error:            "",
+		executionTimeout: 0, // No timeout by default
+		lastActivityTime: now,
 	}
 }
 

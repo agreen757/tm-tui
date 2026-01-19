@@ -141,14 +141,14 @@ func GenerateCrushPrompt(task *taskmaster.Task, model string, tagName string) (s
 // GetCrushCommand returns the full command arguments for running Crush
 func GetCrushCommand(prompt string, model string) []string {
 	args := []string{"run"}
-	
+
 	if model != "" {
 		args = append(args, "--model", model)
 	}
-	
+
 	// The prompt will be passed via stdin or as an argument
 	// For now, we'll prepare it to be passed via stdin in the actual execution
-	
+
 	return args
 }
 
@@ -327,13 +327,13 @@ func ExecuteCrushSubprocess(taskID, model, prompt, tagName string) tea.Cmd {
 	// Create a larger buffered channel to handle bursts of output
 	// Increased from 100 to 1000 to better handle high-volume streaming
 	outCh := make(chan tea.Msg, 1000)
-	
-	// Create a cancellable context  
+
+	// Create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Start the subprocess in a goroutine
 	go runCrushProcess(ctx, taskID, model, prompt, tagName, outCh, cancel)
-	
+
 	// Return subscription message immediately
 	return func() tea.Msg {
 		return CrushExecutionSub{
@@ -348,7 +348,7 @@ func ExecuteCrushSubprocess(taskID, model, prompt, tagName string) tea.Cmd {
 func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string, outCh chan tea.Msg, cancel context.CancelFunc) {
 	defer close(outCh)
 	defer cancel()
-	
+
 	// Create log file for this run using tag-based directory structure
 	logFile, logPath, err := createCrushLogFile(taskID, tagName)
 	var logWriter io.Writer
@@ -363,19 +363,19 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 	} else {
 		defer logFile.Close()
 		logWriter = logFile
-		
+
 		// Send message about log file location
 		outCh <- TaskOutputMsg{
 			TaskID: taskID,
 			Output: fmt.Sprintf("📝 Logging to: %s", logPath),
 		}
 	}
-	
+
 	// Create the command
 	// Note: crush run takes the prompt as an argument, not stdin
 	// The model selection is stored in crush's config, not passed via CLI flag
 	cmd := exec.CommandContext(ctx, "crush", "run", prompt)
-	
+
 	// Set up stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -425,15 +425,15 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 		// Increase scanner buffer size to handle long lines
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 1024*1024) // 1MB max line size
-		
+
 		for scanner.Scan() {
 			line := scanner.Text()
-			
+
 			// Write to log file if available (always write, even if channel is full)
 			if logWriter != nil {
 				fmt.Fprintf(logWriter, "[OUT] %s\n", line)
 			}
-			
+
 			// Non-blocking send with timeout to prevent goroutine from hanging
 			select {
 			case <-ctx.Done():
@@ -460,15 +460,15 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 		// Increase scanner buffer size to handle long lines
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 1024*1024) // 1MB max line size
-		
+
 		for scanner.Scan() {
 			line := scanner.Text()
-			
+
 			// Write to log file if available (always write, even if channel is full)
 			if logWriter != nil {
 				fmt.Fprintf(logWriter, "[ERR] %s\n", line)
 			}
-			
+
 			// Non-blocking send with timeout to prevent goroutine from hanging
 			select {
 			case <-ctx.Done():
@@ -493,7 +493,7 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 
 	// Wait for the process to complete
 	err = cmd.Wait()
-	
+
 	// Write completion status to log file
 	if logWriter != nil {
 		fmt.Fprintf(logWriter, "\n===================\n")
@@ -507,7 +507,7 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 		}
 		fmt.Fprintf(logWriter, "===================\n")
 	}
-	
+
 	if ctx.Err() != nil {
 		// Context was cancelled
 		outCh <- TaskCancelledMsg{
@@ -555,10 +555,10 @@ func SanitizeTaskIDForFilename(taskID string) string {
 func createCrushLogFile(taskID string, tagName string) (*os.File, string, error) {
 	// Sanitize taskID to ensure valid filename (handles both task IDs and command IDs)
 	sanitizedID := SanitizeTaskIDForFilename(taskID)
-	
+
 	var logsDir string
 	var logFileName string
-	
+
 	if tagName != "" {
 		// Use tag-based directory structure per CRUSH_RUN_INSTRUCTIONS.md
 		// .taskmaster/<tag-name>/<task-id>.log
@@ -570,7 +570,7 @@ func createCrushLogFile(taskID string, tagName string) (*os.File, string, error)
 		timestamp := time.Now().Format("20060102-150405")
 		logFileName = fmt.Sprintf("crush-run-%s-%s.log", sanitizedID, timestamp)
 	}
-	
+
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
 		return nil, "", fmt.Errorf("failed to create logs directory: %w", err)

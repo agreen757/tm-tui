@@ -8,10 +8,10 @@ import (
 
 // RecoveryOption represents a suggested recovery action for a git error
 type RecoveryOption struct {
-	Label       string // Display label for the user (e.g., "Force Create Branch")
-	Description string // Detailed description of what this option does
-	Command     []string // The git command arguments to execute for recovery
-	IsDestructive bool // True if this option may lose data (e.g., --force)
+	Label         string   // Display label for the user (e.g., "Force Create Branch")
+	Description   string   // Detailed description of what this option does
+	Command       []string // The git command arguments to execute for recovery
+	IsDestructive bool     // True if this option may lose data (e.g., --force)
 }
 
 // GitError is the base interface for all git-specific errors
@@ -48,15 +48,15 @@ func (e *BranchExistsError) IsRecoverable() bool {
 func (e *BranchExistsError) GetRecoveryOptions() []RecoveryOption {
 	return []RecoveryOption{
 		{
-			Label:       "Checkout Existing Branch",
-			Description: "Switch to the existing branch instead of creating a new one",
-			Command:     []string{"checkout", e.BranchName},
+			Label:         "Checkout Existing Branch",
+			Description:   "Switch to the existing branch instead of creating a new one",
+			Command:       []string{"checkout", e.BranchName},
 			IsDestructive: false,
 		},
 		{
-			Label:       "Force Create Branch",
-			Description: "Create a new branch with the same name, overwriting the existing one",
-			Command:     []string{"checkout", "-b", e.BranchName, "--force"},
+			Label:         "Force Create Branch",
+			Description:   "Create a new branch with the same name, overwriting the existing one",
+			Command:       []string{"checkout", "-b", e.BranchName, "--force"},
 			IsDestructive: true,
 		},
 	}
@@ -87,15 +87,15 @@ func (e *BranchNotFoundError) IsRecoverable() bool {
 func (e *BranchNotFoundError) GetRecoveryOptions() []RecoveryOption {
 	return []RecoveryOption{
 		{
-			Label:       "Fetch Latest Branches",
-			Description: "Fetch the latest branches from the remote repository",
-			Command:     []string{"fetch"},
+			Label:         "Fetch Latest Branches",
+			Description:   "Fetch the latest branches from the remote repository",
+			Command:       []string{"fetch"},
 			IsDestructive: false,
 		},
 		{
-			Label:       "Create Local Branch",
-			Description: fmt.Sprintf("Create a new local branch named '%s'", e.BranchName),
-			Command:     []string{"checkout", "-b", e.BranchName},
+			Label:         "Create Local Branch",
+			Description:   fmt.Sprintf("Create a new local branch named '%s'", e.BranchName),
+			Command:       []string{"checkout", "-b", e.BranchName},
 			IsDestructive: false,
 		},
 	}
@@ -103,9 +103,9 @@ func (e *BranchNotFoundError) GetRecoveryOptions() []RecoveryOption {
 
 // GitPermissionError represents permission-related git errors
 type GitPermissionError struct {
-	Message    string
-	Resource   string
-	Operation  string
+	Message   string
+	Resource  string
+	Operation string
 }
 
 func (e *GitPermissionError) Error() string {
@@ -158,15 +158,15 @@ func (e *GitNetworkError) IsRecoverable() bool {
 func (e *GitNetworkError) GetRecoveryOptions() []RecoveryOption {
 	return []RecoveryOption{
 		{
-			Label:       "Retry Network Operation",
-			Description: "Attempt the same operation again after checking network connection",
-			Command:     []string{}, // Will be determined by caller
+			Label:         "Retry Network Operation",
+			Description:   "Attempt the same operation again after checking network connection",
+			Command:       []string{}, // Will be determined by caller
 			IsDestructive: false,
 		},
 		{
-			Label:       "Check Repository",
-			Description: "Verify the remote repository URL is correct",
-			Command:     []string{"remote", "-v"},
+			Label:         "Check Repository",
+			Description:   "Verify the remote repository URL is correct",
+			Command:       []string{"remote", "-v"},
 			IsDestructive: false,
 		},
 	}
@@ -197,15 +197,15 @@ func (e *DetachedHeadError) IsRecoverable() bool {
 func (e *DetachedHeadError) GetRecoveryOptions() []RecoveryOption {
 	return []RecoveryOption{
 		{
-			Label:       "Checkout a Branch",
-			Description: "Attach HEAD by checking out an existing branch",
-			Command:     []string{"checkout", e.CurrentSHA[:7]}, // Show short SHA for context
+			Label:         "Checkout a Branch",
+			Description:   "Attach HEAD by checking out an existing branch",
+			Command:       []string{"checkout", e.CurrentSHA[:7]}, // Show short SHA for context
 			IsDestructive: false,
 		},
 		{
-			Label:       "Create New Branch",
-			Description: "Create and checkout a new branch from the current commit",
-			Command:     []string{},  // Requires user input for branch name
+			Label:         "Create New Branch",
+			Description:   "Create and checkout a new branch from the current commit",
+			Command:       []string{}, // Requires user input for branch name
 			IsDestructive: false,
 		},
 	}
@@ -243,15 +243,15 @@ func (e *MergeConflictError) IsRecoverable() bool {
 func (e *MergeConflictError) GetRecoveryOptions() []RecoveryOption {
 	return []RecoveryOption{
 		{
-			Label:       "Abort Merge",
-			Description: "Abort the current merge operation and return to the previous state",
-			Command:     []string{"merge", "--abort"},
+			Label:         "Abort Merge",
+			Description:   "Abort the current merge operation and return to the previous state",
+			Command:       []string{"merge", "--abort"},
 			IsDestructive: false,
 		},
 		{
-			Label:       "Resolve Conflicts",
-			Description: "After manually resolving conflicts in the editor, commit the merge",
-			Command:     []string{"add", "."}, // Stage all resolved files
+			Label:         "Resolve Conflicts",
+			Description:   "After manually resolving conflicts in the editor, commit the merge",
+			Command:       []string{"add", "."}, // Stage all resolved files
 			IsDestructive: false,
 		},
 	}
@@ -259,7 +259,7 @@ func (e *MergeConflictError) GetRecoveryOptions() []RecoveryOption {
 
 // UncommittedChangesError represents when there are uncommitted changes blocking an operation
 type UncommittedChangesError struct {
-	Message    string
+	Message      string
 	ChangedFiles []string
 }
 
@@ -289,21 +289,21 @@ func (e *UncommittedChangesError) IsRecoverable() bool {
 func (e *UncommittedChangesError) GetRecoveryOptions() []RecoveryOption {
 	return []RecoveryOption{
 		{
-			Label:       "Commit Changes",
-			Description: "Stage and commit all outstanding changes",
-			Command:     []string{"add", "."},
+			Label:         "Commit Changes",
+			Description:   "Stage and commit all outstanding changes",
+			Command:       []string{"add", "."},
 			IsDestructive: false,
 		},
 		{
-			Label:       "Stash Changes",
-			Description: "Save changes to stash and continue with a clean working directory",
-			Command:     []string{"stash"},
+			Label:         "Stash Changes",
+			Description:   "Save changes to stash and continue with a clean working directory",
+			Command:       []string{"stash"},
 			IsDestructive: false,
 		},
 		{
-			Label:       "Discard Changes",
-			Description: "Discard all uncommitted changes (cannot be undone)",
-			Command:     []string{"checkout", "--", "."},
+			Label:         "Discard Changes",
+			Description:   "Discard all uncommitted changes (cannot be undone)",
+			Command:       []string{"checkout", "--", "."},
 			IsDestructive: true,
 		},
 	}
@@ -311,11 +311,11 @@ func (e *UncommittedChangesError) GetRecoveryOptions() []RecoveryOption {
 
 // AheadBehindError represents when the branch is ahead/behind the remote
 type AheadBehindError struct {
-	Message    string
-	AheadCount int
+	Message     string
+	AheadCount  int
 	BehindCount int
-	BranchName string
-	RemoteName string
+	BranchName  string
+	RemoteName  string
 }
 
 func (e *AheadBehindError) Error() string {
@@ -351,41 +351,41 @@ func (e *AheadBehindError) IsRecoverable() bool {
 
 func (e *AheadBehindError) GetRecoveryOptions() []RecoveryOption {
 	options := []RecoveryOption{}
-	
+
 	if e.BehindCount > 0 {
 		options = append(options, RecoveryOption{
-			Label:       "Pull Latest Changes",
-			Description: "Fetch and merge the latest changes from the remote",
-			Command:     []string{"pull"},
+			Label:         "Pull Latest Changes",
+			Description:   "Fetch and merge the latest changes from the remote",
+			Command:       []string{"pull"},
 			IsDestructive: false,
 		})
 	}
-	
+
 	if e.AheadCount > 0 {
 		options = append(options, RecoveryOption{
-			Label:       "Push Changes",
-			Description: "Push your local commits to the remote repository",
-			Command:     []string{"push"},
+			Label:         "Push Changes",
+			Description:   "Push your local commits to the remote repository",
+			Command:       []string{"push"},
 			IsDestructive: false,
 		})
 	}
-	
+
 	if len(options) == 0 {
 		options = append(options, RecoveryOption{
-			Label:       "Sync with Remote",
-			Description: "Ensure your branch is synchronized with the remote",
-			Command:     []string{"pull"},
+			Label:         "Sync with Remote",
+			Description:   "Ensure your branch is synchronized with the remote",
+			Command:       []string{"pull"},
 			IsDestructive: false,
 		})
 	}
-	
+
 	return options
 }
 
 // GenericGitError is a fallback for unknown git errors
 type GenericGitError struct {
-	Message    string
-	RawOutput  string
+	Message   string
+	RawOutput string
 }
 
 func (e *GenericGitError) Error() string {
@@ -538,7 +538,7 @@ func extractBranchName(command string) string {
 			return parts[i+1]
 		}
 	}
-	
+
 	// If no -b flag, try to extract from "checkout branch-name" pattern
 	// Look for the branch name after checkout command
 	if len(parts) > 1 && (parts[0] == "checkout" || parts[0] == "switch") {
@@ -549,7 +549,7 @@ func extractBranchName(command string) string {
 			}
 		}
 	}
-	
+
 	return "unknown"
 }
 

@@ -8,26 +8,26 @@ import (
 // LogBrowserStyles contains consistent styling for the Log Browser dialog
 type LogBrowserStyles struct {
 	// Panel styles
-	PanelStyle         lipgloss.Style
-	FocusedPanelStyle  lipgloss.Style
+	PanelStyle          lipgloss.Style
+	FocusedPanelStyle   lipgloss.Style
 	UnfocusedPanelStyle lipgloss.Style
-	
+
 	// Text styles
 	TitleStyle    lipgloss.Style
 	SubtitleStyle lipgloss.Style
 	HintStyle     lipgloss.Style
-	
+
 	// State styles
-	EmptyStateStyle   lipgloss.Style
-	LoadingStyle      lipgloss.Style
-	ErrorStyle        lipgloss.Style
-	
+	EmptyStateStyle lipgloss.Style
+	LoadingStyle    lipgloss.Style
+	ErrorStyle      lipgloss.Style
+
 	// Line highlight style
 	CurrentLineStyle lipgloss.Style
-	
+
 	// Spinner for loading states
 	Spinner spinner.Model
-	
+
 	// Theme configuration
 	HighContrast bool
 }
@@ -95,59 +95,59 @@ func NewLogBrowserStylesWithTheme(highContrast bool) *LogBrowserStyles {
 	} else {
 		theme = GetDefaultTheme()
 	}
-	
+
 	// Base panel style
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		Padding(0, 1)
-	
+
 	// Focused panel - use theme color
 	focusedPanelStyle := panelStyle.Copy().
 		BorderForeground(lipgloss.Color(theme.FocusedBorder))
-	
+
 	// Unfocused panel - use theme color
 	unfocusedPanelStyle := panelStyle.Copy().
 		BorderForeground(lipgloss.Color(theme.UnfocusedBorder))
-	
+
 	// Title style - bold with theme color
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(theme.Title))
-	
+
 	// Subtitle style - theme color
 	subtitleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.Subtitle))
-	
+
 	// Hint style - muted with theme color
 	hintStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.Hint)).
 		Italic(true)
-	
+
 	// Empty state style - centered, muted
 	emptyStateStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.Empty)).
 		Italic(true).
 		Align(lipgloss.Center)
-	
+
 	// Loading style - theme color
 	loadingStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.Loading))
-	
+
 	// Error style - theme color, bold
 	errorStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.Error)).
 		Bold(true)
-	
+
 	// Current line highlight - theme colors
 	currentLineStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color(theme.LineHighlight)).
 		Foreground(lipgloss.Color(theme.LineText))
-	
+
 	// Create spinner for loading states
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.SpinnerColor))
-	
+
 	return &LogBrowserStyles{
 		PanelStyle:          panelStyle,
 		FocusedPanelStyle:   focusedPanelStyle,
@@ -171,7 +171,7 @@ func (s *LogBrowserStyles) GetEmptyStateMessage(panelType string) string {
 		"tag_selector": "No tags available\n\nTip: Create tags with task-master or run tasks to generate logs",
 		"log_viewer":   "Select a log file to preview\n\nUse ← → to navigate between panels",
 	}
-	
+
 	if msg, ok := messages[panelType]; ok {
 		return msg
 	}
@@ -181,13 +181,13 @@ func (s *LogBrowserStyles) GetEmptyStateMessage(panelType string) string {
 // RenderEmptyState renders an empty state message with consistent styling
 func (s *LogBrowserStyles) RenderEmptyState(panelType string, width, height int) string {
 	message := s.GetEmptyStateMessage(panelType)
-	
+
 	// Center the message
 	style := s.EmptyStateStyle.
 		Width(width - 4).
 		Height(height - 4).
 		AlignVertical(lipgloss.Center)
-	
+
 	return style.Render(message)
 }
 
