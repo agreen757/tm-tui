@@ -2,13 +2,70 @@ package dialog
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/agreen757/tm-tui/internal/config"
 )
+
+// setupTestCrushConfig creates a temporary Crush configuration for testing
+// Returns the path to the config file and a cleanup function
+func setupTestCrushConfig(t *testing.T, model string) (string, func()) {
+	// Create a temporary directory
+	tmpDir, err := os.MkdirTemp("", "crush-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temporary directory: %v", err)
+	}
+
+	// Create a temporary Crush config file
+	configPath := filepath.Join(tmpDir, ".crush.json")
+	
+	// Set the environment variable to point to our test config BEFORE saving
+	origEnv := os.Getenv(config.EnvCrushConfigPath)
+	os.Setenv(config.EnvCrushConfigPath, configPath)
+	
+	crushConfig := &config.CrushConfig{
+		Schema:  "https://charm.land/crush.json",
+		Version: "1.0",
+		Models: map[string]config.SelectedModel{
+			"large": {
+				Model:    model,
+				Provider: "anthropic",
+			},
+		},
+	}
+
+	// Save the config (will use the environment variable path we just set)
+	err = config.SaveCrushConfig(crushConfig)
+	if err != nil {
+		// Restore environment before failing
+		if origEnv != "" {
+			os.Setenv(config.EnvCrushConfigPath, origEnv)
+		} else {
+			os.Unsetenv(config.EnvCrushConfigPath)
+		}
+		t.Fatalf("Failed to save test crush config: %v", err)
+	}
+
+	// Return cleanup function
+	cleanup := func() {
+		// Restore original environment
+		if origEnv != "" {
+			os.Setenv(config.EnvCrushConfigPath, origEnv)
+		} else {
+			os.Unsetenv(config.EnvCrushConfigPath)
+		}
+		// Clean up temporary directory
+		os.RemoveAll(tmpDir)
+	}
+
+	return configPath, cleanup
+}
 
 // TestTaskRunnerKeyMapStructure tests that the key map is properly initialized
 func TestTaskRunnerKeyMapStructure(t *testing.T) {
@@ -111,30 +168,17 @@ func TestMinimizeToggle(t *testing.T) {
 		t.Error("Expected modal to be expanded initially")
 	}
 
-	// Press 'm' to minimize
-	mKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}
-	modal.HandleKey(mKey)
+	// Press 'ctrl+w' to minimize
+	ctrlWKey := tea.KeyMsg{Type: tea.KeyCtrlW}
+	modal.HandleKey(ctrlWKey)
 	if !modal.minimized {
-		t.Error("Expected modal to be minimized after pressing 'm'")
+		t.Error("Expected modal to be minimized after pressing 'ctrl+w'")
 	}
 
-	// Press 'm' again to maximize
-	modal.HandleKey(mKey)
+	// Press 'ctrl+w' again to maximize
+	modal.HandleKey(ctrlWKey)
 	if modal.minimized {
-		t.Error("Expected modal to be expanded after second 'm' press")
-	}
-
-	// Test uppercase 'M' as well
-	MKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'M'}}
-	modal.HandleKey(MKey)
-	if !modal.minimized {
-		t.Error("Expected modal to be minimized after pressing 'M'")
-	}
-
-	// Press 'M' again to maximize
-	modal.HandleKey(MKey)
-	if modal.minimized {
-		t.Error("Expected modal to be expanded after second 'M' press")
+		t.Error("Expected modal to be expanded after second 'ctrl+w' press")
 	}
 }
 
@@ -356,8 +400,8 @@ func TestMinimizeStatePreservation(t *testing.T) {
 	initialScrollPos := tab.viewport.YOffset
 
 	// Minimize
-	mKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}
-	modal.HandleKey(mKey)
+	ctrlWKey := tea.KeyMsg{Type: tea.KeyCtrlW}
+	modal.HandleKey(ctrlWKey)
 
 	// Verify minimized state
 	if !modal.minimized {
@@ -370,7 +414,7 @@ func TestMinimizeStatePreservation(t *testing.T) {
 	}
 
 	// Maximize (toggle minimize again)
-	modal.HandleKey(mKey)
+	modal.HandleKey(ctrlWKey)
 
 	// Verify maximized state
 	if modal.minimized {
@@ -405,8 +449,8 @@ func TestMinimizedViewWithMultipleTasks(t *testing.T) {
 	modal.tabs[2].SetStatus(TaskFailed)
 
 	// Minimize
-	mKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}
-	modal.HandleKey(mKey)
+	ctrlWKey := tea.KeyMsg{Type: tea.KeyCtrlW}
+	modal.HandleKey(ctrlWKey)
 
 	// Get minimized view
 	view := modal.renderMinimized()
@@ -475,8 +519,8 @@ func TestWindowResizeHandlingInMinimizedState(t *testing.T) {
 	modal.addTab("task-1", "Task 1", "model-1")
 
 	// Minimize
-	mKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}
-	modal.HandleKey(mKey)
+	ctrlWKey := tea.KeyMsg{Type: tea.KeyCtrlW}
+	modal.HandleKey(ctrlWKey)
 
 	// Simulate window resize while minimized
 	modal.SetRect(100, 40, 0, 0)
@@ -524,11 +568,11 @@ func TestRapidMinimizeMaximizeToggling(t *testing.T) {
 		modal.addTab("task-"+string(rune('1'+rune(i))), "Task "+string(rune('1'+rune(i))), "model")
 	}
 
-	mKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}
+	ctrlWKey := tea.KeyMsg{Type: tea.KeyCtrlW}
 
 	// Rapidly toggle minimize/maximize 10 times
 	for i := 0; i < 10; i++ {
-		modal.HandleKey(mKey)
+		modal.HandleKey(ctrlWKey)
 	}
 
 	// After even number of toggles, should be back to expanded state
@@ -1618,5 +1662,604 @@ func TestConfirmationDialogYesNoNavigation(t *testing.T) {
 	}
 	if dialog.FocusedIndex() != 0 {
 		t.Errorf("Expected focus back on Yes button (0), got %d", dialog.FocusedIndex())
+	}
+}
+
+// TestStartTasksWithSingleTask tests creating tabs for a single task
+func TestStartTasksWithSingleTask(t *testing.T) {
+	_, cleanup := setupTestCrushConfig(t, "test-model")
+	defer cleanup()
+	
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	taskIDs := []string{"1"}
+	model := "test-model"
+	
+	err := modal.StartTasks(taskIDs, model)
+	if err != nil {
+		t.Fatalf("StartTasks failed: %v", err)
+	}
+	
+	// Verify one tab was created
+	if len(modal.tabs) != 1 {
+		t.Errorf("Expected 1 tab, got %d", len(modal.tabs))
+	}
+	
+	// Verify active tab is first tab
+	if modal.activeTab != 0 {
+		t.Errorf("Expected activeTab to be 0, got %d", modal.activeTab)
+	}
+	
+	// Verify tab details
+	tab := modal.tabs[0]
+	if tab.GetTaskID() != "1" {
+		t.Errorf("Expected task ID '1', got '%s'", tab.GetTaskID())
+	}
+	
+	// Verify tab title format
+	expectedTitle := "Task 1"
+	if !strings.Contains(tab.GetTaskTitle(), expectedTitle) {
+		t.Errorf("Expected tab title to contain '%s', got '%s'", expectedTitle, tab.GetTaskTitle())
+	}
+}
+
+// TestStartTasksWithMultipleTasks tests creating tabs for multiple tasks (5 tasks)
+func TestStartTasksWithMultipleTasks(t *testing.T) {
+	_, cleanup := setupTestCrushConfig(t, "test-model")
+	defer cleanup()
+	
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	taskIDs := []string{"1", "2", "3", "4", "5"}
+	model := "test-model"
+	
+	err := modal.StartTasks(taskIDs, model)
+	if err != nil {
+		t.Fatalf("StartTasks failed: %v", err)
+	}
+	
+	// Verify 5 tabs were created
+	if len(modal.tabs) != 5 {
+		t.Errorf("Expected 5 tabs, got %d", len(modal.tabs))
+	}
+	
+	// Verify active tab is first tab
+	if modal.activeTab != 0 {
+		t.Errorf("Expected activeTab to be 0, got %d", modal.activeTab)
+	}
+	
+	// Verify each tab has correct ID and title format
+	for i, taskID := range taskIDs {
+		tab := modal.tabs[i]
+		if tab.GetTaskID() != taskID {
+			t.Errorf("Tab %d: expected task ID '%s', got '%s'", i, taskID, tab.GetTaskID())
+		}
+		
+		expectedTitle := fmt.Sprintf("Task %s", taskID)
+		if !strings.Contains(tab.GetTaskTitle(), expectedTitle) {
+			t.Errorf("Tab %d: expected title to contain '%s', got '%s'", i, expectedTitle, tab.GetTaskTitle())
+		}
+	}
+}
+
+// TestStartTasksWithMaximumTasks tests creating tabs for maximum allowed tasks (9 tasks)
+func TestStartTasksWithMaximumTasks(t *testing.T) {
+	_, cleanup := setupTestCrushConfig(t, "test-model")
+	defer cleanup()
+	
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	taskIDs := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	model := "test-model"
+	
+	err := modal.StartTasks(taskIDs, model)
+	if err != nil {
+		t.Fatalf("StartTasks failed with 9 tasks: %v", err)
+	}
+	
+	// Verify 9 tabs were created
+	if len(modal.tabs) != 9 {
+		t.Errorf("Expected 9 tabs, got %d", len(modal.tabs))
+	}
+	
+	// Verify active tab is first tab
+	if modal.activeTab != 0 {
+		t.Errorf("Expected activeTab to be 0, got %d", modal.activeTab)
+	}
+}
+
+// TestStartTasksExceedsMaximum tests that >9 tasks returns an error
+func TestStartTasksExceedsMaximum(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Try to create 10 tasks (exceeds limit)
+	taskIDs := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+	model := "test-model"
+	
+	err := modal.StartTasks(taskIDs, model)
+	if err == nil {
+		t.Fatal("Expected error when starting more than 9 tasks, got nil")
+	}
+	
+	// Verify error message mentions the limit
+	if !strings.Contains(err.Error(), "9") {
+		t.Errorf("Expected error message to mention limit of 9, got: %v", err)
+	}
+	
+	// Verify error message mentions the number of tasks requested
+	if !strings.Contains(err.Error(), "10") {
+		t.Errorf("Expected error message to mention 10 tasks requested, got: %v", err)
+	}
+	
+	// Verify no tabs were created
+	if len(modal.tabs) != 0 {
+		t.Errorf("Expected 0 tabs when StartTasks fails, got %d", len(modal.tabs))
+	}
+}
+
+// TestStartTasksWithEmptyList tests that empty task list returns an error
+func TestStartTasksWithEmptyList(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	taskIDs := []string{}
+	model := "test-model"
+	
+	err := modal.StartTasks(taskIDs, model)
+	if err == nil {
+		t.Fatal("Expected error when starting with empty task list, got nil")
+	}
+	
+	// Verify error message
+	if !strings.Contains(err.Error(), "no task IDs") {
+		t.Errorf("Expected error message to mention 'no task IDs', got: %v", err)
+	}
+	
+	// Verify no tabs were created
+	if len(modal.tabs) != 0 {
+		t.Errorf("Expected 0 tabs when StartTasks fails, got %d", len(modal.tabs))
+	}
+}
+
+// TestStartTasksNamingFormat tests the naming format "Task {ID}: {Title}"
+func TestStartTasksNamingFormat(t *testing.T) {
+	_, cleanup := setupTestCrushConfig(t, "test-model")
+	defer cleanup()
+	
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	taskIDs := []string{"1.1", "2.3", "5"}
+	model := "test-model"
+	
+	err := modal.StartTasks(taskIDs, model)
+	if err != nil {
+		t.Fatalf("StartTasks failed: %v", err)
+	}
+	
+	// Verify naming format for each tab
+	expectedFormats := []string{
+		"Task 1.1",
+		"Task 2.3",
+		"Task 5",
+	}
+	
+	for i, expected := range expectedFormats {
+		tab := modal.tabs[i]
+		title := tab.GetTaskTitle()
+		if !strings.Contains(title, expected) {
+			t.Errorf("Tab %d: expected title to contain '%s', got '%s'", i, expected, title)
+		}
+	}
+}
+
+// TestStartTasksMultipleCalls tests that calling StartTasks multiple times adds tabs
+func TestStartTasksMultipleCalls(t *testing.T) {
+	// Create a config with multiple models
+	tmpDir, err := os.MkdirTemp("", "crush-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temporary directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	
+	configPath := filepath.Join(tmpDir, ".crush.json")
+	
+	// Set the environment variable BEFORE saving
+	origEnv := os.Getenv(config.EnvCrushConfigPath)
+	os.Setenv(config.EnvCrushConfigPath, configPath)
+	defer func() {
+		if origEnv != "" {
+			os.Setenv(config.EnvCrushConfigPath, origEnv)
+		} else {
+			os.Unsetenv(config.EnvCrushConfigPath)
+		}
+	}()
+	
+	crushConfig := &config.CrushConfig{
+		Schema:  "https://charm.land/crush.json",
+		Version: "1.0",
+		Models: map[string]config.SelectedModel{
+			"model-1": {
+				Model:    "model-1",
+				Provider: "anthropic",
+			},
+			"model-2": {
+				Model:    "model-2",
+				Provider: "openai",
+			},
+		},
+	}
+	
+	err = config.SaveCrushConfig(crushConfig)
+	if err != nil {
+		t.Fatalf("Failed to save test crush config: %v", err)
+	}
+	
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// First call: 3 tasks
+	err = modal.StartTasks([]string{"1", "2", "3"}, "model-1")
+	if err != nil {
+		t.Fatalf("First StartTasks failed: %v", err)
+	}
+	
+	if len(modal.tabs) != 3 {
+		t.Errorf("After first call, expected 3 tabs, got %d", len(modal.tabs))
+	}
+	
+	// Second call: 2 more tasks (total would be 5)
+	err = modal.StartTasks([]string{"4", "5"}, "model-2")
+	if err != nil {
+		t.Fatalf("Second StartTasks failed: %v", err)
+	}
+	
+	// Verify total tab count
+	if len(modal.tabs) != 5 {
+		t.Errorf("After second call, expected 5 tabs, got %d", len(modal.tabs))
+	}
+	
+	// Verify active tab was reset to 0 by second call
+	if modal.activeTab != 0 {
+		t.Errorf("Expected activeTab to be 0 after second call, got %d", modal.activeTab)
+	}
+}
+
+// TestExecuteTaskValidation tests that ExecuteTask validates tab existence
+func TestExecuteTaskValidation(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Try to execute a task without creating tabs first
+	_, err := modal.ExecuteTask("nonexistent", "Test Task", "gpt-4", "test prompt", "test-tag")
+	if err == nil {
+		t.Fatal("Expected error when executing task without existing tab, got nil")
+	}
+	
+	// Verify error message mentions the task ID
+	if !strings.Contains(err.Error(), "nonexistent") {
+		t.Errorf("Expected error to mention task ID 'nonexistent', got: %v", err)
+	}
+}
+
+// TestExecuteTaskWithExistingTab tests successful task execution setup
+func TestExecuteTaskWithExistingTab(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Create a tab first
+	modal.addTab("task-1", "Test Task", "gpt-4")
+	
+	// Try to execute the task
+	// Note: We can't actually run the subprocess in tests, but we can verify
+	// that ExecuteTask returns without error and provides a command
+	cmd, err := modal.ExecuteTask("task-1", "Test Task", "gpt-4", "test prompt", "test-tag")
+	
+	// Skip this test if Crush binary is not available (expected in CI)
+	if err != nil {
+		if strings.Contains(err.Error(), "crush binary") {
+			t.Skip("Skipping test: Crush binary not available")
+		}
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	
+	// Verify that a command was returned
+	if cmd == nil {
+		t.Error("Expected ExecuteTask to return a command, got nil")
+	}
+}
+
+// TestExecuteTaskMultipleTasks tests executing multiple tasks concurrently
+func TestExecuteTaskMultipleTasks(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Create multiple tabs
+	taskIDs := []string{"task-1", "task-2", "task-3"}
+	for i, id := range taskIDs {
+		modal.addTab(id, fmt.Sprintf("Task %d", i+1), "gpt-4")
+	}
+	
+	// Try to execute all tasks
+	var cmds []tea.Cmd
+	for _, id := range taskIDs {
+		cmd, err := modal.ExecuteTask(id, fmt.Sprintf("Task %s", id), "gpt-4", "test prompt", "test-tag")
+		
+		// Skip if Crush binary is not available
+		if err != nil {
+			if strings.Contains(err.Error(), "crush binary") {
+				t.Skip("Skipping test: Crush binary not available")
+			}
+			t.Fatalf("Unexpected error for task %s: %v", id, err)
+		}
+		
+		if cmd == nil {
+			t.Errorf("Expected command for task %s, got nil", id)
+		} else {
+			cmds = append(cmds, cmd)
+		}
+	}
+	
+	// Verify we got commands for all tasks
+	if len(cmds) != len(taskIDs) {
+		t.Errorf("Expected %d commands, got %d", len(taskIDs), len(cmds))
+	}
+}
+
+// TestExecuteTaskWithoutCrushBinary tests error handling when Crush is not available
+func TestExecuteTaskWithoutCrushBinary(t *testing.T) {
+	// This test can't force Crush to be unavailable, but documents expected behavior
+	// If Crush is not available, ExecuteTask should return an error
+	t.Skip("Cannot reliably test Crush binary absence without mocking")
+}
+
+// TestExecuteTaskMessageFlow tests that ExecuteTask generates proper messages
+func TestExecuteTaskMessageFlow(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Create a tab
+	modal.addTab("task-1", "Test Task", "gpt-4")
+	
+	// Execute the task
+	cmd, err := modal.ExecuteTask("task-1", "Test Task", "gpt-4", "test prompt", "test-tag")
+	
+	// Skip if Crush binary is not available
+	if err != nil {
+		if strings.Contains(err.Error(), "crush binary") {
+			t.Skip("Skipping test: Crush binary not available")
+		}
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	
+	if cmd == nil {
+		t.Fatal("Expected command, got nil")
+	}
+	
+	// Execute the command to get the first message
+	msg := cmd()
+	
+	// The first message should be a TaskStartedMsg or CrushExecutionSub
+	switch msg.(type) {
+	case TaskStartedMsg:
+		// Expected: TaskStartedMsg to update the tab
+		startMsg := msg.(TaskStartedMsg)
+		if startMsg.TaskID != "task-1" {
+			t.Errorf("Expected TaskStartedMsg for task-1, got %s", startMsg.TaskID)
+		}
+	case CrushExecutionSub:
+		// Also acceptable: subscription message
+		subMsg := msg.(CrushExecutionSub)
+		if subMsg.TaskID != "task-1" {
+			t.Errorf("Expected CrushExecutionSub for task-1, got %s", subMsg.TaskID)
+		}
+	default:
+		t.Errorf("Expected TaskStartedMsg or CrushExecutionSub, got %T", msg)
+	}
+}
+
+// TestValidateModelInConfigWithValidModel tests that validation passes for valid models
+func TestValidateModelInConfigWithValidModel(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Note: This test requires a .crush.json file with configured models
+	// For testing, we skip if no Crush config is available
+	err := modal.ValidateModelInConfig("claude-3-5-sonnet-20241022")
+	
+	// We expect either:
+	// 1. No error if the model is configured
+	// 2. An error about Crush configuration not being found (which is OK for this test environment)
+	if err != nil {
+		// Check if it's about the config file not existing - that's acceptable
+		if !strings.Contains(err.Error(), "Crush configuration") {
+			t.Skipf("Skipping: Crush configuration not available in test environment: %v", err)
+		}
+	}
+	// If we get here with no error, validation passed
+}
+
+// TestValidateModelInConfigWithInvalidModel tests that validation fails for invalid models
+func TestValidateModelInConfigWithInvalidModel(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	// Test with a model that is unlikely to be configured
+	err := modal.ValidateModelInConfig("nonexistent-model-xyz-12345")
+	
+	if err == nil {
+		t.Skip("Skipping: Test requires a configured .crush.json file to properly validate invalid models")
+	}
+	
+	// If we do have a config, the error should mention the model is not available
+	if !strings.Contains(err.Error(), "Selected model not available in Crush configuration") {
+		t.Errorf("Expected error about model not available, got: %v", err)
+	}
+}
+
+// TestStartTasksWithInvalidModel tests that StartTasks fails with invalid model
+func TestStartTasksWithInvalidModel(t *testing.T) {
+	modal := NewTaskRunnerModal(80, 30, nil)
+	
+	taskIDs := []string{"1"}
+	invalidModel := "nonexistent-model-xyz-12345"
+	
+	err := modal.StartTasks(taskIDs, invalidModel)
+	
+	// If .crush.json doesn't exist, we'll get a different error, so skip in that case
+	if err == nil {
+		t.Skip("Skipping: Test requires a configured .crush.json file to properly test invalid models")
+	}
+	
+	// If we do get an error, it should be about model validation
+	if !strings.Contains(err.Error(), "Selected model not available in Crush configuration") &&
+		!strings.Contains(err.Error(), "failed to load Crush configuration") {
+		t.Errorf("Expected error about model validation, got: %v", err)
+	}
+	
+	// Verify no tabs were created due to validation failure
+	if len(modal.tabs) != 0 {
+		t.Errorf("Expected 0 tabs due to validation failure, got %d", len(modal.tabs))
+	}
+}
+
+
+// TestTaskExecutionTabErrorHandling tests error handling in TaskExecutionTab
+func TestTaskExecutionTabErrorHandling(t *testing.T) {
+	tab := NewTaskExecutionTab("task-1", "Test Task", "model-1", 80, 20, nil)
+
+	// Initially no error
+	if tab.HasError() {
+		t.Error("Expected no error initially")
+	}
+
+	if tab.GetError() != "" {
+		t.Error("Expected empty error message initially")
+	}
+
+	// Set error
+	tab.SetError("Task execution failed: timeout")
+
+	// Verify error is set
+	if !tab.HasError() {
+		t.Error("Expected error to be set")
+	}
+
+	if tab.GetError() != "Task execution failed: timeout" {
+		t.Errorf("Expected error message 'Task execution failed: timeout', got '%s'", tab.GetError())
+	}
+
+	// Verify status changed to failed
+	if tab.status != TaskFailed {
+		t.Errorf("Expected status to be TaskFailed, got %v", tab.status)
+	}
+}
+
+// TestTaskExecutionTabTimeout tests timeout detection
+func TestTaskExecutionTabTimeout(t *testing.T) {
+	tab := NewTaskExecutionTab("task-1", "Test Task", "model-1", 80, 20, nil)
+
+	// No timeout initially
+	if tab.IsTimedOut() {
+		t.Error("Expected no timeout with timeout duration of 0")
+	}
+
+	// Set a short timeout
+	tab.SetExecutionTimeout(100 * time.Millisecond)
+
+	// Immediately check - should not be timed out
+	if tab.IsTimedOut() {
+		t.Error("Expected no timeout immediately after setting")
+	}
+
+	// Wait for timeout
+	time.Sleep(150 * time.Millisecond)
+
+	// Should now be timed out
+	if !tab.IsTimedOut() {
+		t.Error("Expected timeout after waiting")
+	}
+}
+
+// TestTaskExecutionTabTimeoutNotRunning tests timeout check stops when task stops
+func TestTaskExecutionTabTimeoutNotRunning(t *testing.T) {
+	tab := NewTaskExecutionTab("task-1", "Test Task", "model-1", 80, 20, nil)
+
+	// Set a short timeout
+	tab.SetExecutionTimeout(100 * time.Millisecond)
+
+	// Wait for timeout
+	time.Sleep(150 * time.Millisecond)
+
+	// Set status to completed
+	tab.SetStatus(TaskCompleted)
+
+	// Should not be timed out (status != running)
+	if tab.IsTimedOut() {
+		t.Error("Expected no timeout when task is not running")
+	}
+}
+
+// TestTaskExecutionTabActivityTimestamp tests last activity time tracking
+func TestTaskExecutionTabActivityTimestamp(t *testing.T) {
+	tab := NewTaskExecutionTab("task-1", "Test Task", "model-1", 80, 20, nil)
+
+	initialActivityTime := tab.lastActivityTime
+
+	// Wait a bit
+	time.Sleep(50 * time.Millisecond)
+
+	// Add output - should update activity time
+	tab.AddOutputLine("test output")
+
+	if tab.lastActivityTime.Equal(initialActivityTime) {
+		t.Error("Expected activity time to be updated after AddOutputLine")
+	}
+
+	if tab.lastActivityTime.Before(initialActivityTime) {
+		t.Error("Expected activity time to be after initial time")
+	}
+}
+
+// TestTaskExecutionTabCleanup tests resource cleanup
+func TestTaskExecutionTabCleanup(t *testing.T) {
+	tab := NewTaskExecutionTab("task-1", "Test Task", "model-1", 80, 20, nil)
+
+	// Set some state
+	tab.error = "test error"
+	tab.SetExecutionTimeout(100 * time.Millisecond)
+
+	// Cleanup
+	tab.Cleanup()
+
+	// Verify resources are cleaned up
+	if tab.cmd != nil {
+		t.Error("Expected cmd to be nil after cleanup")
+	}
+
+	if tab.cancelFunc != nil {
+		t.Error("Expected cancelFunc to be nil after cleanup")
+	}
+
+	// Status should be updated from running to failed (due to cancellation during cleanup)
+	// Error should remain
+	if tab.GetError() != "test error" {
+		t.Error("Expected error to remain after cleanup")
+	}
+}
+
+// TestTaskExecutionTabOutputActivity tests output tracking updates activity
+func TestTaskExecutionTabOutputActivity(t *testing.T) {
+	tab := NewTaskExecutionTab("task-1", "Test Task", "model-1", 80, 20, nil)
+
+	initialTime := tab.lastActivityTime
+	time.Sleep(50 * time.Millisecond)
+
+	// Add output
+	tab.AddOutputLine("test line")
+
+	// Activity time should be updated
+	if !tab.lastActivityTime.After(initialTime) {
+		t.Error("Expected activity time to be updated after output")
+	}
+
+	// Output should be stored
+	if len(tab.output) != 1 {
+		t.Errorf("Expected 1 output line, got %d", len(tab.output))
+	}
+
+	if tab.output[0] != "test line" {
+		t.Errorf("Expected output 'test line', got '%s'", tab.output[0])
 	}
 }

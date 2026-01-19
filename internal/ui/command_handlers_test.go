@@ -1285,3 +1285,154 @@ func TestExecuteTaskUpdateWithConfirmationFlow(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleRunTasksCommand tests multi-task execution command handler
+func TestHandleRunTasksCommand(t *testing.T) {
+	tests := []struct {
+		name              string
+		selectedTaskIDs   []string
+		expectQueueInit   bool
+		expectError       bool
+		expectDialog      bool
+	}{
+		{
+			name:              "empty selection returns error",
+			selectedTaskIDs:   []string{},
+			expectQueueInit:   false,
+			expectError:       true,
+			expectDialog:      false,
+		},
+		{
+			name:              "single task initializes queue",
+			selectedTaskIDs:   []string{"1"},
+			expectQueueInit:   true,
+			expectError:       false,
+			expectDialog:      false,
+		},
+		{
+			name:              "multiple tasks initializes queue",
+			selectedTaskIDs:   []string{"1", "2", "3"},
+			expectQueueInit:   true,
+			expectError:       false,
+			expectDialog:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := newTestModel()
+			model.appState.ClearDialogs()
+			
+			cmd := model.handleRunTasksCommand(tt.selectedTaskIDs)
+			
+			if tt.expectQueueInit {
+				if model.executionQueue == nil {
+					t.Errorf("expected executionQueue to be initialized")
+				}
+				if len(model.executionQueue.TaskIDs) != len(tt.selectedTaskIDs) {
+					t.Errorf("expected %d task IDs in queue, got %d", 
+						len(tt.selectedTaskIDs), len(model.executionQueue.TaskIDs))
+				}
+				if model.executionQueue.CurrentIndex != 0 {
+					t.Errorf("expected CurrentIndex=0, got %d", model.executionQueue.CurrentIndex)
+				}
+			} else if !tt.expectError {
+				// For non-error cases that don't expect queue init
+				if cmd != nil {
+					t.Errorf("expected nil command for non-queue case")
+				}
+			}
+		})
+	}
+}
+
+// TestHandleRunTasksCommandQueueInitialization verifies execution queue state
+func TestHandleRunTasksCommandQueueInitialization(t *testing.T) {
+	model := newTestModel()
+	selectedIDs := []string{"task1", "task2", "task3"}
+	
+	model.handleRunTasksCommand(selectedIDs)
+	
+	if model.executionQueue == nil {
+		t.Fatal("expected executionQueue to be initialized")
+	}
+	
+	// Verify queue structure
+	if len(model.executionQueue.TaskIDs) != len(selectedIDs) {
+		t.Errorf("expected %d tasks, got %d", len(selectedIDs), len(model.executionQueue.TaskIDs))
+	}
+	
+	// Verify all task statuses initialized
+	for _, taskID := range selectedIDs {
+		status, exists := model.executionQueue.TaskStatus[taskID]
+		if !exists {
+			t.Errorf("expected status for task %s", taskID)
+		}
+		if status != "pending" {
+			t.Errorf("expected status 'pending' for task %s, got %s", taskID, status)
+		}
+	}
+	
+	// Verify model selections map is initialized
+	if model.executionQueue.ModelSelections == nil {
+		t.Errorf("expected ModelSelections to be initialized")
+	}
+	
+	// Verify selection tracking is reset
+	if len(model.taskModelSelectionDone) != 0 {
+		t.Errorf("expected taskModelSelectionDone to be empty")
+	}
+}
+
+// TestHandleRunTasksCommandIntegration tests full flow with model selection
+func TestHandleRunTasksCommandIntegration(t *testing.T) {
+	tests := []struct {
+		name           string
+		selectedCount  int
+	}{
+		{
+			name:          "single task flow",
+			selectedCount: 1,
+		},
+		{
+			name:          "multiple tasks flow",
+			selectedCount: 3,
+		},
+		{
+			name:          "many tasks flow",
+			selectedCount: 10,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := newTestModel()
+			
+			// Create selected task IDs
+			selectedIDs := make([]string, tt.selectedCount)
+			for i := 0; i < tt.selectedCount; i++ {
+				selectedIDs[i] = fmt.Sprintf("task%d", i+1)
+			}
+			
+			// Initialize command handler
+			model.handleRunTasksCommand(selectedIDs)
+			
+			// Verify queue state
+			if model.executionQueue == nil {
+				t.Fatal("execution queue not initialized")
+			}
+			
+			if len(model.executionQueue.TaskIDs) != tt.selectedCount {
+				t.Errorf("expected %d tasks in queue, got %d", 
+					tt.selectedCount, len(model.executionQueue.TaskIDs))
+			}
+			
+			// Verify all statuses are "pending"
+			for _, taskID := range model.executionQueue.TaskIDs {
+				if model.executionQueue.TaskStatus[taskID] != "pending" {
+					t.Errorf("task %s has invalid status", taskID)
+				}
+			}
+		})
+	}
+}

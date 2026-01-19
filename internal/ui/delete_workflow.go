@@ -17,6 +17,7 @@ const (
 	deleteOptionsDialogID = "delete_options_dialog"
 	deleteWarningDialogID = "delete_warning_dialog"
 	undoDialogID          = "delete_undo_dialog"
+	maxConcurrentTasks    = 9 // Maximum number of tasks that can be run concurrently
 )
 
 // DeleteWorkflowState tracks the multi-step delete flow.
@@ -303,6 +304,7 @@ func (c *undoContent) View(width, height int) string {
 func (c *undoContent) HandleKey(tea.KeyMsg) tea.Cmd { return nil }
 
 func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
+	m.addLogLine(fmt.Sprintf("DEBUG: handleDialogResultMsg - ID: %s, Button: %s", msg.ID, msg.Button))
 	switch msg.ID {
 	case deleteConfirmDialogID:
 		if msg.Button == "continue" {
@@ -328,6 +330,228 @@ func (m *Model) handleDialogResultMsg(msg dialog.DialogResultMsg) tea.Cmd {
 			return m.executeUndo("")
 		}
 		m.undoSession = nil
+	case "ready_tasks_dialog":
+		m.addLogLine(fmt.Sprintf("DEBUG: ready_tasks_dialog case - Button: %s, Value type: %T", msg.Button, msg.Value))
+		if msg.Button == "confirm" {
+			// Get selected task IDs from the message value
+			if selectedTasks, ok := msg.Value.([]string); ok && len(selectedTasks) > 0 {
+				m.addLogLine(fmt.Sprintf("DEBUG: Selected tasks: %v", selectedTasks))
+				// Validate the task selection (max 9 tasks, dependencies, etc.)
+				if !m.validateReadyTasksExecution(selectedTasks) {
+					// Validation failed - error dialog was shown
+					m.addLogLine("DEBUG: Validation failed")
+					m.appState.PopDialog()
+					return nil
+				}
+				
+				m.addLogLine("DEBUG: Validation passed, showing model selection")
+				// Store the selected task IDs in the model
+				m.readyTasksSelectionIDs = selectedTasks
+				// Close the dialog and show model selection
+				m.appState.PopDialog()
+				m.ShowModelSelectionDialog()
+				return nil
+			} else {
+				m.addLogLine(fmt.Sprintf("DEBUG: Type assertion failed or empty - ok: %v, len: %d", ok, len(selectedTasks)))
+			}
+		}
+		// Cancellation or empty selection - just close the dialog
+		m.addLogLine("DEBUG: Closing ready_tasks_dialog (cancel or empty)")
+		m.readyTasksSelectionIDs = nil
+		m.appState.PopDialog()
+	case "model_selection_dialog":
+		if msg.Button == "confirm" {
+			// Get selected model from the message value
+			if result, ok := msg.Value.(*dialog.ModelSelectionResult); ok {
+				// Close the dialog
+				m.appState.PopDialog()
+				
+				// Check if this model selection is for PRD creation
+				if m.prdCreationPending {
+					m.addLogLine("PRD creation detected, starting PRD generation")
+					m.prdCreationPending = false
+					// Execute Crush for PRD creation with selected model
+					return m.executeCrushForPrd(result.Provider, result.ModelID)
+				}
+				
+				// Check if this model selection is for an agent run
+				if m.agentRunPending && m.agentRunTask != nil {
+					taskID := m.agentRunTaskID
+					taskTitle := m.agentRunTaskTitle
+					task := m.agentRunTask
+					
+					// Clear context
+					m.agentRunPending = false
+					m.agentRunTaskID = ""
+					m.agentRunTaskTitle = ""
+					m.agentRunTask = nil
+					
+					// Start the agent run with selected agent type
+					return m.startAgentRun(taskID, taskTitle, task, m.selectedAgentType, result.ModelID)
+				}
+				
+				// Check if this model selection is for bulk ready tasks execution
+				if len(m.readyTasksSelectionIDs) > 0 {
+					taskIDs := m.readyTasksSelectionIDs
+					m.readyTasksSelectionIDs = nil // Clear after capturing
+					
+					// Validate the model before execution
+					if !m.validateModelExecution(result.ModelID) {
+						// Validation failed - error dialog was shown
+						return nil
+					}
+					
+					m.addLogLine(fmt.Sprintf("Starting concurrent execution of %d tasks with model %s", len(taskIDs), result.ModelID))
+					
+					// Create model selections map with the same model for all tasks
+					modelSelections := make(map[string]string)
+					for _, taskID := range taskIDs {
+						modelSelections[taskID] = result.ModelID
+					}
+					
+					// Execute the selected tasks concurrently
+					return m.executeMultipleTasks(taskIDs, modelSelections)
+				}
+				
+				m.addLogLine(fmt.Sprintf("Model selected: %s (provider: %s)", result.ModelID, result.Provider))
+				return nil
+			}
+		}
+		// Cancellation - clear state and close the dialog
+		m.readyTasksSelectionIDs = nil
+		m.agentRunPending = false
+		m.agentRunTaskID = ""
+		m.agentRunTaskTitle = ""
+		m.agentRunTask = nil
+		m.prdCreationPending = false
+		m.appState.PopDialog()
+	case "task_model_selection_dialog":
+		// Validate execution queue exists
+		if m.executionQueue == nil {
+			m.cleanupExecutionQueue()
+			m.showErrorDialog("Model Selection", "Execution queue is not initialized")
+			m.appState.PopDialog()
+			return nil
+		}
+		
+		if msg.Button == "confirm" {
+			// Get current task ID from execution queue
+			taskID := m.executionQueue.CurrentTask()
+			if taskID == "" {
+				m.cleanupExecutionQueue()
+				m.showErrorDialog("Model Selection", "No current task in execution queue")
+				m.appState.PopDialog()
+				return nil
+			}
+			
+			// Extract modelID from message value with type assertion
+			modelID, ok := msg.Value.(string)
+			if !ok {
+				m.cleanupExecutionQueue()
+				m.showErrorDialog("Model Selection", "Invalid model selection data")
+				m.appState.PopDialog()
+				return nil
+			}
+			
+			// Store model selection in execution queue
+			m.executionQueue.SetModelSelection(taskID, modelID)
+			
+			// Mark task as having model selection
+			if m.taskModelSelectionDone == nil {
+				m.taskModelSelectionDone = make(map[string]bool)
+			}
+			m.taskModelSelectionDone[taskID] = true
+			
+			// Update task status to "ready"
+			m.executionQueue.TaskStatus[taskID] = "ready"
+			
+			// Move to next task in queue
+			m.executionQueue.Next()
+			
+			// Close current dialog
+			m.appState.PopDialog()
+			
+			// Show next task dialog if there are more tasks, otherwise execute all tasks
+			if m.executionQueue.HasNext() {
+				return m.showTaskModelDialogCmd()
+			} else {
+				// All tasks have models - start execution
+				// Collect all task IDs and their model selections
+				var taskIDs []string
+				for _, id := range m.executionQueue.TaskIDs {
+					taskIDs = append(taskIDs, id)
+				}
+				
+				// Pass the entire model selections map to executeMultipleTasks
+				return m.executeMultipleTasks(taskIDs, m.executionQueue.ModelSelections)
+			}
+		} else if msg.Button == "skip" {
+			// Get current task ID from execution queue
+			taskID := m.executionQueue.CurrentTask()
+			if taskID == "" {
+				m.cleanupExecutionQueue()
+				m.addLogLine("Error: No current task to skip in execution queue")
+				m.appState.PopDialog()
+				m.showErrorDialog("Skip Task", "No current task to skip")
+				return nil
+			}
+			
+			// Mark task status as "skipped"
+			m.executionQueue.TaskStatus[taskID] = "skipped"
+			
+			// Skip this task (removes from queue)
+			m.executionQueue.Skip()
+			
+			// Close current dialog
+			m.appState.PopDialog()
+			
+			// Show next task dialog if there are more tasks
+			if m.executionQueue.HasNext() {
+				return m.showTaskModelDialogCmd()
+			} else if m.executionQueue.RemainingCount() > 0 {
+				// Execute remaining tasks (those that already have model selections)
+				var taskIDs []string
+				for _, id := range m.executionQueue.TaskIDs {
+					if m.executionQueue.GetModelSelection(id) != "" {
+						taskIDs = append(taskIDs, id)
+					}
+				}
+				
+				if len(taskIDs) > 0 {
+					// Create model selections map with only selected tasks
+					modelSelections := make(map[string]string)
+					for _, taskID := range taskIDs {
+						modelSelections[taskID] = m.executionQueue.GetModelSelection(taskID)
+					}
+					return m.executeMultipleTasks(taskIDs, modelSelections)
+				}
+				
+				// No tasks with model selections
+				m.cleanupExecutionQueue()
+				m.addLogLine("No tasks selected for execution")
+				return nil
+			} else {
+				// No tasks remain in queue
+				m.cleanupExecutionQueue()
+				m.addLogLine("No tasks selected for execution")
+				return nil
+			}
+		} else if msg.Button == "cancel" {
+			// Cancel entire queue - reset all state
+			m.cleanupExecutionQueue()
+			
+			// Close dialog
+			m.appState.PopDialog()
+			
+			// Return nil to halt flow
+			return nil
+		} else {
+			// Unknown button value - log warning and close dialog with cleanup
+			m.addLogLine(fmt.Sprintf("Warning: Unknown button '%s' in task model selection dialog", msg.Button))
+			m.cleanupExecutionQueue()
+			m.appState.PopDialog()
+			return nil
+		}
 	case commandRunnerDialogID:
 		if msg.Button == "Execute" {
 			if result, ok := msg.Value.(dialog.CommandPromptResult); ok {
@@ -370,4 +594,113 @@ func (m *Model) handleUndoExpired(msg UndoExpiredMsg) {
 	if m.appState != nil {
 		m.appState.PopDialog()
 	}
+}
+
+// validateTaskSelection validates the selected tasks for multi-task execution
+// Returns error message if validation fails, empty string if valid
+func (m *Model) validateTaskSelection(taskIDs []string) string {
+	// Check for empty selection
+	if len(taskIDs) == 0 {
+		return "No tasks selected. Please select at least one task."
+	}
+	
+	// Check for max task limit
+	if len(taskIDs) > maxConcurrentTasks {
+		return fmt.Sprintf("Too many tasks selected (%d). Maximum concurrent tasks is %d. Please select fewer tasks.", len(taskIDs), maxConcurrentTasks)
+	}
+	
+	return ""
+}
+
+// validateModelSelection validates the selected model for task execution
+// Returns error message if validation fails, empty string if valid
+func (m *Model) validateModelSelection(modelID string) string {
+	// Check for empty model ID
+	if modelID == "" {
+		return "No model selected. Please select a model before executing tasks."
+	}
+	
+	return ""
+}
+
+// validateTaskDependencies validates that selected tasks don't have unmet dependencies
+// Returns error message if validation fails, empty string if valid
+func (m *Model) validateTaskDependencies(taskIDs []string) string {
+	if m.taskService == nil {
+		// Can't validate without task service
+		return ""
+	}
+	
+	taskSvc, ok := m.taskService.(*taskmaster.Service)
+	if !ok {
+		// Can't validate with non-standard service
+		return ""
+	}
+	
+	// Check each task's dependencies - they should either be done OR in the selection
+	selectedIDMap := make(map[string]bool)
+	for _, id := range taskIDs {
+		selectedIDMap[id] = true
+	}
+	
+	for _, taskID := range taskIDs {
+		task, found := taskSvc.GetTaskByID(taskID)
+		if !found || task == nil {
+			continue
+		}
+		
+		// Check if task has unmet dependencies
+		for _, depID := range task.Dependencies {
+			// Skip if dependency is in the selection (will be executed together)
+			if selectedIDMap[depID] {
+				continue
+			}
+			
+			// Check if dependency is already done
+			depTask, depFound := taskSvc.GetTaskByID(depID)
+			if !depFound || depTask == nil {
+				// Dependency not found - skip validation for this one
+				continue
+			}
+			
+			// If dependency is not done AND not in selection, that's an error
+			if depTask.Status != taskmaster.StatusDone {
+				return fmt.Sprintf("Task %s has an incomplete dependency: %s (status: %s). Complete the dependency first or add it to your selection.", taskID, depID, depTask.Status)
+			}
+		}
+	}
+	
+	return ""
+}
+
+// validateReadyTasksExecution performs comprehensive validation before ready tasks execution
+// Shows error dialog if validation fails
+// Returns true if validation passed, false if validation failed
+func (m *Model) validateReadyTasksExecution(taskIDs []string) bool {
+	// Validate task selection (max 9 tasks)
+	if errMsg := m.validateTaskSelection(taskIDs); errMsg != "" {
+		m.showErrorDialog("Task Selection Validation", errMsg)
+		return false
+	}
+	
+	// Validate dependencies
+	if errMsg := m.validateTaskDependencies(taskIDs); errMsg != "" {
+		m.showErrorDialog("Dependency Validation", errMsg)
+		return false
+	}
+	
+	return true
+}
+
+// validateModelExecution validates the model before task execution
+// Shows error dialog if validation fails
+// Returns true if validation passed, false if validation failed
+func (m *Model) validateModelExecution(modelID string) bool {
+	// Validate model selection
+	if errMsg := m.validateModelSelection(modelID); errMsg != "" {
+		m.showErrorDialog("Model Validation", errMsg)
+		return false
+	}
+	
+	return true
 }

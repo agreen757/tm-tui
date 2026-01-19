@@ -28,6 +28,44 @@ test: ## Run tests
 	@echo "Running tests..."
 	@go test -v ./...
 
+test-coverage: ## Run tests with coverage report
+	@echo "Running tests with coverage..."
+	@go test -v ./... -coverprofile=coverage.out -covermode=atomic
+	@echo "\nCoverage Summary:"
+	@go tool cover -func=coverage.out | tail -1
+	@echo "\nGenerate HTML coverage report with: make coverage-html"
+
+coverage-html: test-coverage ## Generate HTML coverage report
+	@echo "Generating HTML coverage report..."
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "✓ Coverage report generated: coverage.html"
+
+test-unit: ## Run unit tests only
+	@echo "Running unit tests..."
+	@go test -v -short ./...
+
+test-integration: ## Run integration tests only
+	@echo "Running integration tests..."
+	@go test -v -run Integration ./...
+
+test-ci: ## Run tests for CI/CD pipeline
+	@echo "Running CI tests with coverage..."
+	@go test -v ./... -coverprofile=coverage.out -covermode=atomic -race
+	@echo "\nCoverage Summary:"
+	@go tool cover -func=coverage.out | tail -1
+
+test-suite: ## Run test suite with coverage verification (target: >80%)
+	@echo "Running test suite with coverage..."
+	@go test -v ./internal/executor -coverprofile=suite_coverage.out -covermode=atomic
+	@echo "\nExecutor Package Coverage:"
+	@go tool cover -func=suite_coverage.out | tail -1
+	@echo "\nRunning full test suite..."
+	@go test -v ./... -coverprofile=coverage.out -covermode=atomic
+	@echo "\nOverall Coverage:"
+	@go tool cover -func=coverage.out | tail -1
+	@echo "\nVerifying coverage threshold (>80%)..."
+	@./scripts/check-coverage.sh coverage.out 80 || echo "⚠ Coverage below 80% threshold"
+
 test-init: build ## Run startup initialization tests
 	@echo "Running startup initialization tests..."
 	@./scripts/test-startup-init.sh

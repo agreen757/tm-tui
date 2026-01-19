@@ -54,10 +54,22 @@ type ErrorMsg struct {
 // TickMsg is sent periodically to update the UI (e.g., for elapsed time in task runner)
 type TickMsg struct{}
 
+// ExecutionTimeoutMsg is sent when a task execution timeout expires
+type ExecutionTimeoutMsg struct {
+	Timestamp time.Time
+}
+
 // TickCmd returns a command that sends a tick message every second
 func TickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg {
 		return TickMsg{}
+	})
+}
+
+// ExecutionTimeoutCmd returns a command that sends an ExecutionTimeoutMsg after 30 seconds
+func ExecutionTimeoutCmd() tea.Cmd {
+	return tea.Tick(30*time.Second, func(t time.Time) tea.Msg {
+		return ExecutionTimeoutMsg{Timestamp: t}
 	})
 }
 

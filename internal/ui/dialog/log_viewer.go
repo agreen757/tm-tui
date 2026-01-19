@@ -569,11 +569,11 @@ func (lv *LogViewerPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	
-	// Intercept Tab/Shift+Tab to allow dialog focus cycling
+	// Intercept Tab/Shift+Tab/Esc to allow dialog to handle these keys
 	// These keys should NOT be handled by the log viewer
 	switch msg.String() {
-	case "tab", "shift+tab":
-		// Don't handle these keys - let dialog handle focus cycling
+	case "tab", "shift+tab", "esc":
+		// Don't handle these keys - let dialog handle
 		return lv, nil
 	}
 	
@@ -901,7 +901,7 @@ func wrapLineOptimized(line string, width int) []string {
 		return []string{line}
 	}
 	
-	// Count leading whitespace
+	// Count leading whitespace for continuation indent
 	leadingSpace := 0
 	for _, r := range runes {
 		if r == ' ' || r == '\t' {
@@ -911,15 +911,35 @@ func wrapLineOptimized(line string, width int) []string {
 		}
 	}
 	
+	// Create indent string for continuation lines
+	indent := ""
+	if leadingSpace > 0 {
+		indent = string(runes[:leadingSpace])
+	}
+	
 	wrapped := make([]string, 0, (lineLen/width)+1) // Pre-allocate with expected segments
 	start := 0
+	isFirstLine := true
 	
 	for start < lineLen {
+		// For continuation lines, account for the indent we'll prepend
+		effectiveWidth := width
+		if !isFirstLine && leadingSpace > 0 {
+			effectiveWidth = width - leadingSpace
+			if effectiveWidth < 20 {
+				effectiveWidth = 20 // Minimum effective width
+			}
+		}
+		
 		// Calculate segment end position
-		end := start + width
+		end := start + effectiveWidth
 		if end >= lineLen {
 			// Last segment - take everything remaining
-			wrapped = append(wrapped, string(runes[start:]))
+			segment := string(runes[start:])
+			if !isFirstLine && leadingSpace > 0 {
+				segment = indent + segment
+			}
+			wrapped = append(wrapped, segment)
 			break
 		}
 		
@@ -936,21 +956,26 @@ func wrapLineOptimized(line string, width int) []string {
 			}
 		}
 		
-		// If no space found and we're not at the start, force break
-		if !foundSpace && end < lineLen {
-			// Leave room for continuation indicator (>)
-			breakPoint = end - 1
+		// If no space found, force break at width
+		if !foundSpace {
+			breakPoint = end
 			if breakPoint <= start {
 				breakPoint = start + 1
 			}
 			
 			// Add segment with continuation indicator
 			segment := string(runes[start:breakPoint]) + ">"
+			if !isFirstLine && leadingSpace > 0 {
+				segment = indent + segment
+			}
 			wrapped = append(wrapped, segment)
 			start = breakPoint
 		} else {
 			// Break at word boundary
 			segment := string(runes[start:breakPoint])
+			if !isFirstLine && leadingSpace > 0 {
+				segment = indent + segment
+			}
 			wrapped = append(wrapped, segment)
 			
 			// Skip whitespace at break point
@@ -958,16 +983,9 @@ func wrapLineOptimized(line string, width int) []string {
 			for start < lineLen && (runes[start] == ' ' || runes[start] == '\t') {
 				start++
 			}
-			
-			// Add leading whitespace to continuation lines
-			if start < lineLen && leadingSpace > 0 {
-				indent := string(runes[:leadingSpace])
-				remaining := string(runes[start:])
-				runes = []rune(indent + remaining)
-				lineLen = len(runes)
-				start = 0
-			}
 		}
+		
+		isFirstLine = false
 	}
 	
 	return wrapped

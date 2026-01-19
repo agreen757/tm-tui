@@ -486,7 +486,7 @@ Crush AI autonomously:
 - `↑/↓` - Scroll output
 - `PgUp/PgDn` - Page scroll
 - `Home/End` - Scroll to top/bottom
-- `M` - Minimize/maximize modal
+- `Ctrl+W` - Minimize/maximize modal
 - `Ctrl+C` - Cancel running task (with confirmation for long-running tasks)
 - `Esc` - Close modal (only when no tasks are running)
 
@@ -609,7 +609,7 @@ When a git operation executes, you'll see:
 - `↑/↓` - Scroll through output
 - `Home/End` - Jump to top/bottom of output
 - `PgUp/PgDn` - Page scroll through output
-- `M` - Minimize/maximize the modal (continue using TUI in background)
+- `Ctrl+W` - Minimize/maximize the modal (continue using TUI in background)
 - `Esc` - Close modal (when operation is complete)
 
 #### Handling Git Operation Results

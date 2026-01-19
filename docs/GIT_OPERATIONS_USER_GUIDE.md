@@ -39,7 +39,7 @@ When you start a git operation, the Task Runner modal appears showing:
 │                                                     │
 │ ✓ Completed                                         │
 ├─────────────────────────────────────────────────────┤
-│ ↑↓ scroll • M minimize • Esc close                  │
+│ ↑↓ scroll • Ctrl+W minimize • Esc close                  │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -68,7 +68,7 @@ When you start a git operation, the Task Runner modal appears showing:
 
 **Control Hints:**
 - `↑↓ scroll` - Use arrow keys to scroll output
-- `M minimize` - Collapse modal but keep task running
+- `Ctrl+W minimize` - Collapse modal but keep task running
 - `Esc close` - Close modal (only available when not running)
 
 ## Keyboard Controls in Task Runner
@@ -79,7 +79,7 @@ When you start a git operation, the Task Runner modal appears showing:
 | `PageUp` / `PageDn` | Page scroll |
 | `Home` | Jump to top of output |
 | `End` | Jump to bottom of output |
-| `M` | Minimize/maximize modal |
+| `Ctrl+W` | Minimize/maximize modal |
 | `Ctrl+C` | Cancel operation (with confirmation) |
 | `Esc` | Close modal (only when not running) |
 
@@ -298,10 +298,10 @@ These prevent the operation from completing and need fixing.
 
 **Possible Causes:**
 - Button might be labeled differently
-- Press `M` instead of clicking
+- Press `Ctrl+W` instead of clicking
 
 **Solution:**
-- Use keyboard: Press `M` to minimize
+- Use keyboard: Press `Ctrl+W` to minimize
 - Look at the status bar for available commands
 
 ### Problem: Can't Close Modal
@@ -312,7 +312,7 @@ These prevent the operation from completing and need fixing.
 
 **Solution:**
 - Wait for status to show "Completed ✓" or "Failed ✗"
-- If minimized, press `M` to maximize
+- If minimized, press `Ctrl+W` to maximize
 - Then press `Esc` to close
 
 ### Problem: Operation Takes Too Long

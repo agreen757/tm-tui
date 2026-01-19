@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // DialogType represents the type of dialog
@@ -256,7 +257,7 @@ func (d BaseDialog) RenderBorder(content string) string {
 	}
 
 	style := lipgloss.NewStyle().
-		Padding(0, 1).
+		Padding(1, 1).
 		BorderStyle(d.Style.Border).
 		BorderForeground(borderColor).
 		Width(d.width - 2).  // Account for border
@@ -280,18 +281,33 @@ func (d BaseDialog) RenderBorder(content string) string {
 
 		titleText := " " + d.TitleText + " "
 		titleRendered := titleStyle.Render(titleText)
+		titleWidth := lipgloss.Width(titleRendered)
 
-		titlePos := (d.width - lipgloss.Width(titleRendered)) / 2
+		titlePos := (d.width - titleWidth) / 2
 		if titlePos < 0 {
 			titlePos = 0
 		}
 
-		// Get the first line of the rendered content
-		firstLine := renderer[:d.width]
-
-		// Replace part of the first line with the title
-		if titlePos+len(titleRendered) <= len(firstLine) {
-			renderer = firstLine[:titlePos] + titleRendered + firstLine[titlePos+len(titleRendered):] + renderer[d.width:]
+		// Split the renderer into lines
+		lines := strings.Split(renderer, "\n")
+		if len(lines) > 0 {
+			firstLine := lines[0]
+			
+			// Use ansi.Cut to properly extract parts of the ANSI-styled line
+			// Get the left part (from 0 to titlePos)
+			leftPart := ansi.Cut(firstLine, 0, titlePos)
+			
+			// Get the right part (from titlePos + titleWidth to end)
+			rightStart := titlePos + titleWidth
+			lineWidth := ansi.StringWidth(firstLine)
+			if rightStart <= lineWidth {
+				rightPart := ansi.Cut(firstLine, rightStart, lineWidth)
+				
+				// Combine: left + styled title + right
+				newFirstLine := leftPart + titleRendered + rightPart
+				lines[0] = newFirstLine
+				renderer = strings.Join(lines, "\n")
+			}
 		}
 	}
 

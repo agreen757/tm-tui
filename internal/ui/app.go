@@ -60,6 +60,111 @@ const (
 	PanelLog
 )
 
+// ExecutionQueue manages the queue of tasks selected for execution
+type ExecutionQueue struct {
+	TaskIDs         []string            // IDs of tasks to execute
+	CurrentIndex    int                 // Index of current task
+	ModelSelections map[string]string   // taskID -> modelID mapping
+	TaskStatus      map[string]string   // taskID -> status ("pending", "selecting", "executing", "done", "skipped")
+}
+
+// CurrentTask returns the current task ID based on CurrentIndex
+// Returns empty string if queue is empty or index is out of bounds
+func (eq *ExecutionQueue) CurrentTask() string {
+	if eq == nil || len(eq.TaskIDs) == 0 || eq.CurrentIndex < 0 || eq.CurrentIndex >= len(eq.TaskIDs) {
+		return ""
+	}
+	return eq.TaskIDs[eq.CurrentIndex]
+}
+
+// HasNext checks if there are more tasks to process
+func (eq *ExecutionQueue) HasNext() bool {
+	if eq == nil || len(eq.TaskIDs) == 0 {
+		return false
+	}
+	return eq.CurrentIndex < len(eq.TaskIDs)-1
+}
+
+// Next moves to the next task in the queue
+func (eq *ExecutionQueue) Next() {
+	if eq == nil || len(eq.TaskIDs) == 0 {
+		return
+	}
+	if eq.CurrentIndex < len(eq.TaskIDs)-1 {
+		eq.CurrentIndex++
+	}
+}
+
+// Skip removes the current task from the queue
+func (eq *ExecutionQueue) Skip() {
+	if eq == nil || len(eq.TaskIDs) == 0 || eq.CurrentIndex < 0 || eq.CurrentIndex >= len(eq.TaskIDs) {
+		return
+	}
+	taskID := eq.TaskIDs[eq.CurrentIndex]
+	// Remove from TaskIDs
+	eq.TaskIDs = append(eq.TaskIDs[:eq.CurrentIndex], eq.TaskIDs[eq.CurrentIndex+1:]...)
+	// Clean up status for this task
+	delete(eq.TaskStatus, taskID)
+	// Clean up model selection for this task
+	delete(eq.ModelSelections, taskID)
+	// Adjust index if it's now out of bounds
+	if eq.CurrentIndex >= len(eq.TaskIDs) && len(eq.TaskIDs) > 0 {
+		eq.CurrentIndex = len(eq.TaskIDs) - 1
+	}
+}
+
+// RemainingCount returns the count of remaining tasks
+func (eq *ExecutionQueue) RemainingCount() int {
+	if eq == nil {
+		return 0
+	}
+	return len(eq.TaskIDs)
+}
+
+// IsComplete checks if all tasks have model selections
+func (eq *ExecutionQueue) IsComplete() bool {
+	if eq == nil || len(eq.TaskIDs) == 0 {
+		return false
+	}
+	for _, taskID := range eq.TaskIDs {
+		if _, ok := eq.ModelSelections[taskID]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// GetModelSelection returns the model selection for a specific task
+// Returns empty string if task not found or model not selected
+func (eq *ExecutionQueue) GetModelSelection(taskID string) string {
+	if eq == nil || eq.ModelSelections == nil {
+		return ""
+	}
+	return eq.ModelSelections[taskID]
+}
+
+// SetModelSelection sets the model selection for a specific task
+func (eq *ExecutionQueue) SetModelSelection(taskID, modelID string) {
+	if eq == nil {
+		return
+	}
+	if eq.ModelSelections == nil {
+		eq.ModelSelections = make(map[string]string)
+	}
+	eq.ModelSelections[taskID] = modelID
+}
+
+// Reset clears all selections and resets the queue state
+func (eq *ExecutionQueue) Reset() {
+	if eq == nil {
+		return
+	}
+	eq.TaskIDs = []string{}
+	eq.CurrentIndex = 0
+	eq.ModelSelections = make(map[string]string)
+	eq.TaskStatus = make(map[string]string)
+}
+
 // Model represents the TUI application state
 type Model struct {
 	// Services
@@ -170,8 +275,17 @@ type Model struct {
 	selectedAgentType types.AgentType
 	agentRunChannels  map[string]chan tea.Msg // taskID -> output channel for active runs
 
+	// Ready tasks dialog selection context (for tracking task selection -> model selection flow)
+	readyTasksSelectionIDs []string
+
 	// PRD creation context (for tracking model selection -> PRD generation flow)
 	prdCreationPending bool
+
+	// Execution queue state
+	executionQueue          *ExecutionQueue                    // Queue of tasks to execute
+	activeTaskModelDialog   *dialog.TaskModelSelectionDialog   // Currently active task model selection dialog
+	showTaskModelDialog     bool                               // Whether to show the task model selection dialog
+	taskModelSelectionDone  map[string]bool                    // Track which tasks got model selected
 
 	// Styles
 	styles *Styles
@@ -261,12 +375,16 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		showHelp:          false,
 		commandMode:       false,
 		commandInput:      "",
-		searchInput:       searchInput,
-		styles:            NewStyles(),
-		logLines:          []string{},
-		projectRegistry:   taskService.ProjectRegistry(),
-		activeProject:     taskService.ActiveProjectMetadata(),
-		prdCreationState:  NewPrdCreationState(),
+		searchInput:         searchInput,
+		styles:              NewStyles(),
+		logLines:            []string{},
+		projectRegistry:     taskService.ProjectRegistry(),
+		activeProject:       taskService.ActiveProjectMetadata(),
+		prdCreationState:    NewPrdCreationState(),
+		executionQueue:      nil,
+		activeTaskModelDialog: nil,
+		showTaskModelDialog: false,
+		taskModelSelectionDone: make(map[string]bool),
 	}
 
 	m.commands = defaultCommandSpecs()
@@ -378,6 +496,14 @@ func (m *Model) GitStatus() git.GitStatus {
 		return git.GitStatus{}
 	}
 	return m.gitRefresher.GetStatus()
+}
+
+// ResetExecutionQueue clears all execution queue state for cancellation or completion
+func (m *Model) ResetExecutionQueue() {
+	m.executionQueue = nil
+	m.activeTaskModelDialog = nil
+	m.showTaskModelDialog = false
+	m.taskModelSelectionDone = make(map[string]bool)
 }
 
 // saveStateBeforeDialog saves the current app state before opening a dialog
@@ -619,6 +745,68 @@ func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
 		m.addLogLine(fmt.Sprintf("Selected item: %s", msg.SelectedItem.Title()))
 	}
 	return nil
+}
+
+// showTaskModelDialogCmd displays the task model selection dialog for the current task in the execution queue
+func (m *Model) showTaskModelDialogCmd() tea.Cmd {
+	// Validate execution queue
+	if m.executionQueue == nil || len(m.executionQueue.TaskIDs) == 0 {
+		m.addLogLine("Error: No tasks in execution queue")
+		return nil
+	}
+
+	// Get current task ID
+	taskID := m.executionQueue.CurrentTask()
+	if taskID == "" {
+		m.addLogLine("Error: No current task in execution queue")
+		return nil
+	}
+
+	// Get task details from taskService
+	taskSvc, ok := m.taskService.(*taskmaster.Service)
+	if !ok {
+		m.addLogLine("Error: Unable to access task service for multi-task execution")
+		return nil
+	}
+
+	task, found := taskSvc.GetTaskByID(taskID)
+	if !found || task == nil {
+		m.addLogLine(fmt.Sprintf("Error: Task %s not found in execution queue", taskID))
+		return nil
+	}
+
+	// Create task model selection dialog with queue information
+	// Wrap GetTaskByID to match the expected signature
+	getTaskByID := func(id string) *taskmaster.Task {
+		task, _ := taskSvc.GetTaskByID(id)
+		return task
+	}
+
+	dlg := dialog.NewTaskModelSelectionDialogWithQueue(
+		task,
+		m.executionQueue.CurrentIndex,
+		len(m.executionQueue.TaskIDs),
+		m.executionQueue.TaskIDs,
+		m.executionQueue.ModelSelections,
+		getTaskByID,
+	)
+
+	// Update task status
+	m.executionQueue.TaskStatus[taskID] = "selecting"
+
+	// Mark that we're showing the task model dialog
+	m.showTaskModelDialog = true
+	m.activeTaskModelDialog = dlg
+
+	// Push dialog to display it
+	m.appState.PushDialog(dlg)
+	m.addLogLine(fmt.Sprintf("Displaying model selection for task %d/%d: %s",
+		m.executionQueue.CurrentIndex+1,
+		len(m.executionQueue.TaskIDs),
+		task.Title))
+
+	// Start 30-second timeout for this dialog
+	return m.startExecutionTimeout()
 }
 
 func (m *Model) handleTagOperationMsg(msg TagOperationMsg) tea.Cmd {
@@ -1185,6 +1373,23 @@ func (m *Model) handleModelSelection(msg dialog.ModelSelectionMsg) tea.Cmd {
 		return m.startAgentRun(taskID, taskTitle, task, m.selectedAgentType, msg.ModelID)
 	}
 
+	// Check if this model selection is for bulk ready tasks execution
+	if len(m.readyTasksSelectionIDs) > 0 {
+		taskIDs := m.readyTasksSelectionIDs
+		m.readyTasksSelectionIDs = nil // Clear after capturing
+
+		m.addLogLine(fmt.Sprintf("Starting concurrent execution of %d tasks with model %s", len(taskIDs), msg.ModelID))
+
+		// Create model selections map with the same model for all tasks
+		modelSelections := make(map[string]string)
+		for _, taskID := range taskIDs {
+			modelSelections[taskID] = msg.ModelID
+		}
+
+		// Execute the selected tasks concurrently
+		return m.executeMultipleTasks(taskIDs, modelSelections)
+	}
+
 	return nil
 }
 
@@ -1314,6 +1519,142 @@ func (m *Model) executeCrushAgent(taskID, taskTitle string, task *taskmaster.Tas
 		dialog.StartCrushExecution(taskID, taskTitle, modelID, prompt, m.taskRunner),
 		dialog.ExecuteCrushSubprocess(taskID, modelID, prompt, tagName),
 	)
+}
+
+// executeMultipleTasks executes multiple tasks concurrently with per-task model selections
+func (m *Model) executeMultipleTasks(taskIDs []string, modelSelections map[string]string) tea.Cmd {
+	// Validate crush binary
+	if err := dialog.ValidateCrushBinary(); err != nil {
+		m.cleanupExecutionQueue()
+		appErr := NewDependencyError("Multi-Task Run", err.Error(), err).
+			WithRecoveryHints(
+				"Install Crush: go install github.com/charmbracelet/crush@latest",
+				"Ensure Crush is in your PATH",
+				"Verify the installation with: crush --version",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Validate taskIDs
+	if len(taskIDs) == 0 {
+		m.cleanupExecutionQueue()
+		appErr := NewOperationError("Multi-Task Run", "No tasks to execute", nil).
+			WithRecoveryHints(
+				"Select at least one task",
+				"Try again",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Get active tag context for log directory structure
+	tagName := ""
+	if m.activeProject != nil {
+		tagName = m.activeProject.PrimaryTag()
+	}
+	if tagName == "" && m.taskService != nil {
+		tagName = m.taskService.GetActiveTag()
+	}
+
+	// Ensure task runner modal exists
+	if m.taskRunner == nil {
+		modalWidth := int(float64(m.width) * 0.8)
+		modalHeight := int(float64(m.height) * 0.7)
+		m.taskRunner = dialog.NewTaskRunnerModal(modalWidth, modalHeight, m.appState.DialogStyle())
+	}
+
+	// Type assert taskService to access GetTaskByID
+	taskSvc, ok := m.taskService.(*taskmaster.Service)
+	if !ok {
+		m.cleanupExecutionQueue()
+		appErr := NewOperationError("Multi-Task Run", "Unable to access task service", nil).
+			WithRecoveryHints(
+				"Try restarting the TUI",
+				"Check task service initialization",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Prepare commands for each task execution
+	var cmds []tea.Cmd
+
+	for _, taskID := range taskIDs {
+		// Skip tasks without model selection
+		modelID, ok := modelSelections[taskID]
+		if !ok || modelID == "" {
+			m.addLogLine(fmt.Sprintf("Warning: Task %s has no model selection, skipping", taskID))
+			continue
+		}
+
+		// Get task details from taskService
+		task, found := taskSvc.GetTaskByID(taskID)
+		if !found || task == nil {
+			m.addLogLine(fmt.Sprintf("Warning: Task %s not found, skipping", taskID))
+			continue
+		}
+
+		taskTitle := task.Title
+
+		// Generate the prompt for this task using its specific model
+		prompt, err := dialog.GenerateCrushPrompt(task, modelID, tagName)
+		if err != nil {
+			m.addLogLine(fmt.Sprintf("Error generating prompt for task %s: %v", taskID, err))
+			continue
+		}
+
+		// Execute this task with its specific model
+		cmd, err := m.taskRunner.ExecuteTask(taskID, taskTitle, modelID, prompt, tagName)
+		if err != nil {
+			m.addLogLine(fmt.Sprintf("Error starting task %s: %v", taskID, err))
+			continue
+		}
+
+		cmds = append(cmds, cmd)
+		m.addLogLine(fmt.Sprintf("Started task %s: %s (model: %s)", taskID, taskTitle, modelID))
+
+		// Update status in execution queue if it exists
+		if m.executionQueue != nil {
+			m.executionQueue.TaskStatus[taskID] = "executing"
+		}
+	}
+
+	if len(cmds) == 0 {
+		m.cleanupExecutionQueue()
+		appErr := NewOperationError("Multi-Task Run", "No tasks could be started", nil).
+			WithRecoveryHints(
+				"Check if tasks exist",
+				"Verify task details are complete",
+				"Try again with different tasks",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Show task runner modal
+	m.taskRunnerVisible = true
+
+	m.addLogLine(fmt.Sprintf("Successfully started %d tasks concurrently", len(cmds)))
+
+	// Return all commands as a batch
+	return tea.Batch(cmds...)
+}
+
+// cleanupExecutionQueue resets the execution queue state and dialog configuration
+// This function should be called after task execution completes, is cancelled, or encounters errors
+// to ensure a clean state for the next execution cycle
+func (m *Model) cleanupExecutionQueue() {
+	m.executionQueue = nil
+	m.taskModelSelectionDone = make(map[string]bool)
+	m.showTaskModelDialog = false
+	m.activeTaskModelDialog = nil
+}
+
+// startExecutionTimeout returns a command that sends an ExecutionTimeoutMsg after 30 seconds
+// This is used to detect and recover from long-running or stuck task configuration operations
+func (m *Model) startExecutionTimeout() tea.Cmd {
+	return ExecutionTimeoutCmd()
 }
 
 // executeGeminiAgent executes a task using the Gemini agent
@@ -2304,6 +2645,13 @@ func (m *Model) updateFilteredTasks() {
 func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Dialog crash detection: if showTaskModelDialog is true but there's no active dialog,
+	// it means the dialog was unexpectedly closed or crashed
+	if m.showTaskModelDialog && !m.appState.HasActiveDialog() {
+		m.cleanupExecutionQueue()
+		m.showErrorDialog("Task Configuration Error", "Task configuration dialog was interrupted. Cleanup performed.")
+	}
+
 	switch msg := incomingMsg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -2422,6 +2770,37 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					// Finalize content and transition from loading state
 					content.FinalizeContent()
 				}
+			}
+		}
+
+		// Handle command completion for the list --ready command
+		if msg.Command == "list" && m.appState.IsNextTaskModalActive() {
+			// Parse the output and update the ReadyTasksDialog
+			if readyTasksDialog, ok := m.appState.ActiveDialog().(*dialog.ReadyTasksDialog); ok {
+				// Get accumulated output from appState
+				output := strings.Join(m.appState.NextTaskOutput(), "\n")
+
+				if !msg.Success && msg.Error != nil {
+					// Handle error cases
+					errMsg := msg.Error.Error()
+					var displayMsg string
+					switch {
+					case strings.Contains(errMsg, "not running in a Task Master workspace"):
+						displayMsg = "Not running in a Task Master workspace. Please open a valid project."
+					case strings.Contains(errMsg, "task-master binary not found"):
+						displayMsg = "task-master binary not found. Please check your installation."
+					case strings.Contains(errMsg, "task-master binary not executable"):
+						displayMsg = "task-master binary is not executable. Please check file permissions."
+					default:
+						displayMsg = fmt.Sprintf("Error: %s", errMsg)
+					}
+					output = displayMsg
+				} else if len(output) == 0 {
+					output = "No ready tasks available."
+				}
+
+				// Set content and trigger parsing
+				readyTasksDialog.SetContent(output)
 			}
 		}
 
@@ -2770,6 +3149,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			// Hide modal if no tasks are running
 			if !m.taskRunner.HasRunningTasks() {
 				m.taskRunnerVisible = false
+				// Clean up execution queue state when all tasks complete
+				m.cleanupExecutionQueue()
 			}
 			if cmd != nil {
 				cmds = append(cmds, cmd)
@@ -2821,6 +3202,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			// Hide modal if no tasks are running
 			if !m.taskRunner.HasRunningTasks() {
 				m.taskRunnerVisible = false
+				// Clean up execution queue state when all tasks are done (even if failed)
+				m.cleanupExecutionQueue()
 			}
 			if cmd != nil {
 				cmds = append(cmds, cmd)
@@ -2859,6 +3242,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			// Hide modal if no tasks are running
 			if !m.taskRunner.HasRunningTasks() {
 				m.taskRunnerVisible = false
+				// Clean up execution queue state when all tasks are cancelled
+				m.cleanupExecutionQueue()
 			}
 			if cmd != nil {
 				cmds = append(cmds, cmd)
@@ -2877,11 +3262,24 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				// Modal closed itself
 				m.taskRunnerVisible = false
 				m.taskRunner = nil
+				// Clean up execution queue state when auto-close completes
+				m.cleanupExecutionQueue()
 				m.addLogLine("Task runner closed (all tasks complete)")
 			} else {
 				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
 			}
 			return m, cmd
+		}
+		return m, nil
+
+	case ExecutionTimeoutMsg:
+		// Handle execution timeout for task configuration
+		// If there's an active execution queue and dialog, the operation has timed out
+		if m.executionQueue != nil && m.showTaskModelDialog {
+			m.cleanupExecutionQueue()
+			m.appState.PopDialog()
+			m.showErrorDialog("Task Configuration Timeout", "Task configuration took too long. Operation cancelled. Please try again.")
+			m.addLogLine("Error: Task configuration timeout after 30 seconds")
 		}
 		return m, nil
 
@@ -2896,6 +3294,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					// Modal requested close
 					m.taskRunnerVisible = false
 					m.taskRunner = nil
+					// Clean up execution queue state when modal closes during tick
+					m.cleanupExecutionQueue()
 					return m, nil
 				}
 				m.taskRunner = updatedDialog.(*dialog.TaskRunnerModal)
@@ -2981,6 +3381,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check if modal should be closed (returns nil when closed)
 			if updatedDialog == nil {
 				m.taskRunnerVisible = false
+				// Clean up execution queue state when modal is manually closed
+				m.cleanupExecutionQueue()
 			}
 			if cmd != nil {
 				cmds = append(cmds, cmd)
@@ -3045,6 +3447,16 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				if cmd := m.handleListSelection(msgTyped); cmd != nil {
 					cmds = append(cmds, cmd)
 				}
+			case dialog.DialogResultMsg:
+				// Handle DialogResultMsg while dialog is still active
+				// This is needed because ReadyTasksDialog emits DialogResultMsg via a command
+				// from HandleKey, and the message arrives while the dialog is still open
+				m.addLogLine(fmt.Sprintf("DEBUG: DialogResultMsg received - ID: %s, Button: %s", msgTyped.ID, msgTyped.Button))
+				if cmd := m.handleDialogResultMsg(msgTyped); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				// Return here since handleDialogResultMsg may close/change dialogs
+				return m, tea.Batch(cmds...)
 			case dialog.ConfirmationMsg:
 				// Handle confirmation result
 				if msgTyped.Result == dialog.ConfirmationResultYes {
@@ -3148,32 +3560,16 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				// Initialize NextTask modal state
 				m.appState.StartNextTaskModal()
 
-				// Create and show the dialog
-				nextTaskContent := dialog.NewNextTaskOutputContent()
-				dlg := dialog.NewModalDialog(
-					"Next Task",
-					80,
-					20,
-					nextTaskContent,
-				)
+				// Create and show the ready tasks dialog
+				readyTasksDialog := dialog.NewReadyTasksDialog()
+				m.appState.PushDialog(readyTasksDialog)
 
-				// Add dialog with callback to handle closure
-				m.appState.AddDialog(dlg, func(value interface{}, err error) tea.Cmd {
-					// Reset the next task modal state when dialog closes
-					if m.appState.IsNextTaskModalActive() {
-						m.appState.CloseNextTaskModal()
-						m.addLogLine("Next task modal closed")
-					}
-					// Restore focus to task list
-					m.focusedPanel = PanelTaskList
-					return nil
-				})
-
-				// Execute task-master next command via executor
-				m.addLogLine("Executing: task-master next")
-				if err := m.execService.Execute("next"); err != nil {
-					m.addLogLine(fmt.Sprintf("Error: %v", err))
-					nextTaskContent.SetError(err)
+				// Execute task-master list --ready command via executor
+				m.addLogLine("Executing: task-master list --ready")
+				if err := m.execService.Execute("list", "--ready"); err != nil {
+					// Set CLI execution error in dialog for better error reporting
+					readyTasksDialog.SetCLIExecutionError(err)
+					m.addLogLine(fmt.Sprintf("Error executing task-master: %v", err))
 				} else {
 					// Start listening for executor output
 					cmds = append(cmds, WaitForExecutorOutput(m.execService))
@@ -3448,7 +3844,7 @@ func (m *Model) View() string {
 			if modalWidth > 0 && modalWidth < m.width {
 				modalX = m.width - modalWidth - 2 // 2 spaces from right edge
 			}
-			modalY = 1 // 1 space from top
+			modalY = m.height - modalHeight - 2 // 2 spaces from bottom edge
 		} else {
 			// When maximized, keep centered
 			if modalWidth > 0 && modalWidth < m.width {

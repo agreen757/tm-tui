@@ -38,7 +38,7 @@ modal.SetAutoCloseDelay(5 * time.Second)
 │  [ERR] ERROR: remote error: tls: bad record MAC│
 │                                                │
 │  Tab/Shift+Tab: switch  ↑/↓: scroll           │
-│  M: minimize  Ctrl+C: cancel  Esc: (running)  │
+│  Ctrl+W: minimize  Ctrl+C: cancel  Esc: (running)  │
 └────────────────────────────────────────────────┘
 ```
 
@@ -51,7 +51,7 @@ modal.SetAutoCloseDelay(5 * time.Second)
 │  [ERR] ERROR: Agent processing failed         │
 │                                                │
 │  Tab/Shift+Tab: switch  ↑/↓: scroll           │
-│  M: minimize  Esc: close (auto in 3s)         │
+│  Ctrl+W: minimize  Esc: close (auto in 3s)         │
 └────────────────────────────────────────────────┘
 ```
 

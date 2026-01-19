@@ -53,6 +53,10 @@ type TaskExecutionTab struct {
 	cmd          *exec.Cmd
 	cancelFunc   context.CancelFunc
 	cancelReason string // Optional reason for cancellation
+	// Error handling
+	error              string        // Error message if task failed
+	executionTimeout   time.Duration // Timeout for task execution (0 = no timeout)
+	lastActivityTime   time.Time     // Last time output was received
 }
 
 // NewTaskExecutionTab creates a new task execution tab
@@ -64,22 +68,27 @@ func NewTaskExecutionTab(taskID, taskTitle, model string, width, height int, sty
 		style = DefaultDialogStyle()
 	}
 
+	now := time.Now()
 	return &TaskExecutionTab{
 		taskID:    taskID,
 		taskTitle: taskTitle,
 		status:    TaskRunning,
 		output:    []string{},
 		viewport:  vp,
-		startTime: time.Now(),
+		startTime: now,
 		endTime:   nil,
 		model:     model,
 		style:     style,
+		error:              "",
+		executionTimeout:   0, // No timeout by default
+		lastActivityTime:   now,
 	}
 }
 
 // AddOutputLine appends a line to the output buffer and updates the viewport
 func (t *TaskExecutionTab) AddOutputLine(line string) {
 	t.output = append(t.output, line)
+	t.lastActivityTime = time.Now() // Update last activity time
 	t.updateViewportContent()
 }
 
@@ -285,4 +294,57 @@ func (t *TaskExecutionTab) CancelExecution(reason string) bool {
 // GetCancellationReason returns the reason for cancellation, if any
 func (t *TaskExecutionTab) GetCancellationReason() string {
 	return t.cancelReason
+}
+
+// SetError sets an error message for this task execution
+func (t *TaskExecutionTab) SetError(errorMsg string) {
+	t.error = errorMsg
+	// Only set status to failed if not already failed
+	if t.status == TaskRunning {
+		t.SetStatus(TaskFailed)
+	}
+}
+
+// GetError returns the error message, if any
+func (t *TaskExecutionTab) GetError() string {
+	return t.error
+}
+
+// HasError returns true if there's an error
+func (t *TaskExecutionTab) HasError() bool {
+	return t.error != ""
+}
+
+// SetExecutionTimeout sets a timeout for this task execution
+// If timeout is 0, no timeout is enforced
+func (t *TaskExecutionTab) SetExecutionTimeout(timeout time.Duration) {
+	t.executionTimeout = timeout
+	t.lastActivityTime = time.Now() // Reset activity time when setting timeout
+}
+
+// IsTimedOut checks if the execution has timed out
+// Returns true if timeout is set and has been exceeded
+func (t *TaskExecutionTab) IsTimedOut() bool {
+	// No timeout if not set or task is not running
+	if t.executionTimeout == 0 || t.status != TaskRunning {
+		return false
+	}
+
+	elapsed := time.Since(t.lastActivityTime)
+	return elapsed > t.executionTimeout
+}
+
+// Cleanup performs resource cleanup for this tab
+// This should be called when task completes or modal closes
+func (t *TaskExecutionTab) Cleanup() {
+	// Cancel execution if still running
+	if t.status == TaskRunning {
+		t.CancelExecution("cleanup")
+	}
+
+	// Clear command reference
+	t.cmd = nil
+
+	// Clear cancel function
+	t.cancelFunc = nil
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/agreen757/tm-tui/internal/config"
@@ -63,6 +64,11 @@ func createTestModel() *Model {
 		styles:           NewStyles(),
 		logLines:         []string{},
 		appState:         NewAppState(nil, &keyMap),
+		// Execution queue state
+		executionQueue:         nil,
+		activeTaskModelDialog:  nil,
+		showTaskModelDialog:    false,
+		taskModelSelectionDone: make(map[string]bool),
 	}
 
 	m.buildTaskIndex()
@@ -1172,3 +1178,581 @@ func TestRefreshTaskTree_PreservesViewMode(t *testing.T) {
 	}
 }
 
+// TestExecutionQueueStateInitialization tests that Model includes execution queue state fields
+func TestExecutionQueueStateInitialization(t *testing.T) {
+	m := createTestModel()
+	
+	// Verify executionQueue field exists and is initialized to nil
+	if m.executionQueue != nil {
+		t.Error("Expected executionQueue to be nil initially")
+	}
+	
+	// Verify activeTaskModelDialog field exists and is initialized to nil
+	if m.activeTaskModelDialog != nil {
+		t.Error("Expected activeTaskModelDialog to be nil initially")
+	}
+	
+	// Verify showTaskModelDialog field exists and is initialized to false
+	if m.showTaskModelDialog != false {
+		t.Error("Expected showTaskModelDialog to be false initially")
+	}
+	
+	// Verify taskModelSelectionDone field exists and is initialized as empty map
+	if m.taskModelSelectionDone == nil {
+		t.Error("Expected taskModelSelectionDone to be initialized as non-nil map")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Errorf("Expected taskModelSelectionDone to be empty initially, got %d entries", len(m.taskModelSelectionDone))
+	}
+}
+
+// TestExecutionQueueStateCanBeModified tests that execution queue state can be properly modified
+func TestExecutionQueueStateCanBeModified(t *testing.T) {
+	m := createTestModel()
+	
+	// Create and assign an ExecutionQueue
+	queue := &ExecutionQueue{
+		TaskIDs:        []string{"1", "2"},
+		ModelSelections: make(map[string]string),
+		TaskStatus:     make(map[string]string),
+	}
+	m.executionQueue = queue
+	
+	// Verify the assignment worked
+	if m.executionQueue == nil {
+		t.Fatal("Failed to assign executionQueue")
+	}
+	if len(m.executionQueue.TaskIDs) != 2 {
+		t.Errorf("Expected 2 task IDs in queue, got %d", len(m.executionQueue.TaskIDs))
+	}
+	
+	// Modify showTaskModelDialog
+	m.showTaskModelDialog = true
+	if !m.showTaskModelDialog {
+		t.Error("Failed to set showTaskModelDialog to true")
+	}
+	
+	// Modify taskModelSelectionDone
+	m.taskModelSelectionDone["1"] = true
+	m.taskModelSelectionDone["2"] = true
+	if len(m.taskModelSelectionDone) != 2 {
+		t.Errorf("Expected 2 entries in taskModelSelectionDone, got %d", len(m.taskModelSelectionDone))
+	}
+}
+
+// TestExecutionQueueStateCanBeReset tests that execution queue state can be properly reset
+func TestExecutionQueueStateCanBeReset(t *testing.T) {
+	m := createTestModel()
+	
+	// Set up some state
+	m.executionQueue = &ExecutionQueue{
+		TaskIDs: []string{"1", "2"},
+	}
+	m.showTaskModelDialog = true
+	m.taskModelSelectionDone["1"] = true
+	m.taskModelSelectionDone["2"] = true
+	
+	// Verify state was set
+	if m.executionQueue == nil {
+		t.Fatal("Failed to set executionQueue for test")
+	}
+	if !m.showTaskModelDialog {
+		t.Fatal("Failed to set showTaskModelDialog for test")
+	}
+	if len(m.taskModelSelectionDone) != 2 {
+		t.Fatal("Failed to set taskModelSelectionDone for test")
+	}
+	
+	// Reset the state (this is how execution queue should be reset)
+	m.executionQueue = nil
+	m.showTaskModelDialog = false
+	m.taskModelSelectionDone = make(map[string]bool)
+	
+	// Verify state was reset
+	if m.executionQueue != nil {
+		t.Error("Expected executionQueue to be nil after reset")
+	}
+	if m.showTaskModelDialog {
+		t.Error("Expected showTaskModelDialog to be false after reset")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Errorf("Expected taskModelSelectionDone to be empty after reset, got %d entries", len(m.taskModelSelectionDone))
+	}
+}
+
+// TestExecutionQueueStateFieldTypes tests that fields have correct types
+func TestExecutionQueueStateFieldTypes(t *testing.T) {
+	m := createTestModel()
+	
+	// Test that fields exist and have the correct types
+	// This is a compile-time check via type assertions
+	var _ *ExecutionQueue = m.executionQueue
+	var _ bool = m.showTaskModelDialog
+	var _ map[string]bool = m.taskModelSelectionDone
+}
+
+// TestResetExecutionQueue tests the ResetExecutionQueue method
+func TestResetExecutionQueue(t *testing.T) {
+	m := createTestModel()
+	
+	// Set up some state
+	m.executionQueue = &ExecutionQueue{
+		TaskIDs: []string{"1", "2"},
+		ModelSelections: make(map[string]string),
+		TaskStatus: make(map[string]string),
+	}
+	m.showTaskModelDialog = true
+	m.taskModelSelectionDone["1"] = true
+	m.taskModelSelectionDone["2"] = true
+	
+	// Verify state was set
+	if m.executionQueue == nil {
+		t.Fatal("Failed to set executionQueue for test")
+	}
+	if !m.showTaskModelDialog {
+		t.Fatal("Failed to set showTaskModelDialog for test")
+	}
+	if len(m.taskModelSelectionDone) != 2 {
+		t.Fatal("Failed to set taskModelSelectionDone for test")
+	}
+	
+	// Call ResetExecutionQueue
+	m.ResetExecutionQueue()
+	
+	// Verify state was reset
+	if m.executionQueue != nil {
+		t.Error("Expected executionQueue to be nil after ResetExecutionQueue()")
+	}
+	if m.activeTaskModelDialog != nil {
+		t.Error("Expected activeTaskModelDialog to be nil after ResetExecutionQueue()")
+	}
+	if m.showTaskModelDialog {
+		t.Error("Expected showTaskModelDialog to be false after ResetExecutionQueue()")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Errorf("Expected taskModelSelectionDone to be empty after ResetExecutionQueue(), got %d entries", len(m.taskModelSelectionDone))
+	}
+}
+
+// TestResetExecutionQueue_WithNilFields tests ResetExecutionQueue when fields are already nil
+func TestResetExecutionQueue_WithNilFields(t *testing.T) {
+	m := createTestModel()
+	
+	// Verify initial state is already reset
+	if m.executionQueue != nil {
+		t.Fatal("Test setup error: executionQueue should be nil initially")
+	}
+	if m.activeTaskModelDialog != nil {
+		t.Fatal("Test setup error: activeTaskModelDialog should be nil initially")
+	}
+	if m.showTaskModelDialog {
+		t.Fatal("Test setup error: showTaskModelDialog should be false initially")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Fatal("Test setup error: taskModelSelectionDone should be empty initially")
+	}
+	
+	// Call ResetExecutionQueue on already-reset state (should be safe)
+	m.ResetExecutionQueue()
+	
+	// Verify state is still reset
+	if m.executionQueue != nil {
+		t.Error("Expected executionQueue to remain nil")
+	}
+	if m.activeTaskModelDialog != nil {
+		t.Error("Expected activeTaskModelDialog to remain nil")
+	}
+	if m.showTaskModelDialog {
+		t.Error("Expected showTaskModelDialog to remain false")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Errorf("Expected taskModelSelectionDone to remain empty, got %d entries", len(m.taskModelSelectionDone))
+	}
+}
+
+// TestResetExecutionQueue_MultipleResets tests calling ResetExecutionQueue multiple times
+func TestResetExecutionQueue_MultipleResets(t *testing.T) {
+	m := createTestModel()
+	
+	for i := 0; i < 3; i++ {
+		// Set state
+		m.executionQueue = &ExecutionQueue{
+			TaskIDs: []string{"task1", "task2", "task3"},
+		}
+		m.showTaskModelDialog = true
+		m.taskModelSelectionDone["task1"] = true
+		
+		// Reset
+		m.ResetExecutionQueue()
+		
+		// Verify reset
+		if m.executionQueue != nil {
+			t.Errorf("Iteration %d: Expected executionQueue to be nil after reset", i)
+		}
+		if m.showTaskModelDialog {
+			t.Errorf("Iteration %d: Expected showTaskModelDialog to be false after reset", i)
+		}
+		if len(m.taskModelSelectionDone) != 0 {
+			t.Errorf("Iteration %d: Expected taskModelSelectionDone to be empty after reset", i)
+		}
+	}
+}
+
+
+// TestExecutionQueueStateIndividualFieldModification tests modifying individual fields
+func TestExecutionQueueStateIndividualFieldModification(t *testing.T) {
+	m := createTestModel()
+	
+	// Test executionQueue field
+	queue := &ExecutionQueue{TaskIDs: []string{"1", "2"}}
+	m.executionQueue = queue
+	if m.executionQueue != queue {
+		t.Error("Failed to set/retrieve executionQueue field")
+	}
+	
+	// Test showTaskModelDialog field
+	m.showTaskModelDialog = true
+	if !m.showTaskModelDialog {
+		t.Error("Failed to set showTaskModelDialog to true")
+	}
+	m.showTaskModelDialog = false
+	if m.showTaskModelDialog {
+		t.Error("Failed to set showTaskModelDialog to false")
+	}
+	
+	// Test taskModelSelectionDone field
+	m.taskModelSelectionDone["task1"] = true
+	if !m.taskModelSelectionDone["task1"] {
+		t.Error("Failed to set taskModelSelectionDone entry")
+	}
+	delete(m.taskModelSelectionDone, "task1")
+	if _, exists := m.taskModelSelectionDone["task1"]; exists {
+		t.Error("Failed to delete taskModelSelectionDone entry")
+	}
+}
+
+// TestExecutionQueueStateMemoryManagement tests that reset properly clears references
+func TestExecutionQueueStateMemoryManagement(t *testing.T) {
+	m := createTestModel()
+	
+	// Create an execution queue with substantial state
+	queue := &ExecutionQueue{
+		TaskIDs: []string{"1", "2", "3", "4", "5"},
+		ModelSelections: map[string]string{
+			"1": "model1",
+			"2": "model2",
+			"3": "model3",
+		},
+		TaskStatus: map[string]string{
+			"1": "executing",
+			"2": "pending",
+		},
+		CurrentIndex: 2,
+	}
+	m.executionQueue = queue
+	
+	// Populate taskModelSelectionDone with many entries
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("task%d", i)
+		m.taskModelSelectionDone[key] = true
+	}
+	
+	// Verify state was set
+	if m.executionQueue == nil {
+		t.Fatal("Failed to set executionQueue")
+	}
+	if len(m.executionQueue.TaskIDs) != 5 {
+		t.Fatal("executionQueue not properly initialized")
+	}
+	if len(m.taskModelSelectionDone) != 10 {
+		t.Fatal("taskModelSelectionDone not properly initialized")
+	}
+	
+	// Reset and verify complete cleanup
+	m.ResetExecutionQueue()
+	
+	if m.executionQueue != nil {
+		t.Error("Expected executionQueue to be nil after reset")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Errorf("Expected taskModelSelectionDone to be empty, got %d entries", len(m.taskModelSelectionDone))
+	}
+	// Verify we can add to the reset map immediately
+	m.taskModelSelectionDone["newTask"] = true
+	if !m.taskModelSelectionDone["newTask"] {
+		t.Error("Failed to use taskModelSelectionDone map after reset")
+	}
+}
+
+// TestExecutionQueueStatePartialReset tests that reset clears all fields even if some were not set
+func TestExecutionQueueStatePartialReset(t *testing.T) {
+	m := createTestModel()
+	
+	// Set only some fields, leaving others at initial values
+	m.executionQueue = &ExecutionQueue{TaskIDs: []string{"1"}}
+	// Leave activeTaskModelDialog as nil
+	m.showTaskModelDialog = true
+	// Leave taskModelSelectionDone empty
+	
+	// Verify partial state
+	if m.executionQueue == nil {
+		t.Fatal("Failed to set executionQueue")
+	}
+	if m.activeTaskModelDialog != nil {
+		t.Fatal("Test setup error: activeTaskModelDialog should be nil")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Fatal("Test setup error: taskModelSelectionDone should be empty")
+	}
+	
+	// Reset
+	m.ResetExecutionQueue()
+	
+	// Verify all fields are reset to initial state
+	if m.executionQueue != nil {
+		t.Error("Expected executionQueue to be nil")
+	}
+	if m.activeTaskModelDialog != nil {
+		t.Error("Expected activeTaskModelDialog to be nil")
+	}
+	if m.showTaskModelDialog {
+		t.Error("Expected showTaskModelDialog to be false")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Errorf("Expected taskModelSelectionDone to be empty, got %d entries", len(m.taskModelSelectionDone))
+	}
+}
+
+// TestExecutionQueueIntegration_RepeatedCycles tests many cycles of queue creation and reset
+func TestExecutionQueueIntegration_RepeatedCycles(t *testing.T) {
+	m := createTestModel()
+	
+	// Run 100 cycles to test for memory leaks
+	for cycle := 0; cycle < 100; cycle++ {
+		// Create a queue with state
+		m.executionQueue = &ExecutionQueue{
+			TaskIDs: []string{"task1", "task2", "task3"},
+			ModelSelections: map[string]string{
+				"task1": "model1",
+				"task2": "model2",
+				"task3": "model3",
+			},
+			TaskStatus: map[string]string{
+				"task1": "executing",
+				"task2": "pending",
+				"task3": "pending",
+			},
+			CurrentIndex: 1,
+		}
+		
+		// Populate selection tracking
+		m.showTaskModelDialog = true
+		m.taskModelSelectionDone["task1"] = true
+		m.taskModelSelectionDone["task2"] = true
+		m.taskModelSelectionDone["task3"] = true
+		
+		// Verify state exists
+		if m.executionQueue == nil {
+			t.Fatalf("Cycle %d: Failed to create executionQueue", cycle)
+		}
+		if len(m.taskModelSelectionDone) != 3 {
+			t.Fatalf("Cycle %d: taskModelSelectionDone not properly set", cycle)
+		}
+		
+		// Reset
+		m.ResetExecutionQueue()
+		
+		// Verify reset
+		if m.executionQueue != nil {
+			t.Errorf("Cycle %d: executionQueue not reset", cycle)
+		}
+		if m.showTaskModelDialog {
+			t.Errorf("Cycle %d: showTaskModelDialog not reset", cycle)
+		}
+		if len(m.taskModelSelectionDone) != 0 {
+			t.Errorf("Cycle %d: taskModelSelectionDone not empty after reset", cycle)
+		}
+	}
+}
+
+// TestExecutionQueueIntegration_StateIsolation tests that queue state doesn't interfere with other Model fields
+func TestExecutionQueueIntegration_StateIsolation(t *testing.T) {
+	m := createTestModel()
+	
+	// Set up some execution queue state
+	m.executionQueue = &ExecutionQueue{TaskIDs: []string{"1", "2"}}
+	m.showTaskModelDialog = true
+	m.taskModelSelectionDone["1"] = true
+	
+	// Modify other Model fields
+	originalSelectedIndex := m.selectedIndex
+	m.selectedIndex = 5
+	m.commandMode = true
+	m.searchMode = true
+	
+	// Reset execution queue state
+	m.ResetExecutionQueue()
+	
+	// Verify execution queue state is reset
+	if m.executionQueue != nil {
+		t.Error("executionQueue not reset")
+	}
+	if m.showTaskModelDialog {
+		t.Error("showTaskModelDialog not reset")
+	}
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Error("taskModelSelectionDone not reset")
+	}
+	
+	// Verify other Model fields are unchanged
+	if m.selectedIndex == originalSelectedIndex {
+		t.Error("Other Model fields were affected by ResetExecutionQueue()")
+	}
+	if !m.commandMode {
+		t.Error("commandMode should not be affected")
+	}
+	if !m.searchMode {
+		t.Error("searchMode should not be affected")
+	}
+}
+
+// TestExecutionQueueIntegration_TaskSelection tests interaction with task selection
+func TestExecutionQueueIntegration_TaskSelection(t *testing.T) {
+	m := createTestModel()
+	
+	// Start with a selected task
+	if len(m.visibleTasks) == 0 {
+		t.Skip("Test requires visible tasks")
+	}
+	
+	originalTask := m.selectedTask
+	
+	// Set up execution queue state
+	m.executionQueue = &ExecutionQueue{
+		TaskIDs: []string{"1", "2"},
+		CurrentIndex: 0,
+	}
+	
+	// Perform task navigation
+	m.selectNext()
+	
+	// Verify task selection changed
+	if m.selectedTask == originalTask {
+		t.Fatal("Task selection should have changed")
+	}
+	
+	// Reset execution queue
+	m.ResetExecutionQueue()
+	
+	// Verify task selection is unchanged by reset
+	if m.selectedTask != m.visibleTasks[m.selectedIndex] {
+		t.Error("ResetExecutionQueue affected task selection")
+	}
+}
+
+// TestExecutionQueueIntegration_FieldConsistency tests field consistency after operations
+func TestExecutionQueueIntegration_FieldConsistency(t *testing.T) {
+	m := createTestModel()
+	
+	// Verify initial consistency
+	if m.executionQueue != nil || m.activeTaskModelDialog != nil ||
+		m.showTaskModelDialog || len(m.taskModelSelectionDone) != 0 {
+		t.Fatal("Test setup: initial state not clean")
+	}
+	
+	// Create queue and partially fill state
+	m.executionQueue = &ExecutionQueue{TaskIDs: []string{"1"}}
+	m.showTaskModelDialog = true
+	m.taskModelSelectionDone["1"] = true
+	
+	// Verify consistency before reset
+	if m.executionQueue == nil || !m.showTaskModelDialog || len(m.taskModelSelectionDone) == 0 {
+		t.Fatal("State setup failed")
+	}
+	
+	// Reset and verify all fields are consistent (all reset)
+	m.ResetExecutionQueue()
+	
+	// All fields should be at their initial state
+	allReset := m.executionQueue == nil &&
+		m.activeTaskModelDialog == nil &&
+		!m.showTaskModelDialog &&
+		len(m.taskModelSelectionDone) == 0
+	
+	if !allReset {
+		t.Error("After ResetExecutionQueue(), not all fields are reset to initial state")
+	}
+}
+
+// TestExecutionQueueIntegration_ConcurrentStateModification tests modifying state while resetting
+func TestExecutionQueueIntegration_ConcurrentStateModification(t *testing.T) {
+	m := createTestModel()
+	
+	// Set up state with multiple entries
+	m.executionQueue = &ExecutionQueue{TaskIDs: []string{"1", "2", "3", "4", "5"}}
+	for i := 1; i <= 5; i++ {
+		key := fmt.Sprintf("%d", i)
+		m.taskModelSelectionDone[key] = true
+	}
+	
+	// Verify state
+	if len(m.taskModelSelectionDone) != 5 {
+		t.Fatal("Failed to populate taskModelSelectionDone")
+	}
+	
+	// Reset
+	m.ResetExecutionQueue()
+	
+	// Try to add new entries after reset (map should be usable)
+	m.taskModelSelectionDone["6"] = true
+	m.taskModelSelectionDone["7"] = true
+	
+	// Verify new entries were added
+	if len(m.taskModelSelectionDone) != 2 {
+		t.Error("Failed to add entries to map after reset")
+	}
+	
+	// Reset again and verify clean state
+	m.ResetExecutionQueue()
+	if len(m.taskModelSelectionDone) != 0 {
+		t.Error("taskModelSelectionDone not empty after second reset")
+	}
+}
+
+
+// TestExecuteMultipleTasks_EmptyTaskList tests executeMultipleTasks with empty task list
+func TestExecuteMultipleTasks_EmptyTaskList(t *testing.T) {
+	m := createTestModel()
+	
+	// Call with empty task list
+	cmd := m.executeMultipleTasks([]string{}, map[string]string{})
+	
+	// Should return nil (error shown via appError)
+	if cmd != nil {
+		t.Error("Expected executeMultipleTasks to return nil for empty task list")
+	}
+}
+
+// TestExecuteMultipleTasks_ModelSelectionsMapProperty tests the function signature accepts modelSelections map
+func TestExecuteMultipleTasks_ModelSelectionsMapProperty(t *testing.T) {
+	m := createTestModel()
+	
+	// Test that we can pass a modelSelections map with different models per task
+	// This is the key change from the old function signature
+	modelSelections := map[string]string{
+		"1": "claude-3-5-sonnet-20241022",
+		"2": "gpt-4o-mini",
+		"3": "gemini-2.0",
+	}
+	
+	// The function should accept this map (it will fail to execute without taskService,
+	// but that's not the concern of this unit test)
+	taskIDs := []string{"1", "2", "3"}
+	
+	// Just verify the function can be called with the new signature
+	// The implementation will handle missing taskService appropriately
+	_ = m.executeMultipleTasks(taskIDs, modelSelections)
+	
+	// This test passes if the function accepts the new signature without compilation errors
+	t.Log("executeMultipleTasks signature correctly accepts modelSelections map")
+}

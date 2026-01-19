@@ -100,6 +100,23 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 	// Log that the command was triggered
 	m.addLogLine("Alt+R pressed - Run Task with AI Agent")
 	
+	// Count selected tasks
+	numSelected := 0
+	selectedTaskIDs := []string{}
+	for taskID := range m.selectedIDs {
+		if m.selectedIDs[taskID] {
+			numSelected++
+			selectedTaskIDs = append(selectedTaskIDs, taskID)
+		}
+	}
+	
+	// If multiple tasks are selected, use multi-task execution
+	if numSelected > 1 {
+		m.addLogLine(fmt.Sprintf("Running %d selected tasks with AI Agent", numSelected))
+		return m.handleRunTasksCommand(selectedTaskIDs)
+	}
+	
+	// Single task execution (existing behavior)
 	// Check if a task is selected
 	if m.selectedTask == nil {
 		m.addLogLine("ERROR: No task selected")
@@ -140,9 +157,46 @@ func (m *Model) handleRunTaskCommand() tea.Cmd {
 	return nil
 }
 
+// handleRunTasksCommand initializes the execution queue for multi-task execution
+func (m *Model) handleRunTasksCommand(selectedTaskIDs []string) tea.Cmd {
+	// Validate selected task IDs
+	if len(selectedTaskIDs) == 0 {
+		m.addLogLine("ERROR: No tasks selected for execution")
+		appErr := NewValidationError("Run Tasks", "No tasks selected for execution.", nil).
+			WithRecoveryHints(
+				"Use Space to select multiple tasks",
+				"Press Alt+R to execute selected tasks",
+			)
+		m.showAppError(appErr)
+		return nil
+	}
+
+	// Create execution queue
+	m.executionQueue = &ExecutionQueue{
+		TaskIDs:         selectedTaskIDs,
+		CurrentIndex:    0,
+		ModelSelections: make(map[string]string),
+		TaskStatus:      make(map[string]string),
+	}
+
+	// Initialize task statuses
+	for _, id := range selectedTaskIDs {
+		m.executionQueue.TaskStatus[id] = "pending"
+	}
+
+	// Reset selection tracking
+	m.taskModelSelectionDone = make(map[string]bool)
+
+	m.addLogLine(fmt.Sprintf("Initialized execution queue with %d tasks", len(selectedTaskIDs)))
+
+	// Show first task model dialog
+	return m.showTaskModelDialogCmd()
+}
+
 // DEPRECATED: Replaced by ExpansionScopeDialog
 // This function is kept for backward compatibility only.
 func (m *Model) openTaskSelectionDialog() tea.Cmd {
+
 	dm := m.dialogManager()
 	if dm == nil {
 		return nil

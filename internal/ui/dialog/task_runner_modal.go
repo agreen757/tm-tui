@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/agreen757/tm-tui/internal/config"
 )
 
 // Message types for TaskRunnerModal
@@ -111,8 +112,8 @@ func DefaultTaskRunnerKeyMap() TaskRunnerKeyMap {
 			key.WithHelp("end", "bottom"),
 		),
 		Minimize: key.NewBinding(
-			key.WithKeys("m", "M"),
-			key.WithHelp("m", "minimize"),
+			key.WithKeys("ctrl+w"),
+			key.WithHelp("ctrl+w", "minimize"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("ctrl+c"),
@@ -218,6 +219,8 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	case tea.KeyMsg:
 		result, cmd := m.HandleKey(msg)
 		if result == DialogResultClose {
+			// Cleanup all tabs before closing
+			m.cleanup()
 			return nil, cmd
 		}
 		return m, cmd
@@ -243,6 +246,20 @@ func (m *TaskRunnerModal) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		return m, m.checkAutoClose()
 	case TaskFailedMsg:
 		m.setTabStatus(msg.TaskID, TaskFailed)
+		
+		// Set error information in the tab
+		if tab := m.getTabByID(msg.TaskID); tab != nil {
+			errorMsg := msg.Error
+			if msg.Message != "" {
+				errorMsg = msg.Message
+			}
+			tab.SetError(errorMsg)
+			// Add error to output for visibility
+			if errorMsg != "" {
+				tab.AddOutputLine(fmt.Sprintf("\n[ERROR] %s", errorMsg))
+			}
+		}
+		
 		// For git tasks, keep the modal open on failure
 		if m.isGitTask(msg.TaskID) {
 			m.handleGitTaskFailure(msg.TaskID)
@@ -281,6 +298,22 @@ func (m *TaskRunnerModal) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 	// Cancel any pending git auto-close timers on any key press
 	if len(m.gitAutoCloseTimers) > 0 {
 		m.gitAutoCloseTimers = make(map[string]*time.Time)
+	}
+
+	// When minimized, only handle action shortcuts (Minimize, Cancel, Close)
+	// Let all other keys pass through to the main UI/dialog system
+	if m.minimized {
+		if key.Matches(msg, m.keyMap.Minimize) {
+			m.ToggleMinimize()
+			return DialogResultNone, nil
+		}
+		if key.Matches(msg, m.keyMap.Cancel) {
+			m.cancelActiveTask()
+			return DialogResultNone, nil
+		}
+		// Don't handle Close (Esc) when minimized - let it pass through
+		// to close any open dialogs in the main UI
+		return DialogResultNone, nil
 	}
 
 	// Pass key to active tab for scrolling control
@@ -363,6 +396,127 @@ func (m *TaskRunnerModal) addTab(taskID, taskTitle, model string) {
 	m.activeTab = len(m.tabs) - 1
 }
 
+// ValidateModelInConfig checks if the selected model exists in the Crush configuration.
+// Returns an error with the message "Selected model not available in Crush configuration"
+// if the model is not found in the configuration's Models map.
+func (m *TaskRunnerModal) ValidateModelInConfig(model string) error {
+	// Load Crush configuration
+	crushConfig, err := config.LoadCrushConfig()
+	if err != nil {
+		// If we can't load the config, we can't validate
+		// Return a specific error about this
+		return fmt.Errorf("failed to load Crush configuration: %w", err)
+	}
+
+	// Check if model exists in the configuration
+	if crushConfig.Models == nil || len(crushConfig.Models) == 0 {
+		// If no models are configured at all, the requested model can't exist
+		return fmt.Errorf("Selected model not available in Crush configuration")
+	}
+
+	// Look for the model in the Models map (which uses model types like "large", "small" as keys)
+	// We need to check if the requested model matches any of the configured models
+	for _, selectedModel := range crushConfig.Models {
+		if selectedModel.Model == model {
+			// Model found in configuration
+			return nil
+		}
+	}
+
+	// Model not found in any configuration entry
+	return fmt.Errorf("Selected model not available in Crush configuration")
+}
+
+// StartTasks creates tabs for multiple tasks and prepares them for concurrent execution.
+// This method validates that the number of tasks doesn't exceed 9 (the maximum tab limit),
+// creates a tab for each task with proper naming format, and sets the modal to visible.
+// The actual task execution is handled separately through the subprocess mechanism.
+//
+// Parameters:
+//   - taskIDs: slice of task IDs to create tabs for
+//   - model: the AI model to use for all tasks
+//
+// Returns:
+//   - error: validation error if taskIDs is empty, exceeds 9 tasks, model is invalid, or other issues
+func (m *TaskRunnerModal) StartTasks(taskIDs []string, model string) error {
+	// Validate input
+	if len(taskIDs) == 0 {
+		return fmt.Errorf("no task IDs provided")
+	}
+	if len(taskIDs) > 9 {
+		return fmt.Errorf("cannot start more than 9 tasks concurrently (requested: %d)", len(taskIDs))
+	}
+
+	// Validate that the model exists in Crush configuration
+	if err := m.ValidateModelInConfig(model); err != nil {
+		return err
+	}
+
+	// Calculate tab dimensions
+	width, height, _, _ := m.GetRect()
+	tabWidth := width - 2
+	tabHeight := height - 8 // Account for header, footer, and margins
+
+	if tabHeight < 1 {
+		tabHeight = 1
+	}
+
+	// Create tabs for each task
+	for _, taskID := range taskIDs {
+		// Format: "Task {ID}: {Title}"
+		// For now, use taskID as title - the actual title will be set when TaskStartedMsg arrives
+		taskTitle := fmt.Sprintf("Task %s", taskID)
+		
+		tab := NewTaskExecutionTab(taskID, taskTitle, model, tabWidth, tabHeight, m.Style)
+		m.tabs = append(m.tabs, tab)
+	}
+
+	// Set active tab to first tab
+	// Note: Modal visibility is managed by the app, not here
+	m.activeTab = 0
+
+	return nil
+}
+
+// ExecuteTask starts execution for a specific task in its corresponding tab.
+// This method wraps the existing Crush execution functions to provide a convenient
+// API for starting tasks, especially for concurrent multi-task execution.
+//
+// The method launches execution in a goroutine and returns immediately. Output is
+// streamed back via TaskOutputMsg, TaskCompletedMsg, or TaskFailedMsg messages
+// that the app must subscribe to and forward to the modal.
+//
+// Parameters:
+//   - taskID: the task identifier (must match an existing tab)
+//   - taskTitle: human-readable task title
+//   - model: AI model to use for execution
+//   - prompt: the prompt/instructions to send to Crush
+//   - tagName: tag context for organizing log files
+//
+// Returns:
+//   - tea.Cmd: command that initiates the execution
+//   - error: validation error if task is invalid or binary not found
+func (m *TaskRunnerModal) ExecuteTask(taskID, taskTitle, model, prompt, tagName string) (tea.Cmd, error) {
+	// Validate crush binary is available
+	if err := ValidateCrushBinary(); err != nil {
+		return nil, err
+	}
+	
+	// Return a batch command that:
+	// 1. Sends TaskStartedMsg to create the tab for this task
+	// 2. Starts the subprocess execution
+	return tea.Batch(
+		func() tea.Msg {
+			return TaskStartedMsg{
+				TaskID:    taskID,
+				TaskTitle: taskTitle,
+				Model:     model,
+			}
+		},
+		ExecuteCrushSubprocess(taskID, model, prompt, tagName),
+	), nil
+}
+
 // setTabStatus updates the status of a tab by task ID
 func (m *TaskRunnerModal) setTabStatus(taskID string, status TaskExecutionStatus) {
 	for _, tab := range m.tabs {
@@ -371,6 +525,31 @@ func (m *TaskRunnerModal) setTabStatus(taskID string, status TaskExecutionStatus
 			return
 		}
 	}
+}
+
+// getTabByID retrieves a tab by task ID
+// Returns nil if tab not found
+func (m *TaskRunnerModal) getTabByID(taskID string) *TaskExecutionTab {
+	for _, tab := range m.tabs {
+		if tab.GetTaskID() == taskID {
+			return tab
+		}
+	}
+	return nil
+}
+
+// cleanup performs resource cleanup for all tabs
+// This should be called when the modal is closing
+func (m *TaskRunnerModal) cleanup() {
+	for _, tab := range m.tabs {
+		if tab != nil {
+			tab.Cleanup()
+		}
+	}
+	
+	// Clear all tabs
+	m.tabs = []*TaskExecutionTab{}
+	m.activeTab = 0
 }
 
 // nextTab switches to the next tab
@@ -818,7 +997,7 @@ func (m *TaskRunnerModal) renderFooter() string {
 		"1-9: jump",
 		"↑/↓: scroll",
 		"PgUp/PgDn: page",
-		"M: minimize",
+		"Ctrl+W: minimize",
 		"Ctrl+C: cancel",
 	}
 

@@ -155,17 +155,6 @@ func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	
 	// Then handle specific message types
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		// Handle global dialog keys (Esc, Tab, etc.)
-		// Note: Panel-specific keys like Enter were already handled above
-		result, cmd := d.HandleKey(msg)
-		if result != DialogResultNone {
-			return d, cmd
-		}
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		
 	case tea.WindowSizeMsg:
 		// Update dialog dimensions from window resize
 		d.SetRect(msg.Width, msg.Height, 0, 0)

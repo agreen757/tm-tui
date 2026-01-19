@@ -142,6 +142,9 @@ func NewModelSelectionDialog(width, height int, configPath string) *ModelSelecti
 		providerList:     providerList,
 	}
 
+	// Set dialog ID for result handling
+	dialog.ListDialog.BaseDialog.ID = "model_selection_dialog"
+
 	dialog.SetFooterHints(
 		ShortcutHint{Key: "↑/↓", Label: "Navigate"},
 		ShortcutHint{Key: "Tab", Label: "Filter provider"},
@@ -531,6 +534,21 @@ func (d *ModelSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 			// Cycle through provider filters
 			d.CycleProviderFilter()
 			return d, nil
+		}
+	case ListSelectionMsg:
+		// Handle confirmation via ListSelectionMsg from ListDialog
+		if msg.SelectedItem != nil {
+			if modelItem, ok := msg.SelectedItem.(*ModelSelectionListItem); ok {
+				opt := modelItem.GetOption()
+				// Emit DialogResultMsg when model is selected
+				return d, func() tea.Msg {
+					return DialogResultMsg{
+						ID:     "model_selection_dialog",
+						Button: "confirm",
+						Value:  &ModelSelectionResult{Provider: opt.Provider, ModelID: opt.ModelID},
+					}
+				}
+			}
 		}
 	}
 	// Let parent handle other messages

@@ -136,7 +136,7 @@ func DefaultKeyMap() KeyMap {
 		),
 		NextTask: key.NewBinding(
 			key.WithKeys("n"),
-			key.WithHelp("n", "next task"),
+			key.WithHelp("n", "list ready tasks"),
 		),
 		Refresh: key.NewBinding(
 			key.WithKeys("r"),

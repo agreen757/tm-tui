@@ -679,8 +679,9 @@ func TestLoadFilesFromPath(t *testing.T) {
 	}
 
 	browser := &LogFileBrowserModel{
-		list:  list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
-		files: []FileEntry{},
+		list:     list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
+		files:    []FileEntry{},
+		dirCache: NewLRUCache(10),
 	}
 
 	// Load files from the test directory
@@ -698,8 +699,9 @@ func TestLoadFilesFromPath(t *testing.T) {
 // TestLoadFilesFromPathInvalidPath tests error handling
 func TestLoadFilesFromPathInvalidPath(t *testing.T) {
 	browser := &LogFileBrowserModel{
-		list:  list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
-		files: []FileEntry{},
+		list:     list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
+		files:    []FileEntry{},
+		dirCache: NewLRUCache(10),
 	}
 
 	// Try loading from invalid path (outside .taskmaster)
