@@ -1,4 +1,4 @@
-.PHONY: build run test clean install help install-memory install-crush install-gemini check-gemini check-crush check-project-setup init-crush-config install-all test-init
+.PHONY: build run test clean install help install-memory install-crush install-task-master install-gemini check-gemini check-crush check-project-setup init-crush-config install-all test-init
 
 # Binary name
 BINARY_NAME=tm-tui
@@ -100,6 +100,25 @@ init-crush-config: build ## Initialize .crush.json if missing
 		fi; \
 	fi
 
+install-task-master: ## Install Task Master AI CLI via npm
+	@echo "Installing Task Master AI CLI..."
+	@if ! command -v npm >/dev/null 2>&1; then \
+		echo "✗ npm not found. Please install Node.js first."; \
+		echo "  Visit: https://nodejs.org/"; \
+		exit 1; \
+	fi
+	@if command -v task-master >/dev/null 2>&1; then \
+		echo "✓ Task Master CLI already installed at: $$(which task-master)"; \
+	else \
+		npm install -g task-master-ai; \
+		if command -v task-master >/dev/null 2>&1; then \
+			echo "✓ Task Master CLI installed successfully at: $$(which task-master)"; \
+		else \
+			echo "⚠ Warning: Installation completed but task-master not found in PATH"; \
+			echo "  You may need to configure your PATH or use npx task-master"; \
+		fi; \
+	fi
+
 install-crush: ## Install the Crush CLI (required for task execution)
 	@echo "Installing Crush CLI..."
 	@go install $(CRUSH_REPO)@latest
@@ -113,12 +132,23 @@ install-memory: ## Install the memory tool for LLM agents
 	@echo "Installing memory tool..."
 	@go build -o $(GOPATH)/bin/memory ./cmd/memory
 
-install-all: install install-memory install-gemini ## Install all binaries (tm-tui, memory, crush, gemini)
+install-all: install install-memory install-task-master install-gemini ## Install all binaries (tm-tui, memory, task-master, crush, gemini)
 	@echo "All tools installed successfully."
 
 fmt: ## Format code
 	@echo "Formatting code..."
 	@go fmt ./...
+
+check-task-master: ## Check if Task Master CLI is installed
+	@echo "Checking for Task Master CLI..."
+	@if command -v task-master >/dev/null 2>&1; then \
+		echo "✓ Task Master CLI is installed at: $$(which task-master)"; \
+		task-master --version 2>/dev/null || echo "  (version command not available)"; \
+	else \
+		echo "✗ Task Master CLI is not installed"; \
+		echo "Run 'make install-task-master' to install"; \
+		exit 1; \
+	fi
 
 vet: ## Run go vet
 	@echo "Running go vet..."
