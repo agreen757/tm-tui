@@ -8,18 +8,18 @@ import (
 // TestToggleMarkdown tests the markdown toggle functionality
 func TestToggleMarkdown(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	// Default should be disabled
 	if lv.markdownEnabled {
 		t.Error("Markdown should be disabled by default")
 	}
-	
+
 	// Toggle on
 	lv.ToggleMarkdown()
 	if !lv.markdownEnabled {
 		t.Error("Markdown should be enabled after toggle")
 	}
-	
+
 	// Toggle back off
 	lv.ToggleMarkdown()
 	if lv.markdownEnabled {
@@ -30,7 +30,7 @@ func TestToggleMarkdown(t *testing.T) {
 // TestRenderMarkdownHeaders tests header rendering
 func TestRenderMarkdownHeaders(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -72,11 +72,11 @@ func TestRenderMarkdownHeaders(t *testing.T) {
 			contains: []string{"Title", "Section", "Subsection"},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := lv.renderMarkdown(tt.input)
-			
+
 			for _, expected := range tt.contains {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q, got: %s", expected, result)
@@ -89,7 +89,7 @@ func TestRenderMarkdownHeaders(t *testing.T) {
 // TestRenderMarkdownCodeBlocks tests code block rendering
 func TestRenderMarkdownCodeBlocks(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -116,11 +116,11 @@ func TestRenderMarkdownCodeBlocks(t *testing.T) {
 			contains: []string{"Some text", "code", "More text"},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := lv.renderMarkdown(tt.input)
-			
+
 			for _, expected := range tt.contains {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q", expected)
@@ -133,7 +133,7 @@ func TestRenderMarkdownCodeBlocks(t *testing.T) {
 // TestRenderInlineFormatting tests inline markdown formatting
 func TestRenderInlineFormatting(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -165,11 +165,11 @@ func TestRenderInlineFormatting(t *testing.T) {
 			contains: []string{"foo", "bar"},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := lv.renderInlineFormatting(tt.input)
-			
+
 			for _, expected := range tt.contains {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q, got: %s", expected, result)
@@ -182,7 +182,7 @@ func TestRenderInlineFormatting(t *testing.T) {
 // TestRenderMarkdownLists tests list rendering
 func TestRenderMarkdownLists(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -209,11 +209,11 @@ func TestRenderMarkdownLists(t *testing.T) {
 			contains: []string{"Dash item", "Asterisk item"},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := lv.renderMarkdown(tt.input)
-			
+
 			for _, expected := range tt.contains {
 				if !strings.Contains(result, expected) {
 					t.Errorf("Expected result to contain %q", expected)
@@ -226,7 +226,7 @@ func TestRenderMarkdownLists(t *testing.T) {
 // TestRenderMarkdownPreservesStructure tests that structure is preserved
 func TestRenderMarkdownPreservesStructure(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	input := `# Title
 ## Section 1
 Some text here
@@ -239,9 +239,9 @@ More text with **bold** and ` + "`code`" + `
 ` + "```" + `
 code block
 ` + "```"
-	
+
 	result := lv.renderMarkdown(input)
-	
+
 	// Check that all content is present
 	expectedParts := []string{
 		"Title",
@@ -254,7 +254,7 @@ code block
 		"code",
 		"code block",
 	}
-	
+
 	for _, part := range expectedParts {
 		if !strings.Contains(result, part) {
 			t.Errorf("Expected result to contain %q", part)
@@ -265,7 +265,7 @@ code block
 // TestRenderMarkdownEdgeCases tests edge cases
 func TestRenderMarkdownEdgeCases(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	tests := []struct {
 		name   string
 		input  string
@@ -307,11 +307,11 @@ func TestRenderMarkdownEdgeCases(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := lv.renderMarkdown(tt.input)
-			
+
 			if !tt.verify(result) {
 				t.Errorf("Verification failed for input %q, got: %s", tt.input, result)
 			}
@@ -324,15 +324,15 @@ func TestMarkdownWithWordWrap(t *testing.T) {
 	lv := NewLogViewerPanel(40, 24, nil)
 	lv.markdownEnabled = true
 	lv.wordWrap = true
-	
+
 	content := "# Very Long Title That Should Wrap When Rendered\n\nThis is a very long paragraph that should wrap properly even with markdown rendering enabled."
 	lv.SetContent(content, "test.md")
-	
+
 	// Check that content was rendered
 	if lv.renderedContent == "" {
 		t.Error("Expected rendered content to be non-empty")
 	}
-	
+
 	// Check that content contains expected parts
 	if !strings.Contains(lv.renderedContent, "Title") {
 		t.Error("Expected rendered content to contain 'Title'")
@@ -342,13 +342,13 @@ func TestMarkdownWithWordWrap(t *testing.T) {
 // TestFooterShowsMarkdownToggle tests that footer displays markdown toggle status
 func TestFooterShowsMarkdownToggle(t *testing.T) {
 	lv := NewLogViewerPanel(80, 24, nil)
-	
+
 	// Markdown off
 	footer := lv.renderFooter()
 	if !strings.Contains(footer, "Markdown: OFF") {
 		t.Error("Expected footer to show 'Markdown: OFF'")
 	}
-	
+
 	// Markdown on
 	lv.markdownEnabled = true
 	footer = lv.renderFooter()

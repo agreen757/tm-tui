@@ -91,16 +91,16 @@ func TestRenderStatusBarWithGitAvailable(t *testing.T) {
 func TestRenderStatusBarModes(t *testing.T) {
 	cfg := &config.Config{TaskMasterPath: "/tmp/test"}
 	baseModel := Model{
-		config:       cfg,
-		width:        80,
-		height:       24,
-		styles:       NewStyles(),
-		helpModel:    help.New(),
-		keyMap:       NewKeyMap(cfg),
+		config:    cfg,
+		width:     80,
+		height:    24,
+		styles:    NewStyles(),
+		helpModel: help.New(),
+		keyMap:    NewKeyMap(cfg),
 	}
 
 	tests := []struct {
-		name string
+		name  string
 		setup func(*Model)
 	}{
 		{
@@ -155,15 +155,15 @@ func TestGitInfoStylingOutput(t *testing.T) {
 		expectLen func(int) bool
 	}{
 		{
-			name:     "no git repo shows styled message",
-			isRepo:   false,
-			gitAvail: true,
+			name:      "no git repo shows styled message",
+			isRepo:    false,
+			gitAvail:  true,
 			expectLen: func(l int) bool { return l > 10 }, // Has ANSI codes
 		},
 		{
-			name:     "git unavailable returns empty",
-			isRepo:   false,
-			gitAvail: false,
+			name:      "git unavailable returns empty",
+			isRepo:    false,
+			gitAvail:  false,
 			expectLen: func(l int) bool { return l == 0 },
 		},
 	}
@@ -243,7 +243,7 @@ func TestRenderProgressBar(t *testing.T) {
 		name       string
 		percentage float64
 		width      int
-		expectLen  int // in runes, not bytes
+		expectLen  int  // in runes, not bytes
 		expectFull bool // all filled (▓)
 		expectZero bool // all empty (░)
 	}{
@@ -385,17 +385,17 @@ func TestRenderProgressBar50Percent(t *testing.T) {
 // TestCalculateTaskProgress tests the calculateTaskProgress function with various task configurations
 func TestCalculateTaskProgress(t *testing.T) {
 	tests := []struct {
-		name       string
-		tasks      []taskmaster.Task
-		wantDone   int
-		wantTotal  int
+		name        string
+		tasks       []taskmaster.Task
+		wantDone    int
+		wantTotal   int
 		wantPercent float64
 	}{
 		{
-			name:       "empty task list",
-			tasks:      []taskmaster.Task{},
-			wantDone:   0,
-			wantTotal:  0,
+			name:        "empty task list",
+			tasks:       []taskmaster.Task{},
+			wantDone:    0,
+			wantTotal:   0,
 			wantPercent: 0.0,
 		},
 		{
@@ -1361,58 +1361,58 @@ func TestRenderNarrowHeaderMinimalSeparators(t *testing.T) {
 // TestRenderHeaderLayoutSelection tests that renderHeader selects the correct layout based on terminal width
 func TestRenderHeaderLayoutSelection(t *testing.T) {
 	tests := []struct {
-		name          string
-		width         int
+		name           string
+		width          int
 		expectedLayout string // "wide", "medium", or "narrow"
-		checkPattern  string  // Pattern to verify correct layout
+		checkPattern   string // Pattern to verify correct layout
 	}{
 		{
-			name:          "width 100 selects wide layout",
-			width:         100,
+			name:           "width 100 selects wide layout",
+			width:          100,
 			expectedLayout: "wide",
-			checkPattern:  "Progress: ",
+			checkPattern:   "Progress: ",
 		},
 		{
-			name:          "width 120 selects wide layout",
-			width:         120,
+			name:           "width 120 selects wide layout",
+			width:          120,
 			expectedLayout: "wide",
-			checkPattern:  "Progress: ",
+			checkPattern:   "Progress: ",
 		},
 		{
-			name:          "width 80 selects medium layout",
-			width:         80,
+			name:           "width 80 selects medium layout",
+			width:          80,
 			expectedLayout: "medium",
-			checkPattern:  "Task Master TUI",
+			checkPattern:   "Task Master TUI",
 		},
 		{
-			name:          "width 90 selects medium layout",
-			width:         90,
+			name:           "width 90 selects medium layout",
+			width:          90,
 			expectedLayout: "medium",
-			checkPattern:  "Task Master TUI",
+			checkPattern:   "Task Master TUI",
 		},
 		{
-			name:          "width 99 selects medium layout (just below wide)",
-			width:         99,
+			name:           "width 99 selects medium layout (just below wide)",
+			width:          99,
 			expectedLayout: "medium",
-			checkPattern:  "Task Master TUI",
+			checkPattern:   "Task Master TUI",
 		},
 		{
-			name:          "width 79 selects narrow layout",
-			width:         79,
+			name:           "width 79 selects narrow layout",
+			width:          79,
 			expectedLayout: "narrow",
-			checkPattern:  "TM-TUI",
+			checkPattern:   "TM-TUI",
 		},
 		{
-			name:          "width 60 selects narrow layout",
-			width:         60,
+			name:           "width 60 selects narrow layout",
+			width:          60,
 			expectedLayout: "narrow",
-			checkPattern:  "TM-TUI",
+			checkPattern:   "TM-TUI",
 		},
 		{
-			name:          "width 40 selects narrow layout",
-			width:         40,
+			name:           "width 40 selects narrow layout",
+			width:          40,
 			expectedLayout: "narrow",
-			checkPattern:  "TM-TUI",
+			checkPattern:   "TM-TUI",
 		},
 	}
 
@@ -1455,9 +1455,9 @@ func TestRenderHeaderLayoutSelection(t *testing.T) {
 // TestRenderHeaderDefaultTag tests that renderHeader uses default tag when config is nil or ActiveTag is empty
 func TestRenderHeaderDefaultTag(t *testing.T) {
 	tests := []struct {
-		name          string
-		config        *config.Config
-		expectedTag   string
+		name        string
+		config      *config.Config
+		expectedTag string
 	}{
 		{
 			name:        "nil config uses default tag",
@@ -1518,19 +1518,19 @@ func TestRenderHeaderDefaultTag(t *testing.T) {
 // TestRenderHeaderProgressIntegration tests that renderHeader correctly integrates with calculateTaskProgress
 func TestRenderHeaderProgressIntegration(t *testing.T) {
 	tests := []struct {
-		name       string
-		tasks      []taskmaster.Task
-		width      int
-		wantDone   int
-		wantTotal  int
+		name        string
+		tasks       []taskmaster.Task
+		width       int
+		wantDone    int
+		wantTotal   int
 		wantPercent string
 	}{
 		{
-			name:  "empty task list shows zero progress",
-			tasks: []taskmaster.Task{},
-			width: 120,
-			wantDone: 0,
-			wantTotal: 0,
+			name:        "empty task list shows zero progress",
+			tasks:       []taskmaster.Task{},
+			width:       120,
+			wantDone:    0,
+			wantTotal:   0,
 			wantPercent: "0",
 		},
 		{
@@ -1539,9 +1539,9 @@ func TestRenderHeaderProgressIntegration(t *testing.T) {
 				{ID: "1", Title: "Task 1", Status: taskmaster.StatusDone},
 				{ID: "2", Title: "Task 2", Status: taskmaster.StatusPending},
 			},
-			width: 120,
-			wantDone: 1,
-			wantTotal: 2,
+			width:       120,
+			wantDone:    1,
+			wantTotal:   2,
 			wantPercent: "50",
 		},
 		{
@@ -1550,9 +1550,9 @@ func TestRenderHeaderProgressIntegration(t *testing.T) {
 				{ID: "1", Title: "Task 1", Status: taskmaster.StatusDone},
 				{ID: "2", Title: "Task 2", Status: taskmaster.StatusDone},
 			},
-			width: 120,
-			wantDone: 2,
-			wantTotal: 2,
+			width:       120,
+			wantDone:    2,
+			wantTotal:   2,
 			wantPercent: "100",
 		},
 	}
@@ -1600,10 +1600,10 @@ func TestRenderHeaderWidthBoundaries(t *testing.T) {
 		expectMedium bool
 		expectNarrow bool
 	}{
-		{width: 100, expectWide: true},   // Exactly at wide threshold
-		{width: 99, expectMedium: true},  // Just below wide threshold
-		{width: 80, expectMedium: true},  // Exactly at medium threshold
-		{width: 79, expectNarrow: true},  // Just below medium threshold
+		{width: 100, expectWide: true},  // Exactly at wide threshold
+		{width: 99, expectMedium: true}, // Just below wide threshold
+		{width: 80, expectMedium: true}, // Exactly at medium threshold
+		{width: 79, expectNarrow: true}, // Just below medium threshold
 	}
 
 	for _, tt := range tests {
@@ -1868,10 +1868,10 @@ func TestRenderHeaderResponsive(t *testing.T) {
 func TestRenderHeaderLayoutExclusivity(t *testing.T) {
 	// Test cases verify mutually exclusive elements to catch layout mix-ups
 	tests := []struct {
-		name         string
-		width        int
-		tag          string
-		shouldHave   []string
+		name          string
+		width         int
+		tag           string
+		shouldHave    []string
 		shouldNotHave []string
 	}{
 		// App name exclusivity tests
@@ -2007,7 +2007,7 @@ func createTestModelWithWidth(width int, tag string) Model {
 		TaskMasterPath: "/tmp/test",
 		ActiveTag:      tag,
 	}
-	
+
 	// Create some test tasks to provide deterministic progress (5 done, 5 pending = 50%)
 	tasks := []taskmaster.Task{
 		{ID: "1", Title: "Task 1", Status: "done"},
@@ -2021,7 +2021,7 @@ func createTestModelWithWidth(width int, tag string) Model {
 		{ID: "9", Title: "Task 9", Status: "pending"},
 		{ID: "10", Title: "Task 10", Status: "pending"},
 	}
-	
+
 	model := Model{
 		config:    cfg,
 		width:     width,
@@ -2032,11 +2032,11 @@ func createTestModelWithWidth(width int, tag string) Model {
 		helpModel: help.New(),
 		keyMap:    NewKeyMap(cfg),
 	}
-	
+
 	// Build task index for progress calculation
 	for i := range model.tasks {
 		model.taskIndex[model.tasks[i].ID] = &model.tasks[i]
 	}
-	
+
 	return model
 }

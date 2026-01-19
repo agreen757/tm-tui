@@ -347,4 +347,3 @@ func draftToTask(draft SubtaskDraft, id, parentID string, index int) Task {
 
 	return task
 }
-

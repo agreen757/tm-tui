@@ -91,8 +91,8 @@ func classifyLine(line string) LineType {
 	trimmed := strings.TrimSpace(line)
 
 	// Metadata lines (tag info, file paths)
-	if strings.HasPrefix(trimmed, "🏷") || 
-	   strings.Contains(trimmed, "Listing tasks from:") {
+	if strings.HasPrefix(trimmed, "🏷") ||
+		strings.Contains(trimmed, "Listing tasks from:") {
 		return LineTypeMetadata
 	}
 
@@ -119,15 +119,15 @@ func isDecorativeLine(line string) bool {
 	// Box-drawing characters used in table formatting
 	// Decorative lines use corners, junctions, and horizontal lines
 	decorativeChars := "┌┬┐├┼┤└┴┘─"
-	
+
 	// Must contain at least one decorative character
 	if !strings.ContainsAny(line, decorativeChars) {
 		return false
 	}
-	
+
 	// All box-drawing chars for checking
 	boxChars := "┌┬┐├┼┤└┴┘─│"
-	
+
 	for _, char := range line {
 		// Skip whitespace
 		if char == ' ' || char == '\t' {
@@ -138,7 +138,7 @@ func isDecorativeLine(line string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -148,13 +148,13 @@ func isHeaderLine(line string) bool {
 	if !strings.Contains(line, "│") {
 		return false
 	}
-	
+
 	// Check for common header keywords
 	lowerLine := strings.ToLower(line)
 	hasID := strings.Contains(lowerLine, "id")
 	hasTitle := strings.Contains(lowerLine, "title")
 	hasStatus := strings.Contains(lowerLine, "status")
-	
+
 	// Header must have at least ID and Title columns
 	return hasID && hasTitle && hasStatus
 }
@@ -165,17 +165,17 @@ func isDataRow(line string) bool {
 	if !strings.Contains(line, "│") {
 		return false
 	}
-	
+
 	// Must not be a decorative line
 	if isDecorativeLine(line) {
 		return false
 	}
-	
+
 	// Must not be a header line
 	if isHeaderLine(line) {
 		return false
 	}
-	
+
 	// Data rows contain pipes but not exclusively box-drawing chars
 	return true
 }
@@ -194,7 +194,7 @@ func extractColumnBoundaries(headerLine string) []ColumnInfo {
 	}
 
 	var columns []ColumnInfo
-	
+
 	// The pipe character "│" is 3 bytes in UTF-8
 	const pipeSeparator = "│"
 	pipeLen := len(pipeSeparator)
@@ -273,27 +273,27 @@ type ReadyTasksDialog struct {
 	selectedIDs        []string
 	rawOutput          string
 	parseError         error
-	mu                 sync.Mutex // Protects concurrent access to tasks during async fetching
+	mu                 sync.Mutex              // Protects concurrent access to tasks during async fetching
 	cache              map[string]*TaskDetails // Cache for fetched task details keyed by task ID
-	showRawOutput      bool                   // Flag to show raw output when parsing fails
-	cliExecutionError  error                  // Stores CLI execution error with context
-	emptyResultMessage string                 // Custom message when no tasks available
-	statusMessage      string                 // Status message shown during operations (e.g., "Configuring models...")
+	showRawOutput      bool                    // Flag to show raw output when parsing fails
+	cliExecutionError  error                   // Stores CLI execution error with context
+	emptyResultMessage string                  // Custom message when no tasks available
+	statusMessage      string                  // Status message shown during operations (e.g., "Configuring models...")
 }
 
 // NewReadyTasksDialog creates a new ready tasks dialog
 func NewReadyTasksDialog() *ReadyTasksDialog {
 	dialog := &ReadyTasksDialog{
-		ListDialog:        NewListDialog("Ready Tasks", 80, 20, []ListItem{}),
-		tasks:             []ReadyTaskItem{},
-		selectedIDs:       []string{},
-		rawOutput:         "",
-		parseError:        nil,
-		cache:             make(map[string]*TaskDetails),
-		showRawOutput:     false,
-		cliExecutionError: nil,
+		ListDialog:         NewListDialog("Ready Tasks", 80, 20, []ListItem{}),
+		tasks:              []ReadyTaskItem{},
+		selectedIDs:        []string{},
+		rawOutput:          "",
+		parseError:         nil,
+		cache:              make(map[string]*TaskDetails),
+		showRawOutput:      false,
+		cliExecutionError:  nil,
 		emptyResultMessage: "",
-		statusMessage:     "",
+		statusMessage:      "",
 	}
 
 	// Assign ID for dialog result handling
@@ -451,7 +451,7 @@ func parseComplexity(value string) int {
 	value = strings.ReplaceAll(value, "●", "")
 	value = strings.ReplaceAll(value, "○", "")
 	value = strings.TrimSpace(value)
-	
+
 	// Try to parse as integer
 	var complexity int
 	fmt.Sscanf(value, "%d", &complexity)
@@ -464,17 +464,17 @@ func parseList(value string) []string {
 	if strings.TrimSpace(value) == "" {
 		return nil
 	}
-	
+
 	parts := strings.Split(value, ",")
 	var result []string
-	
+
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part != "" {
 			result = append(result, part)
 		}
 	}
-	
+
 	return result
 }
 
@@ -495,48 +495,48 @@ func detectTitleTruncation(title string) (string, bool) {
 // Returns an error if the table format is invalid or cannot be parsed
 func (d *ReadyTasksDialog) parseTasksFromTable() error {
 	lines := strings.Split(d.rawOutput, "\n")
-	
+
 	var headerCols []string
 	var currentTask *ReadyTaskItem
 	var foundHeader bool
-	
+
 	for _, line := range lines {
 		lineType := classifyLine(line)
-		
+
 		switch lineType {
 		case LineTypeHeader:
 			// Split by pipe and extract column names
 			parts := strings.Split(line, "│")
 			headerCols = []string{}
-			
+
 			// Skip first and last parts (empty before first │ and after last │)
 			for i := 1; i < len(parts)-1; i++ {
 				headerCols = append(headerCols, strings.TrimSpace(parts[i]))
 			}
-			
+
 			if len(headerCols) == 0 {
 				return fmt.Errorf("failed to parse header: no columns found")
 			}
-			
+
 			foundHeader = true
-			
+
 		case LineTypeData:
 			if len(headerCols) == 0 {
 				continue // Skip data rows before header is found
 			}
-			
+
 			// Split data row by pipes
 			parts := strings.Split(line, "│")
 			if len(parts) < 3 { // Need at least opening, data, and closing
 				continue
 			}
-			
+
 			// Extract column values (skip first and last which are empty)
 			values := make([]string, 0, len(parts)-2)
 			for i := 1; i < len(parts)-1; i++ {
 				values = append(values, strings.TrimSpace(parts[i]))
 			}
-			
+
 			// Create a map of column name to value
 			colMap := make(map[string]string)
 			for i, col := range headerCols {
@@ -544,7 +544,7 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 					colMap[strings.ToLower(col)] = values[i]
 				}
 			}
-			
+
 			// Helper to find value by column name (case-insensitive, partial match)
 			getValue := func(name string) string {
 				name = strings.ToLower(name)
@@ -560,9 +560,9 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 				}
 				return ""
 			}
-			
+
 			id := getValue("id")
-			
+
 			// If ID is present, start a new task
 			if id != "" {
 				// Save previous task if exists
@@ -581,18 +581,18 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 					}
 					d.tasks = append(d.tasks, *currentTask)
 				}
-				
+
 				// Create new task
 				currentTask = &ReadyTaskItem{
 					ID: id,
 				}
-				
+
 				// Extract all other fields
 				titleRaw := getValue("title")
 				cleanedTitle, isTruncated := detectTitleTruncation(titleRaw)
 				currentTask.TaskTitle = cleanedTitle
 				currentTask.TitleTruncated = isTruncated
-				
+
 				// Parse status (handle symbols that might be alone or with text)
 				status := getValue("status")
 				// Remove symbols
@@ -602,12 +602,12 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 				status = strings.TrimSpace(status)
 				// If status is empty after removing symbols, it might continue on next line
 				currentTask.Status = status
-				
+
 				currentTask.Priority = getValue("priority")
 				currentTask.Dependencies = parseList(getValue("dependencies"))
 				currentTask.Blocks = parseList(getValue("blocks"))
 				currentTask.Complexity = parseComplexity(getValue("complex"))
-				
+
 			} else if currentTask != nil {
 				// This is a continuation line (empty ID column)
 				// Append to title if it continues on next line
@@ -622,7 +622,7 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 					// Update truncation flag
 					currentTask.TitleTruncated = isTruncated
 				}
-				
+
 				// Status might continue on the next line (e.g., symbol on line 1, text on line 2)
 				statusContinuation := getValue("status")
 				// Remove any symbols
@@ -630,7 +630,7 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 				statusContinuation = strings.ReplaceAll(statusContinuation, "○", "")
 				statusContinuation = strings.ReplaceAll(statusContinuation, "✓", "")
 				statusContinuation = strings.TrimSpace(statusContinuation)
-				
+
 				if statusContinuation != "" {
 					if currentTask.Status == "" {
 						// First line had only symbol, this line has the actual status
@@ -643,7 +643,7 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 			}
 		}
 	}
-	
+
 	// Add the last task if exists
 	if currentTask != nil && currentTask.ID != "" {
 		// Clean up trailing ellipses in status if this is the last line
@@ -662,16 +662,16 @@ func (d *ReadyTasksDialog) parseTasksFromTable() error {
 		}
 		d.tasks = append(d.tasks, *currentTask)
 	}
-	
+
 	// Check if we found a valid table structure
 	if !foundHeader {
 		return fmt.Errorf("no table header found in output")
 	}
-	
+
 	if len(d.tasks) == 0 {
 		return fmt.Errorf("no tasks parsed from table output")
 	}
-	
+
 	return nil
 }
 
@@ -682,7 +682,7 @@ func (d *ReadyTasksDialog) parseTasksFromText() {
 		// Successfully parsed as table
 		return
 	}
-	
+
 	// Fall back to regex-based parsing
 	lines := strings.Split(d.rawOutput, "\n")
 
@@ -745,7 +745,7 @@ func (d *ReadyTasksDialog) parseTasksFromText() {
 	if currentTask != nil && currentTask.ID != "" {
 		d.tasks = append(d.tasks, *currentTask)
 	}
-	
+
 	// If no tasks were parsed by either method, set error with context
 	if len(d.tasks) == 0 {
 		d.parseError = fmt.Errorf("failed to parse tasks: unrecognized output format. Output starts with: %s", truncateStrLen(strings.TrimSpace(d.rawOutput), 50))
@@ -1197,7 +1197,7 @@ func (d *ReadyTasksDialog) updateUIWithCachedDetails(truncatedIDs []string) {
 		}
 	}
 	d.mu.Unlock()
-	
+
 	// Update the list display
 	d.updateUIAfterFetch()
 }
@@ -1225,23 +1225,24 @@ func (d *ReadyTasksDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 			return DialogResultNone, nil
 		}
 	}
-	
+
 	// Handle Enter key directly - emit DialogResultMsg with selected tasks
 	// This fixes the issue where ListSelectionMsg from ListDialog.HandleKey()
-	// was being emitted as a command AFTER the dialog was closed due to 
+	// was being emitted as a command AFTER the dialog was closed due to
 	// DialogResultConfirm, preventing the message from ever reaching Update()
 	if msg.String() == "enter" {
 		selectedTasks := d.GetSelectedTasks()
+
 		if len(selectedTasks) == 0 {
 			// No tasks selected - cancel the dialog
 			return DialogResultCancel, nil
 		}
-		
+
 		// Show configuration message when multiple tasks are selected
 		if len(selectedTasks) > 1 {
 			d.statusMessage = fmt.Sprintf("Configuring models for %d tasks...", len(selectedTasks))
 		}
-		
+
 		// Return DialogResultNone + cmd that emits DialogResultMsg
 		// This prevents immediate dialog close by DialogManager but triggers
 		// the proper message flow to handleDialogResultMsg in delete_workflow.go
@@ -1253,12 +1254,12 @@ func (d *ReadyTasksDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 			}
 		}
 	}
-	
+
 	// Handle Escape key - cancel the dialog
 	if msg.String() == "esc" {
 		return DialogResultCancel, nil
 	}
-	
+
 	// Delegate other key presses to ListDialog (navigation, space for toggle, etc.)
 	return d.ListDialog.HandleKey(msg)
 }
@@ -1269,7 +1270,7 @@ func (d *ReadyTasksDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	// ListSelectionMsg from ListDialog was emitted as a command AFTER the dialog
 	// was closed due to DialogResultConfirm. This Update() method now only handles
 	// delegation to the embedded ListDialog for non-key messages (like window resize).
-	
+
 	// Delegate all messages to ListDialog, but return self to preserve custom View()
 	_, cmd := d.ListDialog.Update(msg)
 	return d, cmd
@@ -1323,7 +1324,7 @@ func (d *ReadyTasksDialog) renderRawOutput() string {
 		Foreground(d.ListDialog.Style.BorderColor).
 		Render(strings.Repeat("─", 76))
 	lines = append(lines, separator)
-	
+
 	// Add spacing
 	lines = append(lines, "")
 
@@ -1380,12 +1381,12 @@ func (d *ReadyTasksDialog) renderTaskTable() string {
 
 	// Selection status line
 	selected, total := d.GetSelectionCount()
-	
+
 	// Format selection count display
 	selectionCountText := fmt.Sprintf("Selected: %d task(s)", selected)
 	statusStyle := lipgloss.NewStyle().
 		Foreground(d.ListDialog.Style.TextColor)
-	
+
 	// Add additional help text based on selection state
 	var helpText string
 	if selected == 0 {
@@ -1398,9 +1399,9 @@ func (d *ReadyTasksDialog) renderTaskTable() string {
 		helpText = fmt.Sprintf("%s / %d total (Space to toggle, Alt+A for all)", selectionCountText, total)
 		statusStyle = statusStyle.Bold(true)
 	}
-	
+
 	lines = append(lines, statusStyle.Render(helpText))
-	
+
 	// Add spacing between header area and content
 	lines = append(lines, "")
 
@@ -1481,9 +1482,9 @@ func (d *ReadyTasksDialog) renderTaskTable() string {
 func (d *ReadyTasksDialog) formatTaskRow(id, title, priority string, complexity interface{}, isHeader bool) string {
 	// Column widths: ID(5) | Title(30) | Priority(10) | Complexity(8) + separators(3)
 	const (
-		idWidth        = 5
-		titleWidth     = 30
-		priorityWidth  = 10
+		idWidth         = 5
+		titleWidth      = 30
+		priorityWidth   = 10
 		complexityWidth = 8
 	)
 
@@ -1497,7 +1498,7 @@ func (d *ReadyTasksDialog) formatTaskRow(id, title, priority string, complexity 
 
 	// Apply consistent padding to match checkbox area in formatTaskRowWithCheckbox
 	padding := "      " // Matches width of "► [✓] " (checkbox area)
-	
+
 	// For the header, ensure it lines up with the content rows that include checkboxes
 	row := fmt.Sprintf("%s%-5s │ %-30s │ %-10s │ %8s",
 		padding,
@@ -1510,11 +1511,11 @@ func (d *ReadyTasksDialog) formatTaskRow(id, title, priority string, complexity 
 	// Use visible width for consistency
 	const totalWidth = 76
 	displayWidth := lipgloss.Width(row)
-	
+
 	if displayWidth < totalWidth {
 		row = row + strings.Repeat(" ", totalWidth-displayWidth)
 	}
-	
+
 	return row
 }
 
@@ -1540,13 +1541,13 @@ func (d *ReadyTasksDialog) formatTaskRowWithCheckbox(task ReadyTaskItem, focused
 
 	// Consistent alignment with fixed-width checkbox area
 	checkboxArea := fmt.Sprintf("%s%s ", prefix, checkbox)
-	
+
 	// Ensure checkbox area has consistent width whether focused or not
 	if !focused {
 		// Add padding to align with focused items that have the arrow
 		checkboxArea = strings.Repeat(" ", 2) + checkbox + " "
 	}
-	
+
 	row := fmt.Sprintf("%s%-5s │ %-30s │ %-10s │ %8d",
 		checkboxArea,
 		truncateStr(task.ID, 5),
@@ -1558,9 +1559,9 @@ func (d *ReadyTasksDialog) formatTaskRowWithCheckbox(task ReadyTaskItem, focused
 	// Use visible width (accounting for ANSI codes) rather than byte length
 	displayWidth := lipgloss.Width(row)
 	const totalWidth = 76
-	
+
 	if displayWidth < totalWidth {
-		row = row + strings.Repeat(" ", totalWidth - displayWidth)
+		row = row + strings.Repeat(" ", totalWidth-displayWidth)
 	} else if displayWidth > totalWidth {
 		// This shouldn't happen with our formatting, but handle it safely
 		// We can't just truncate bytes as it may cut ANSI codes

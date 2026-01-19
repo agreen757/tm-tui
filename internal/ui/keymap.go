@@ -74,7 +74,7 @@ type KeyMap struct {
 
 	// Analysis
 	AnalyzeComplexity key.Binding
-	
+
 	// Git integration
 	GitMenu key.Binding
 
@@ -158,7 +158,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+shift+c"),
 			key.WithHelp("ctrl+shift+c", "analyze complexity"),
 		),
-		
+
 		GitMenu: key.NewBinding(
 			key.WithKeys("g"),
 			key.WithHelp("g", "git menu"),

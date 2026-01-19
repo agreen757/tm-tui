@@ -8,14 +8,14 @@ import (
 // TestNewLogBrowserStyles verifies that styles are created with correct properties
 func TestNewLogBrowserStyles(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	if styles == nil {
 		t.Fatal("NewLogBrowserStyles returned nil")
 	}
-	
+
 	// Verify all styles are initialized by checking if they can render
 	testContent := "Test"
-	
+
 	if styles.PanelStyle.Render(testContent) == "" {
 		t.Error("PanelStyle not initialized")
 	}
@@ -51,7 +51,7 @@ func TestNewLogBrowserStyles(t *testing.T) {
 // TestGetEmptyStateMessage verifies correct empty state messages
 func TestGetEmptyStateMessage(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	tests := []struct {
 		name      string
 		panelType string
@@ -78,7 +78,7 @@ func TestGetEmptyStateMessage(t *testing.T) {
 			want:      "No content available",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := styles.GetEmptyStateMessage(tt.panelType)
@@ -92,7 +92,7 @@ func TestGetEmptyStateMessage(t *testing.T) {
 // TestRenderEmptyState verifies empty state rendering
 func TestRenderEmptyState(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	tests := []struct {
 		name      string
 		panelType string
@@ -118,14 +118,14 @@ func TestRenderEmptyState(t *testing.T) {
 			height:    20,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rendered := styles.RenderEmptyState(tt.panelType, tt.width, tt.height)
 			if rendered == "" {
 				t.Error("RenderEmptyState returned empty string")
 			}
-			
+
 			// The rendered output contains ANSI codes, so just verify it's not empty
 			// and has reasonable length (message + styling)
 			if len(rendered) < 10 {
@@ -138,20 +138,20 @@ func TestRenderEmptyState(t *testing.T) {
 // TestRenderLoadingState verifies loading state rendering
 func TestRenderLoadingState(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	message := "Loading log files..."
 	spinnerView := "⠋"
-	
+
 	rendered := styles.RenderLoadingState(message, spinnerView)
-	
+
 	if rendered == "" {
 		t.Error("RenderLoadingState returned empty string")
 	}
-	
+
 	if !strings.Contains(rendered, message) {
 		t.Errorf("RenderLoadingState output doesn't contain message: %q", message)
 	}
-	
+
 	if !strings.Contains(rendered, spinnerView) {
 		t.Errorf("RenderLoadingState output doesn't contain spinner: %q", spinnerView)
 	}
@@ -160,12 +160,12 @@ func TestRenderLoadingState(t *testing.T) {
 // TestStyleConsistency verifies that focused and unfocused styles are different
 func TestStyleConsistency(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	// Render the same content with both styles
 	content := "Test Content"
 	focused := styles.FocusedPanelStyle.Render(content)
 	unfocused := styles.UnfocusedPanelStyle.Render(content)
-	
+
 	// They should render differently (different border colors)
 	if focused == unfocused {
 		t.Error("Focused and unfocused panel styles render identically")
@@ -175,13 +175,13 @@ func TestStyleConsistency(t *testing.T) {
 // TestEmptyStateMessagesHaveHints verifies that empty states include helpful hints
 func TestEmptyStateMessagesHaveHints(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	panelTypes := []string{"file_browser", "tag_selector", "log_viewer"}
-	
+
 	for _, panelType := range panelTypes {
 		t.Run(panelType, func(t *testing.T) {
 			message := styles.GetEmptyStateMessage(panelType)
-			
+
 			// All messages should contain "Tip:" to provide helpful guidance
 			if !strings.Contains(message, "Tip:") {
 				t.Errorf("Empty state message for %q should contain 'Tip:' for user guidance", panelType)
@@ -193,22 +193,22 @@ func TestEmptyStateMessagesHaveHints(t *testing.T) {
 // TestStyleColors verifies that styles use consistent color scheme
 func TestStyleColors(t *testing.T) {
 	styles := NewLogBrowserStyles()
-	
+
 	// Verify key colors are set (by checking render output contains ANSI codes)
 	testContent := "Test"
-	
+
 	// Focused border should use cyan (#8be9fd)
 	focused := styles.FocusedPanelStyle.Render(testContent)
 	if !strings.Contains(focused, "\x1b[") {
 		t.Error("FocusedPanelStyle doesn't apply ANSI color codes")
 	}
-	
+
 	// Error style should use red
 	error := styles.ErrorStyle.Render(testContent)
 	if !strings.Contains(error, "\x1b[") {
 		t.Error("ErrorStyle doesn't apply ANSI color codes")
 	}
-	
+
 	// Loading style should use cyan
 	loading := styles.LoadingStyle.Render(testContent)
 	if !strings.Contains(loading, "\x1b[") {
@@ -219,7 +219,7 @@ func TestStyleColors(t *testing.T) {
 // BenchmarkRenderEmptyState benchmarks empty state rendering performance
 func BenchmarkRenderEmptyState(b *testing.B) {
 	styles := NewLogBrowserStyles()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = styles.RenderEmptyState("file_browser", 80, 24)
@@ -229,7 +229,7 @@ func BenchmarkRenderEmptyState(b *testing.B) {
 // BenchmarkGetEmptyStateMessage benchmarks message retrieval
 func BenchmarkGetEmptyStateMessage(b *testing.B) {
 	styles := NewLogBrowserStyles()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = styles.GetEmptyStateMessage("file_browser")
@@ -239,11 +239,11 @@ func BenchmarkGetEmptyStateMessage(b *testing.B) {
 // TestHighContrastTheme verifies high-contrast theme creation
 func TestHighContrastTheme(t *testing.T) {
 	styles := NewLogBrowserStylesWithTheme(true)
-	
+
 	if !styles.HighContrast {
 		t.Error("High contrast flag not set")
 	}
-	
+
 	// Verify styles are initialized
 	testContent := "Test"
 	if styles.FocusedPanelStyle.Render(testContent) == "" {
@@ -257,7 +257,7 @@ func TestHighContrastTheme(t *testing.T) {
 // TestGetDefaultTheme verifies default theme configuration
 func TestGetDefaultTheme(t *testing.T) {
 	theme := GetDefaultTheme()
-	
+
 	if theme.FocusedBorder == "" {
 		t.Error("FocusedBorder not set")
 	}
@@ -272,7 +272,7 @@ func TestGetDefaultTheme(t *testing.T) {
 // TestGetHighContrastTheme verifies high-contrast theme configuration
 func TestGetHighContrastTheme(t *testing.T) {
 	theme := GetHighContrastTheme()
-	
+
 	if theme.FocusedBorder == "" {
 		t.Error("FocusedBorder not set")
 	}
@@ -282,7 +282,7 @@ func TestGetHighContrastTheme(t *testing.T) {
 	if theme.Error == "" {
 		t.Error("Error color not set")
 	}
-	
+
 	// High contrast should use different colors than default
 	defaultTheme := GetDefaultTheme()
 	if theme.FocusedBorder == defaultTheme.FocusedBorder {
@@ -302,7 +302,7 @@ func TestThemeConsistency(t *testing.T) {
 		{"default", GetDefaultTheme()},
 		{"high-contrast", GetHighContrastTheme()},
 	}
-	
+
 	for _, tt := range themes {
 		t.Run(tt.name, func(t *testing.T) {
 			// Check all colors start with #

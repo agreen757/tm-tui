@@ -411,7 +411,7 @@ func TestCommitsDialog_Refresh(t *testing.T) {
 
 	// Test refresh key
 	result, cmd := dialog.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	
+
 	if result != DialogResultNone {
 		t.Errorf("Expected DialogResultNone for refresh, got %v", result)
 	}

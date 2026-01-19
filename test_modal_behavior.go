@@ -101,7 +101,7 @@ func TestApproach2_NoDialogStackForTaskRunner(t *testing.T) {
 	// Instead, manage it separately via m.taskRunnerVisible flag
 	taskRunnerModal := dialog.NewTaskRunnerModal(80, 30, nil)
 	taskRunnerVisible := true // Simulating m.taskRunnerVisible = true
-	
+
 	fmt.Printf("Task Runner Modal created (managed separately): %v\n", taskRunnerModal != nil)
 	fmt.Printf("Task Runner visible flag: %v\n", taskRunnerVisible)
 	dialogCount3 := countDialogs(manager)
@@ -216,7 +216,7 @@ func countDialogs(manager *dialog.DialogManager) int {
 	count := 0
 	// Save current state
 	var dialogs []dialog.Dialog
-	
+
 	// Pop all dialogs and count them
 	for manager.GetActiveDialog() != nil {
 		d := manager.PopDialog()
@@ -227,12 +227,12 @@ func countDialogs(manager *dialog.DialogManager) int {
 			break
 		}
 	}
-	
+
 	// Restore dialogs in reverse order (to maintain original order)
 	for i := len(dialogs) - 1; i >= 0; i-- {
 		manager.PushDialog(dialogs[i])
 	}
-	
+
 	return count
 }
 

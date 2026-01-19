@@ -6,15 +6,15 @@ import (
 
 func TestPositionDialogInBounds_CenterPositioning(t *testing.T) {
 	tests := []struct {
-		name             string
-		termWidth        int
-		termHeight       int
-		dialogWidth      int
-		dialogHeight     int
-		expectX          int
-		expectY          int
-		expectWidth      int
-		expectHeight     int
+		name         string
+		termWidth    int
+		termHeight   int
+		dialogWidth  int
+		dialogHeight int
+		expectX      int
+		expectY      int
+		expectWidth  int
+		expectHeight int
 	}{
 		{
 			name:         "Normal size terminal, normal dialog",
@@ -86,14 +86,14 @@ func TestDegradeDialogSize(t *testing.T) {
 	config := DefaultPositioningConfig()
 
 	tests := []struct {
-		name              string
-		desiredWidth      int
-		desiredHeight     int
-		termWidth         int
-		termHeight        int
-		expectWidth       int
-		expectHeight      int
-		expectDegraded    bool
+		name           string
+		desiredWidth   int
+		desiredHeight  int
+		termWidth      int
+		termHeight     int
+		expectWidth    int
+		expectHeight   int
+		expectDegraded bool
 	}{
 		{
 			name:           "Normal size - no degradation",
@@ -157,15 +157,15 @@ func TestDegradeDialogSize(t *testing.T) {
 
 func TestClampDialogPosition(t *testing.T) {
 	tests := []struct {
-		name      string
-		x         int
-		y         int
-		width     int
-		height    int
-		termWidth int
+		name       string
+		x          int
+		y          int
+		width      int
+		height     int
+		termWidth  int
 		termHeight int
-		expectX   int
-		expectY   int
+		expectX    int
+		expectY    int
 	}{
 		{
 			name:       "Normal position - no clamping",
@@ -229,33 +229,33 @@ func TestClampDialogPosition(t *testing.T) {
 
 func TestIsTerminalTooSmall(t *testing.T) {
 	tests := []struct {
-		name     string
-		width    int
-		height   int
+		name        string
+		width       int
+		height      int
 		expectSmall bool
 	}{
 		{
-			name:     "Normal terminal",
-			width:    100,
-			height:   30,
+			name:        "Normal terminal",
+			width:       100,
+			height:      30,
 			expectSmall: false,
 		},
 		{
-			name:     "Too narrow",
-			width:    30,
-			height:   30,
+			name:        "Too narrow",
+			width:       30,
+			height:      30,
 			expectSmall: true,
 		},
 		{
-			name:     "Too short",
-			width:    100,
-			height:   10,
+			name:        "Too short",
+			width:       100,
+			height:      10,
 			expectSmall: true,
 		},
 		{
-			name:     "Both too small",
-			width:    20,
-			height:   5,
+			name:        "Both too small",
+			width:       20,
+			height:      5,
 			expectSmall: true,
 		},
 	}
@@ -272,13 +272,13 @@ func TestIsTerminalTooSmall(t *testing.T) {
 
 func TestIsDialogFullyVisible(t *testing.T) {
 	tests := []struct {
-		name      string
-		x         int
-		y         int
-		width     int
-		height    int
-		termWidth int
-		termHeight int
+		name          string
+		x             int
+		y             int
+		width         int
+		height        int
+		termWidth     int
+		termHeight    int
 		expectVisible bool
 	}{
 		{
@@ -335,37 +335,37 @@ func TestIsDialogFullyVisible(t *testing.T) {
 
 func TestRepositionDialogIfNeeded(t *testing.T) {
 	tests := []struct {
-		name           string
-		currentX       int
-		currentY       int
-		width          int
-		height         int
-		newTermWidth   int
-		newTermHeight  int
+		name             string
+		currentX         int
+		currentY         int
+		width            int
+		height           int
+		newTermWidth     int
+		newTermHeight    int
 		expectReposition bool
-		expectX        int
-		expectY        int
+		expectX          int
+		expectY          int
 	}{
 		{
-			name:           "Position still valid",
-			currentX:       25,
-			currentY:       5,
-			width:          50,
-			height:         20,
-			newTermWidth:   100,
-			newTermHeight:  30,
+			name:             "Position still valid",
+			currentX:         25,
+			currentY:         5,
+			width:            50,
+			height:           20,
+			newTermWidth:     100,
+			newTermHeight:    30,
 			expectReposition: false,
-			expectX:        25,
-			expectY:        5,
+			expectX:          25,
+			expectY:          5,
 		},
 		{
-			name:           "Terminal shrunk - reposition needed",
-			currentX:       50,
-			currentY:       15,
-			width:          50,
-			height:         20,
-			newTermWidth:   60,
-			newTermHeight:  25,
+			name:             "Terminal shrunk - reposition needed",
+			currentX:         50,
+			currentY:         15,
+			width:            50,
+			height:           20,
+			newTermWidth:     60,
+			newTermHeight:    25,
 			expectReposition: true,
 		},
 	}
@@ -393,13 +393,13 @@ func TestRepositionDialogIfNeeded(t *testing.T) {
 
 func TestCalculateOptimalDialogSize(t *testing.T) {
 	tests := []struct {
-		name         string
-		contentWidth int
+		name          string
+		contentWidth  int
 		contentHeight int
-		termWidth    int
-		termHeight   int
-		expectWidth  int
-		expectHeight int
+		termWidth     int
+		termHeight    int
+		expectWidth   int
+		expectHeight  int
 	}{
 		{
 			name:          "Normal content",

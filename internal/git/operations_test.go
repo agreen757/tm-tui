@@ -12,10 +12,10 @@ import (
 // TestGitCreateBranchOperationValidateArgs tests branch name validation
 func TestGitCreateBranchOperationValidateArgs(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		branchName string
-		shouldErr bool
-		errMsg    string
+		shouldErr  bool
+		errMsg     string
 	}{
 		{
 			name:       "valid branch name",
@@ -62,9 +62,9 @@ func TestGitCreateBranchOperationValidateArgs(t *testing.T) {
 // TestGitSwitchBranchOperationValidateArgs tests branch name validation for switch
 func TestGitSwitchBranchOperationValidateArgs(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		branchName string
-		shouldErr bool
+		shouldErr  bool
 	}{
 		{
 			name:       "valid branch name",
@@ -112,7 +112,7 @@ func TestGitCreateBranchOperationBuildCommand(t *testing.T) {
 
 	expectedArgs := []string{"git", "checkout", "-b", branchName}
 	actualArgs := append([]string{cmd.Path}, cmd.Args[1:]...)
-	
+
 	if len(actualArgs) != len(expectedArgs) {
 		t.Errorf("expected args length %d, got %d", len(expectedArgs), len(actualArgs))
 	}

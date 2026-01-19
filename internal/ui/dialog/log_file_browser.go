@@ -69,7 +69,7 @@ type LogFileBrowserModel struct {
 	currentTag   string
 	breadcrumbs  []string // Track navigation path for breadcrumbs
 	maxDepth     int      // Maximum depth to display (prevent UI overflow)
-	
+
 	// Caching fields
 	dirCache      *LRUCache // LRU cache for directory listings (max 50 entries)
 	metadataCache *LRUCache // LRU cache for file metadata
@@ -121,7 +121,7 @@ func (m *LogFileBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab", "shift+tab", "esc":
 			// Don't pass to list - return as-is so dialog can handle
 			return m, nil
-		
+
 		// Handle directory navigation keys
 		case "enter", "l", "right":
 			// Enter directory or select file
@@ -135,10 +135,10 @@ func (m *LogFileBrowserModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Pass other messages to the list for default handling
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	
+
 	// Update selected file based on list selection
 	m.updateSelection()
-	
+
 	return m, cmd
 }
 
@@ -170,7 +170,7 @@ func (m *LogFileBrowserModel) handleEnter() (tea.Model, tea.Cmd) {
 	} else {
 		// File selected - update selectedFile and send message to parent dialog
 		m.selectedFile = entry.Path
-		
+
 		// Send FileSelectedMsg to notify parent dialog to load the file content
 		return m, func() tea.Msg {
 			return FileSelectedMsg{FilePath: entry.Path}
@@ -187,7 +187,7 @@ func (m *LogFileBrowserModel) handleParent() (tea.Model, tea.Cmd) {
 
 	// Get parent directory
 	parentPath := filepath.Dir(m.currentPath)
-	
+
 	// Don't go above the .taskmaster directory
 	if !strings.Contains(parentPath, ".taskmaster") {
 		return m, nil
@@ -336,22 +336,22 @@ func (m *LogFileBrowserModel) loadFiles() {
 
 	// Try each path and use the first one that exists and is readable
 	var targetPath string
-	
+
 	for _, path := range searchPaths {
 		info, err := os.Stat(path)
 		if err != nil {
 			continue
 		}
-		
+
 		if !info.IsDir() {
 			continue
 		}
-		
+
 		// Check if we have read permission
 		if err := canReadDir(path); err != nil {
 			continue
 		}
-		
+
 		targetPath = path
 		break
 	}
@@ -363,7 +363,7 @@ func (m *LogFileBrowserModel) loadFiles() {
 				targetPath = taskmasterDir
 			}
 		}
-		
+
 		// Still no path - show empty state
 		if targetPath == "" {
 			m.currentPath = ""
@@ -583,7 +583,7 @@ func extractTaskID(filename string) string {
 	var name string
 	ext := strings.ToLower(filepath.Ext(filename))
 	supportedExts := []string{".log", ".md", ".txt"}
-	
+
 	hasKnownExt := false
 	for _, supportedExt := range supportedExts {
 		if ext == supportedExt {
@@ -591,16 +591,16 @@ func extractTaskID(filename string) string {
 			break
 		}
 	}
-	
+
 	if hasKnownExt {
 		name = strings.TrimSuffix(filename, ext)
 	} else {
 		name = filename
 	}
-	
+
 	// Clean up any trailing dots from malformed filenames
 	name = strings.TrimRight(name, ".")
-	
+
 	// If the entire name (after removing extension) is a task ID, return it
 	if isTaskIDPattern(name) {
 		return name
@@ -611,20 +611,20 @@ func extractTaskID(filename string) string {
 	parts := strings.FieldsFunc(name, func(r rune) bool {
 		return r == '-' || r == '_' || r == ' '
 	})
-	
+
 	// Check each part to see if it's a task ID
 	for _, part := range parts {
 		if part == "" {
 			continue
 		}
-		
+
 		// Clean up trailing dots
 		part = strings.TrimRight(part, ".")
-		
+
 		if isTaskIDPattern(part) {
 			return part
 		}
-		
+
 		// Also try splitting by dots and looking for task ID patterns
 		// This handles cases like "test.1.2" where "1.2" should be extracted
 		dotParts := strings.Split(part, ".")

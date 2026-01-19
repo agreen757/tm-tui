@@ -33,21 +33,21 @@ type LogBrowserDialog struct {
 	logViewer   *LogViewerPanel
 
 	// State
-	currentPath    string
-	selectedFile   string
-	focusedPanel   int               // 0=browser, 1=viewer
-	statusMsg      string            // Status bar message for errors/info
-	showHelp       bool              // Show help overlay
-	
+	currentPath  string
+	selectedFile string
+	focusedPanel int    // 0=browser, 1=viewer
+	statusMsg    string // Status bar message for errors/info
+	showHelp     bool   // Show help overlay
+
 	// Size constraints
 	showSizeWarning bool // Show warning if terminal is too small
 	minWidth        int  // Minimum recommended width (80)
 	minHeight       int  // Minimum recommended height (24)
-	
+
 	// Dependencies
-	taskService    *taskmaster.Service
-	style          *DialogStyle
-	browserStyles  *LogBrowserStyles // Consistent styling for panels
+	taskService   *taskmaster.Service
+	style         *DialogStyle
+	browserStyles *LogBrowserStyles // Consistent styling for panels
 }
 
 // NewLogBrowserDialog creates a new LogBrowserDialog with initialized panels and state
@@ -55,13 +55,13 @@ func NewLogBrowserDialog(width, height int, taskService *taskmaster.Service) *Lo
 	// Calculate panel widths with specified proportions: 40% file browser, 60% log viewer
 	browserWidth := (width * 40) / 100
 	viewerWidth := width - browserWidth
-	
+
 	// Get or create default style
 	style := DefaultDialogStyle()
-	
+
 	// Create consistent browser styles
 	browserStyles := NewLogBrowserStyles()
-	
+
 	// Create the dialog with actual panel models
 	dialog := &LogBrowserDialog{
 		BaseFocusableDialog: NewBaseFocusableDialog("Log Browser", width, height, DialogKindCustom, 2),
@@ -78,11 +78,11 @@ func NewLogBrowserDialog(width, height int, taskService *taskmaster.Service) *Lo
 		style:               style,
 		browserStyles:       browserStyles,
 	}
-	
+
 	// Set initial focus on file browser
 	dialog.SetFocusedIndex(0)
 	dialog.fileBrowser.SetFocused(true)
-	
+
 	return dialog
 }
 
@@ -90,7 +90,7 @@ func NewLogBrowserDialog(width, height int, taskService *taskmaster.Service) *Lo
 func (d *LogBrowserDialog) Init() tea.Cmd {
 	// Initialize all panels
 	var cmds []tea.Cmd
-	
+
 	// Initialize panels (they all have Init() methods)
 	if cmd := d.fileBrowser.Init(); cmd != nil {
 		cmds = append(cmds, cmd)
@@ -108,7 +108,7 @@ func (d *LogBrowserDialog) Init() tea.Cmd {
 // Update processes messages and updates the dialog state
 func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	var cmds []tea.Cmd
-	
+
 	// First, update the focused panel with the message
 	// This allows panels to handle keys (like Enter) before global dialog keys
 	switch d.focusedPanel {
@@ -117,7 +117,7 @@ func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		var cmd tea.Cmd
 		model, cmd = d.fileBrowser.Update(msg)
 		d.fileBrowser = model.(*LogFileBrowserModel)
-		
+
 		// If the file browser returned a FileSelectedMsg command, execute it immediately
 		if cmd != nil {
 			// Execute the command to get the message
@@ -125,11 +125,11 @@ func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 			if fileMsg, ok := resultMsg.(FileSelectedMsg); ok {
 				// Handle the file selection immediately instead of batching
 				d.selectedFile = fileMsg.FilePath
-				
+
 				// Update dialog title to show selected file name
 				fileName := filepath.Base(fileMsg.FilePath)
 				d.BaseFocusableDialog.TitleText = fmt.Sprintf("Log Browser - %s", fileName)
-				
+
 				// Load file content into Log Viewer
 				err := d.logViewer.LoadFileContent(fileMsg.FilePath)
 				if err != nil {
@@ -142,7 +142,7 @@ func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
-		
+
 	case 1: // Log Viewer
 		var model tea.Model
 		var cmd tea.Cmd
@@ -152,22 +152,22 @@ func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	}
-	
+
 	// Then handle specific message types
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		// Update dialog dimensions from window resize
 		d.SetRect(msg.Width, msg.Height, 0, 0)
 		// Panel dimensions will be recalculated in View() based on new dialog size
-		
+
 	case FileSelectedMsg:
 		// Handle file selection from File Browser
 		d.selectedFile = msg.FilePath
-		
+
 		// Update dialog title to show selected file name
 		fileName := filepath.Base(msg.FilePath)
 		d.BaseFocusableDialog.TitleText = fmt.Sprintf("Log Browser - %s", fileName)
-		
+
 		// Load file content into Log Viewer
 		err := d.logViewer.LoadFileContent(msg.FilePath)
 		if err != nil {
@@ -177,10 +177,10 @@ func (d *LogBrowserDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 			// Clear status message on success
 			d.statusMsg = ""
 		}
-		
+
 		return d, nil
 	}
-	
+
 	// Batch all accumulated commands and return
 	if len(cmds) > 0 {
 		return d, tea.Batch(cmds...)
@@ -220,7 +220,7 @@ func (d *LogBrowserDialog) View() string {
 
 	// Combine panels horizontally using lipgloss
 	panelsView := lipgloss.JoinHorizontal(lipgloss.Top, fileBrowserView, logViewerView)
-	
+
 	// Render status bar if there's a status message
 	var baseView string
 	if d.statusMsg != "" {
@@ -228,20 +228,20 @@ func (d *LogBrowserDialog) View() string {
 			Width(d.width).
 			Padding(0, 1)
 		statusBar := statusStyle.Render("⚠️  " + d.statusMsg)
-		
+
 		// Combine panels and status bar vertically
 		baseView = lipgloss.JoinVertical(lipgloss.Left, panelsView, statusBar)
 	} else {
 		baseView = panelsView
 	}
-	
+
 	// If help overlay is shown, render it on top
 	if d.showHelp {
 		helpOverlay := d.renderHelpOverlay()
 		// Use Place to center the overlay over the base view
 		return lipgloss.Place(d.width, d.height, lipgloss.Center, lipgloss.Center, helpOverlay, lipgloss.WithWhitespaceChars(" "))
 	}
-	
+
 	return baseView
 }
 
@@ -258,24 +258,24 @@ func (d *LogBrowserDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 		// Consume all other keys when help is shown
 		return DialogResultNone, nil
 	}
-	
+
 	// Handle global shortcuts that work regardless of focused panel
 	switch {
 	case key.Matches(msg, key.NewBinding(key.WithKeys("?"))):
 		// Toggle help overlay
 		d.showHelp = !d.showHelp
 		return DialogResultNone, nil
-		
+
 	case key.Matches(msg, key.NewBinding(key.WithKeys("r"))):
 		// Refresh file list and tag data
 		return DialogResultNone, d.refresh()
-		
+
 	case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+f"))):
 		// Ctrl+F to open dialog is handled at the UI level (not here)
 		// But we include it in the help text
 		return DialogResultNone, nil
 	}
-	
+
 	// Use the base focusable handler for common keys like Esc
 	result, cmd := d.HandleBaseFocusableKey(msg)
 	if result != DialogResultNone {
@@ -287,27 +287,27 @@ func (d *LogBrowserDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 	case key.Matches(msg, key.NewBinding(key.WithKeys("tab"))):
 		// Unfocus current panel before switching
 		d.unfocusCurrentPanel()
-		
+
 		// Move to next panel
 		d.focusedPanel = (d.focusedPanel + 1) % 2
 		d.SetFocusedIndex(d.focusedPanel)
-		
+
 		// Focus new panel
 		d.focusCurrentPanel()
-		
+
 		return DialogResultNone, nil
-		
+
 	case key.Matches(msg, key.NewBinding(key.WithKeys("shift+tab"))):
 		// Unfocus current panel before switching
 		d.unfocusCurrentPanel()
-		
+
 		// Move to previous panel
 		d.focusedPanel = (d.focusedPanel - 1 + 2) % 2
 		d.SetFocusedIndex(d.focusedPanel)
-		
+
 		// Focus new panel
 		d.focusCurrentPanel()
-		
+
 		return DialogResultNone, nil
 	}
 
@@ -347,22 +347,22 @@ func (d *LogBrowserDialog) IsTerminalSizeWarning() bool {
 // refresh reloads file list and tag data
 func (d *LogBrowserDialog) refresh() tea.Cmd {
 	var cmds []tea.Cmd
-	
+
 	// Refresh file browser
 	if d.fileBrowser != nil {
 		if cmd := d.fileBrowser.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
-	
+
 	// Update status message
 	d.statusMsg = "Refreshed file list and tags"
-	
+
 	// Always return a command (even if empty) to signal the refresh was executed
 	if len(cmds) > 0 {
 		return tea.Batch(cmds...)
 	}
-	
+
 	// Return a no-op command to indicate refresh was triggered
 	return func() tea.Msg {
 		return nil
@@ -374,10 +374,10 @@ func (d *LogBrowserDialog) renderHelpOverlay() string {
 	if !d.showHelp {
 		return ""
 	}
-	
+
 	// Create help content based on focused panel
 	var helpContent string
-	
+
 	// Global shortcuts (always shown)
 	globalShortcuts := []string{
 		"Global Shortcuts:",
@@ -389,7 +389,7 @@ func (d *LogBrowserDialog) renderHelpOverlay() string {
 		"  r        - Refresh file list",
 		"",
 	}
-	
+
 	// Panel-specific shortcuts
 	var panelShortcuts []string
 	switch d.focusedPanel {
@@ -418,19 +418,19 @@ func (d *LogBrowserDialog) renderHelpOverlay() string {
 			"  w        - Toggle word wrap",
 		}
 	}
-	
+
 	// Combine all shortcuts
 	allShortcuts := append(globalShortcuts, panelShortcuts...)
 	helpContent = strings.Join(allShortcuts, "\n")
-	
+
 	// Calculate overlay dimensions
 	overlayWidth := 60
 	overlayHeight := len(allShortcuts) + 4 // Add padding
-	
+
 	// Center the overlay
 	x := (d.width - overlayWidth) / 2
 	y := (d.height - overlayHeight) / 2
-	
+
 	// Create overlay style
 	overlayStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -441,21 +441,21 @@ func (d *LogBrowserDialog) renderHelpOverlay() string {
 		Height(overlayHeight).
 		Padding(1, 2).
 		Align(lipgloss.Left)
-	
+
 	// Add title
 	titleStyle := lipgloss.NewStyle().
 		Foreground(d.style.TitleColor).
 		Bold(true)
-	
+
 	title := titleStyle.Render("Keyboard Shortcuts Help")
 	content := title + "\n\n" + helpContent
-	
+
 	overlay := overlayStyle.Render(content)
-	
+
 	// Position the overlay (we'll use absolute positioning in View())
 	_ = x
 	_ = y
-	
+
 	return overlay
 }
 
@@ -490,12 +490,12 @@ func (d *LogBrowserDialog) AdjustPanelSizes(width, height int) {
 func (d *LogBrowserDialog) RecoverFromError() {
 	// Reset error state while preserving user data
 	d.statusMsg = ""
-	
+
 	// Ensure panels are in a valid state
 	if d.logViewer.HasError() {
 		d.logViewer.ClearContent()
 	}
-	
+
 	// Verify focus is still on a valid panel
 	if d.focusedPanel < 0 || d.focusedPanel > 1 {
 		d.focusedPanel = 0
@@ -521,22 +521,22 @@ func (d *LogBrowserDialog) wrapPanel(content, title string, panelIndex, width, h
 	} else {
 		panelStyle = d.browserStyles.UnfocusedPanelStyle
 	}
-	
+
 	// Apply dimensions
 	panelStyle = panelStyle.
 		Width(width - 2). // Account for border and padding
 		Height(height - 2)
-	
+
 	// Add title with consistent styling
 	titleBar := d.browserStyles.TitleStyle.Render(title)
-	
+
 	// Combine title and content
 	fullContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		titleBar,
 		content,
 	)
-	
+
 	return panelStyle.Render(fullContent)
 }
 

@@ -170,22 +170,22 @@ func (report *ComplexityReport) FilterByLevel(levels []ComplexityLevel) *Complex
 // BuildAnalyzeComplexityArgs constructs CLI arguments for task-master analyze-complexity command
 func BuildAnalyzeComplexityArgs(scope string, taskID string, tags []string) []string {
 	args := []string{"analyze-complexity"}
-	
+
 	if scope != "" {
 		args = append(args, "--research")
 	}
-	
+
 	// Add task ID if analyzing a selected task
 	if taskID != "" && scope == "selected" {
 		args = append(args, "--task-id", taskID)
 	}
-	
+
 	// Add tags if analyzing by tag
 	if len(tags) > 0 && scope == "tag" {
 		tagsStr := strings.Join(tags, ",")
 		args = append(args, "--tags", tagsStr)
 	}
-	
+
 	return args
 }
 
@@ -193,9 +193,9 @@ func BuildAnalyzeComplexityArgs(scope string, taskID string, tags []string) []st
 // and extracts progress information
 func ParseComplexityProgress(line string) ComplexityProgressState {
 	state := ComplexityProgressState{}
-	
+
 	line = strings.TrimSpace(line)
-	
+
 	// Filter out empty lines and noise
 	if line == "" ||
 		strings.Contains(line, "/.taskmaster/") ||
@@ -204,7 +204,7 @@ func ParseComplexityProgress(line string) ComplexityProgressState {
 		len(line) > 200 {
 		return state
 	}
-	
+
 	// Parse "Analyzing task X (Y/Z)..." pattern
 	// Example: "Analyzing task 1.2 (5/47)..."
 	re := regexp.MustCompile(`Analyzing task (\S+)\s+\((\d+)/(\d+)\)`)
@@ -212,24 +212,24 @@ func ParseComplexityProgress(line string) ComplexityProgressState {
 		taskID := matches[1]
 		analyzed, _ := strconv.Atoi(matches[2])
 		total, _ := strconv.Atoi(matches[3])
-		
+
 		state.CurrentTaskID = taskID
 		state.TasksAnalyzed = analyzed
 		state.TotalTasks = total
 		return state
 	}
-	
+
 	// Parse "Progress: X/Y" pattern
 	re = regexp.MustCompile(`Progress:\s*(\d+)/(\d+)`)
 	if matches := re.FindStringSubmatch(line); len(matches) > 2 {
 		analyzed, _ := strconv.Atoi(matches[1])
 		total, _ := strconv.Atoi(matches[2])
-		
+
 		state.TasksAnalyzed = analyzed
 		state.TotalTasks = total
 		return state
 	}
-	
+
 	return state
 }
 
@@ -249,17 +249,17 @@ func parseComplexityReportFromFile(jsonStr string) (*ComplexityReport, error) {
 			UsedResearch   bool   `json:"usedResearch"`
 		} `json:"meta"`
 		ComplexityAnalysis []struct {
-			TaskId             interface{} `json:"taskId"` // Could be string or int
-			TaskTitle          string      `json:"taskTitle"`
-			ComplexityScore    int         `json:"complexityScore"`
+			TaskId              interface{} `json:"taskId"` // Could be string or int
+			TaskTitle           string      `json:"taskTitle"`
+			ComplexityScore     int         `json:"complexityScore"`
 			RecommendedSubtasks int         `json:"recommendedSubtasks"`
-			ExpansionPrompt    string      `json:"expansionPrompt"`
-			Reasoning          string      `json:"reasoning"`
+			ExpansionPrompt     string      `json:"expansionPrompt"`
+			Reasoning           string      `json:"reasoning"`
 		} `json:"complexityAnalysis"`
 	}
 
 	var fileReport FileComplexityReport
-	
+
 	// Trim any whitespace and quotes
 	jsonStr = strings.TrimSpace(jsonStr)
 	if strings.HasPrefix(jsonStr, "\"") && strings.HasSuffix(jsonStr, "\"") {
@@ -267,28 +267,28 @@ func parseComplexityReportFromFile(jsonStr string) (*ComplexityReport, error) {
 		// Unescape JSON string escapes
 		jsonStr = strings.ReplaceAll(jsonStr, "\\\"", "\"")
 	}
-	
+
 	if err := json.Unmarshal([]byte(jsonStr), &fileReport); err != nil {
 		return nil, fmt.Errorf("failed to parse complexity report JSON: %w", err)
 	}
-	
+
 	// Convert to our internal format
 	report := ComplexityReport{
 		Tasks:      make([]TaskComplexity, 0, len(fileReport.ComplexityAnalysis)),
 		AnalyzedAt: time.Now(), // Default to now, will try to parse from file
 	}
-	
+
 	// Try to parse the timestamp
 	if t, err := time.Parse(time.RFC3339, fileReport.Meta.GeneratedAt); err == nil {
 		report.AnalyzedAt = t
 	}
-	
+
 	// Convert each task complexity entry
 	for _, analysis := range fileReport.ComplexityAnalysis {
 		// Get complexity level based on score
 		thresholds := DefaultLevelThresholds()
 		level := GetLevelFromScore(analysis.ComplexityScore, &thresholds)
-		
+
 		// Convert TaskId to string (could be int or string in the file)
 		var taskId string
 		switch v := analysis.TaskId.(type) {
@@ -301,7 +301,7 @@ func parseComplexityReportFromFile(jsonStr string) (*ComplexityReport, error) {
 		default:
 			taskId = fmt.Sprintf("%v", analysis.TaskId)
 		}
-		
+
 		taskComplexity := TaskComplexity{
 			TaskID:      taskId,
 			Level:       level,
@@ -310,9 +310,9 @@ func parseComplexityReportFromFile(jsonStr string) (*ComplexityReport, error) {
 			Description: analysis.Reasoning,
 			AnalyzedAt:  report.AnalyzedAt,
 		}
-		
+
 		report.Tasks = append(report.Tasks, taskComplexity)
 	}
-	
+
 	return &report, nil
 }

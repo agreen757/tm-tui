@@ -290,10 +290,10 @@ func (d *FormDialog) Init() tea.Cmd {
 func (d *FormDialog) FocusNext() tea.Cmd {
 	// Blur current field
 	d.blurCurrentField()
-	
+
 	// Move to next element
 	d.BaseFocusableDialog.FocusNext()
-	
+
 	// Focus new field
 	return d.focusCurrentField()
 }
@@ -302,10 +302,10 @@ func (d *FormDialog) FocusNext() tea.Cmd {
 func (d *FormDialog) FocusPrev() tea.Cmd {
 	// Blur current field
 	d.blurCurrentField()
-	
+
 	// Move to previous element
 	d.BaseFocusableDialog.FocusPrev()
-	
+
 	// Focus new field
 	return d.focusCurrentField()
 }
@@ -357,12 +357,12 @@ func (d *FormDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 // HandleKey routes keyboard input to the focused element.
 func (d *FormDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 	focused := d.FocusedIndex()
-	
+
 	// Special handling for textarea fields
 	if focused < len(d.fields) && d.fields[focused].Type == FormFieldTypeTextArea {
 		// Temporary debug
 		_ = fmt.Sprintf("Textarea focused, key: %v", msg.String())
-		
+
 		// Handle navigation keys first
 		switch msg.String() {
 		case "tab":
@@ -379,7 +379,7 @@ func (d *FormDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 			return d.handleFieldKey(focused, msg)
 		}
 	}
-	
+
 	// For non-textarea fields, use normal base handling (includes tab/shift+tab)
 	if result, cmd := d.HandleBaseFocusableKey(msg); result != DialogResultNone {
 		return result, cmd
@@ -402,18 +402,18 @@ func (d *FormDialog) handleFieldKey(index int, msg tea.KeyMsg) (DialogResult, te
 		return DialogResultNone, cmd
 	case FormFieldTypeTextArea:
 		var cmd tea.Cmd
-		
+
 		// Check if textarea is actually focused before update
 		wasFocused := field.textarea.Focused()
 		if !wasFocused {
 			// Force focus if not focused
 			field.textarea.Focus()
 		}
-		
+
 		oldValue := field.textarea.Value()
 		field.textarea, cmd = field.textarea.Update(msg)
 		newValue := field.textarea.Value()
-		
+
 		// Debug: Check if value actually changed
 		if oldValue != newValue {
 			d.emitValueChanged(field.ID, strings.TrimSpace(newValue))
@@ -615,14 +615,14 @@ func (d *FormDialog) View() string {
 func (d *FormDialog) renderField(index int) string {
 	field := d.fields[index]
 	isFocused := d.FocusedIndex() == index
-	
+
 	// Style the label with focus indicator
 	labelStyle := lipgloss.NewStyle().Bold(true)
 	if isFocused {
 		labelStyle = labelStyle.Foreground(lipgloss.Color("#00BFFF")) // Bright blue for focused
 	}
 	label := labelStyle.Render(field.Label)
-	
+
 	value := ""
 
 	switch field.Type {
@@ -665,23 +665,23 @@ func (d *FormDialog) renderField(index int) string {
 		if buttonText == "" {
 			buttonText = "[Click to Select]"
 		}
-		
+
 		// Show selected items if any
 		if selectedTags, ok := field.Value.([]string); ok && len(selectedTags) > 0 {
 			buttonText = fmt.Sprintf("[%s]", strings.Join(selectedTags, ", "))
 		}
-		
+
 		buttonStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			Padding(0, 2).
 			BorderForeground(lipgloss.Color("#7d7d7d"))
-		
+
 		if isFocused {
 			buttonStyle = buttonStyle.
 				BorderForeground(lipgloss.Color("#00BFFF")).
 				Background(lipgloss.Color("#1a1a2e"))
 		}
-		
+
 		value = buttonStyle.Render(buttonText)
 	}
 
@@ -692,7 +692,7 @@ func (d *FormDialog) renderField(index int) string {
 			help := lipgloss.NewStyle().Foreground(lipgloss.Color("#7d7d7d")).Render(field.Help)
 			body = lipgloss.JoinVertical(lipgloss.Left, body, help)
 		}
-		
+
 		// Add subtle background highlight for focused field
 		bodyStyle := lipgloss.NewStyle().Padding(0, 1)
 		if isFocused {

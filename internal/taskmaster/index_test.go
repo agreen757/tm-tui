@@ -74,25 +74,25 @@ func TestBuildTaskIndex(t *testing.T) {
 			wantWarnings: 0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			index, warnings := buildTaskIndex(tt.tasks)
-			
+
 			if len(index) != tt.wantIndexLen {
 				t.Errorf("buildTaskIndex() index length = %d, want %d", len(index), tt.wantIndexLen)
 			}
-			
+
 			if len(warnings) != tt.wantWarnings {
 				t.Errorf("buildTaskIndex() warnings = %d, want %d", len(warnings), tt.wantWarnings)
 			}
-			
+
 			// Verify parent relationships
 			for id, task := range index {
 				if task.ID != id {
 					t.Errorf("Index key %s doesn't match task ID %s", id, task.ID)
 				}
-				
+
 				// Check that children are properly linked
 				for i, child := range task.Children {
 					if child.Parent != task {
@@ -174,15 +174,15 @@ func TestFlattenTasks(t *testing.T) {
 			wantCount: 6,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			flattened := flattenTasks(tt.tasks)
-			
+
 			if len(flattened) != tt.wantCount {
 				t.Errorf("flattenTasks() count = %d, want %d", len(flattened), tt.wantCount)
 			}
-			
+
 			// Verify all tasks are present and unique
 			seen := make(map[string]bool)
 			for _, task := range flattened {
@@ -206,9 +206,9 @@ func TestBuildTaskIndex_ParentRelationships(t *testing.T) {
 			},
 		},
 	}
-	
+
 	index, _ := buildTaskIndex(tasks)
-	
+
 	// Check parent task
 	parent, ok := index["1"]
 	if !ok {
@@ -223,7 +223,7 @@ func TestBuildTaskIndex_ParentRelationships(t *testing.T) {
 	if len(parent.Children) != 2 {
 		t.Errorf("Parent should have 2 children, got %d", len(parent.Children))
 	}
-	
+
 	// Check child tasks
 	child1, ok := index["1.1"]
 	if !ok {
@@ -238,7 +238,7 @@ func TestBuildTaskIndex_ParentRelationships(t *testing.T) {
 	if child1.ParentID != "1" {
 		t.Errorf("Child ParentID = %s, want '1'", child1.ParentID)
 	}
-	
+
 	child2, ok := index["1.2"]
 	if !ok {
 		t.Fatal("Child 2 not in index")

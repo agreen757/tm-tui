@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestTagSelectorStructInit tests the TagSelectorConfig and TagSelectorResult struct initialization

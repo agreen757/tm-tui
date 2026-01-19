@@ -36,8 +36,8 @@ func NewPrdInputDialog(cfg *config.Config) *dialog.FormDialog {
 			Required:    true,
 			Placeholder: "Brief overview of the PRD",
 			//Help:        "A concise summary of what this PRD covers",
-			Rows:        6,
-			Border:      true,
+			Rows:   6,
+			Border: true,
 		},
 		{
 			ID:          "filename",
@@ -220,8 +220,6 @@ func createPrdFormDialog(cfg *config.Config, fields []dialog.FormField, state *P
 
 	return form
 }
-
-
 
 // countSentences counts the approximate number of sentences in a text
 func countSentences(text string) int {

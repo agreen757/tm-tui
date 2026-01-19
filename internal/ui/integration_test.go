@@ -52,8 +52,8 @@ func TestDialogResponsivityWithLargeSets(t *testing.T) {
 	// Add many tasks to test performance
 	for i := 0; i < 50; i++ {
 		task := taskmaster.Task{
-			ID:    fmt.Sprintf("%d", i),
-			Title: fmt.Sprintf("Test Task %d", i),
+			ID:     fmt.Sprintf("%d", i),
+			Title:  fmt.Sprintf("Test Task %d", i),
 			Status: taskmaster.StatusPending,
 		}
 		m.tasks = append(m.tasks, task)
@@ -271,8 +271,8 @@ func TestSingleTaskExecutionPreservesSingleTaskFlow(t *testing.T) {
 	// Setup single selected task (or no multi-select)
 	m.selectedIDs = make(map[string]bool)
 	m.selectedTask = &taskmaster.Task{
-		ID:    "1",
-		Title: "Test Task",
+		ID:     "1",
+		Title:  "Test Task",
 		Status: taskmaster.StatusPending,
 	}
 

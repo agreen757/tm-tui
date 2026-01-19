@@ -55,27 +55,27 @@ func (d *BranchCreateDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	// Handle text input and validate in real-time
 	var cmd tea.Cmd
 	d.input, cmd = d.input.Update(msg)
-	
+
 	// Clear error message on new input
 	if _, ok := msg.(tea.KeyMsg); ok {
 		d.validateAndUpdateError()
 	}
-	
+
 	return d, cmd
 }
 
 // isValidBranchName checks if the current input is a valid branch name
 func (d *BranchCreateDialog) isValidBranchName() bool {
 	branchName := strings.TrimSpace(d.input.Value())
-	
+
 	if branchName == "" {
 		return false
 	}
-	
+
 	if strings.Contains(branchName, " ") {
 		return false
 	}
-	
+
 	// Check for other invalid characters
 	invalidChars := []string{"\t", "\n", "\r", ":", "~", "^", "?", "*", "[", "\\"}
 	for _, char := range invalidChars {
@@ -83,36 +83,36 @@ func (d *BranchCreateDialog) isValidBranchName() bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 // validateAndUpdateError updates error message based on current input
 func (d *BranchCreateDialog) validateAndUpdateError() {
 	branchName := d.input.Value()
-	
+
 	if strings.TrimSpace(branchName) == "" {
 		d.errorMsg = ""
 		return
 	}
-	
+
 	// Check for spaces (works with trimmed value)
 	if strings.Contains(branchName, " ") {
 		d.errorMsg = "Branch name cannot contain spaces"
 		return
 	}
-	
+
 	// Check for other invalid characters
 	if strings.Contains(branchName, ":") {
 		d.errorMsg = "Branch name cannot contain colons"
 		return
 	}
-	if strings.Contains(branchName, "~") || strings.Contains(branchName, "^") || 
-	   strings.Contains(branchName, "?") || strings.Contains(branchName, "*") {
+	if strings.Contains(branchName, "~") || strings.Contains(branchName, "^") ||
+		strings.Contains(branchName, "?") || strings.Contains(branchName, "*") {
 		d.errorMsg = "Branch name contains invalid characters"
 		return
 	}
-	
+
 	d.errorMsg = ""
 }
 

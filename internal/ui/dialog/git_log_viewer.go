@@ -15,21 +15,21 @@ import (
 
 // GitLogEntry represents a single structured log entry
 type GitLogEntry struct {
-	Level      string    `json:"level"`
-	Time       string    `json:"time"`
-	CommandID  string    `json:"command_id"`
-	Tag        string    `json:"tag"`
-	GitArgs    string    `json:"git_args"`
-	Event      string    `json:"event"`
-	Command    string    `json:"command"`
-	Args       []string  `json:"args"`
-	Source     string    `json:"source"`
-	Output     string    `json:"output"`
-	DurationMs int64     `json:"duration_ms"`
-	ExitCode   int       `json:"exit_code"`
-	Message    string    `json:"message"`
-	Error      string    `json:"error"`
-	Raw        string    `json:"-"` // Raw JSON line
+	Level      string   `json:"level"`
+	Time       string   `json:"time"`
+	CommandID  string   `json:"command_id"`
+	Tag        string   `json:"tag"`
+	GitArgs    string   `json:"git_args"`
+	Event      string   `json:"event"`
+	Command    string   `json:"command"`
+	Args       []string `json:"args"`
+	Source     string   `json:"source"`
+	Output     string   `json:"output"`
+	DurationMs int64    `json:"duration_ms"`
+	ExitCode   int      `json:"exit_code"`
+	Message    string   `json:"message"`
+	Error      string   `json:"error"`
+	Raw        string   `json:"-"` // Raw JSON line
 }
 
 // GitLogViewer provides methods to read and view git logs

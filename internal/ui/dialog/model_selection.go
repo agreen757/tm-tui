@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/agreen757/tm-tui/internal/config"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ModelOption represents an available AI model with metadata
@@ -17,9 +17,9 @@ type ModelOption struct {
 	ModelID       string
 	DisplayName   string
 	ContextWindow int
-	InputCost     float64  // per 1M tokens
-	OutputCost    float64  // per 1M tokens
-	Capabilities  string   // Optional: brief description of capabilities
+	InputCost     float64 // per 1M tokens
+	OutputCost    float64 // per 1M tokens
+	Capabilities  string  // Optional: brief description of capabilities
 }
 
 // ModelSelectionResult is the result of model selection
@@ -57,7 +57,7 @@ func (m *ModelSelectionListItem) Description() string {
 	} else {
 		contextStr = fmt.Sprintf("%d", contextWindow)
 	}
-	
+
 	// Calculate average cost and determine tier
 	avgCost := (m.option.InputCost + m.option.OutputCost) / 2
 	var costTier string
@@ -68,11 +68,11 @@ func (m *ModelSelectionListItem) Description() string {
 	} else {
 		costTier = "💎 Premium"
 	}
-	
+
 	// Format precise cost
 	costStr := fmt.Sprintf("$%.2f/$%.2f", m.option.InputCost, m.option.OutputCost)
 	provider := strings.ToTitle(m.option.Provider)
-	
+
 	return fmt.Sprintf("%s | %s tokens | %s | %s/1M", provider, contextStr, costTier, costStr)
 }
 
@@ -89,19 +89,19 @@ func (m *ModelSelectionListItem) GetOption() ModelOption {
 // ModelSelectionDialog is a dialog for selecting AI models
 type ModelSelectionDialog struct {
 	*ListDialog
-	lastSelected  *ModelSelectionResult
-	configPath    string
-	allModels     []ModelOption      // Store all models for filtering
-	providers     map[string]bool    // Available providers
-	selectedProvider string           // Currently selected provider filter (empty = all)
-	providerList  []string           // Sorted list of providers for cycling
+	lastSelected     *ModelSelectionResult
+	configPath       string
+	allModels        []ModelOption   // Store all models for filtering
+	providers        map[string]bool // Available providers
+	selectedProvider string          // Currently selected provider filter (empty = all)
+	providerList     []string        // Sorted list of providers for cycling
 }
 
 // NewModelSelectionDialog creates a new model selection dialog
 func NewModelSelectionDialog(width, height int, configPath string) *ModelSelectionDialog {
 	// Load available models
 	allModels := loadAvailableModels()
-	
+
 	// Convert to ListItem interface
 	items := make([]ListItem, len(allModels))
 	for i, opt := range allModels {
@@ -117,7 +117,7 @@ func NewModelSelectionDialog(width, height int, configPath string) *ModelSelecti
 	for _, model := range allModels {
 		providers[model.Provider] = true
 	}
-	
+
 	providerList := make([]string, 0, len(providers))
 	providerList = append(providerList, "") // Empty string means "all providers"
 	for provider := range providers {
@@ -567,5 +567,3 @@ func (d *ModelSelectionDialog) View() string {
 func NewModelSelectionDialogSimple() *ModelSelectionDialog {
 	return NewModelSelectionDialog(60, 20, "")
 }
-
-

@@ -29,6 +29,13 @@
 - [Memory System](#memory-system)
 - [Configuration](#configuration)
 - [Development](#development)
+- [Troubleshooting](#troubleshooting)
+  - [Task Master CLI Not Found](#task-master-cli-not-found)
+  - [Permission Errors During Installation](#permission-errors-during-installation)
+  - [Node.js Not Installed or Wrong Version](#nodejs-not-installed-or-wrong-version)
+  - [Multiple Node.js Installations](#multiple-nodejs-installations-nvm--homebrewsystem)
+  - [Platform-Specific Installation Notes](#platform-specific-installation-notes)
+  - [Edge Cases and Known Issues](#edge-cases-and-known-issues)
 - [Credits](#credits)
 
 ## Overview
@@ -59,8 +66,30 @@ Terminal interface for managing development tasks, viewing task hierarchies, and
 ## Requirements
 
 - Go 1.23 or later
-- [Task Master AI](https://github.com/cyanheads/task-master-ai) installed globally (`npm i -g task-master-ai`)
+- **Node.js 20 or later** (REQUIRED - Node.js 18.x is NOT supported)
+- [Task Master AI](https://github.com/cyanheads/task-master-ai) installed globally
+  - **Manual install**: `npm i -g task-master-ai`
+  - **Automated install**: `make install-task-master` (recommended)
 - A Task Master project (`.taskmaster` directory with tasks)
+
+### Node.js Installation Methods
+
+**Recommended: Use nvm (Node Version Manager)**
+```bash
+# Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Install Node.js 20+
+nvm install 20
+nvm use 20
+```
+
+**Alternative: System Package Manager**
+- **macOS (Homebrew)**: `brew install node` (ensure version 20+)
+- **Ubuntu/Debian**: See platform-specific notes below
+- **Windows**: Download from [nodejs.org](https://nodejs.org/) (version 20+)
+
+⚠️ **Important**: task-master-ai requires Node.js 20.18.1+ to avoid compatibility warnings. Older versions may fail at runtime.
 
 ## Installation
 
@@ -107,6 +136,32 @@ make build
 # Run the built binary
 ./bin/tm-tui
 ```
+
+### Installing Dependencies
+
+After building from source, install required runtime dependencies:
+
+```bash
+# Install all dependencies (recommended for new users)
+make install-all
+# Installs: tm-tui, memory, task-master, crush, gemini
+
+# Or install individually
+make install-task-master  # Task Master AI CLI (npm) - REQUIRED
+make install-crush        # Crush AI assistant (Go)
+make install-memory       # Memory tool for LLM agents (Go)
+make install-gemini       # Gemini CLI (Go)
+```
+
+**Verify installations:**
+
+```bash
+make check-task-master   # Verify Task Master CLI
+make check-crush         # Verify Crush CLI  
+make check-gemini        # Verify Gemini CLI
+```
+
+**Note**: Task Master AI is required for all TUI functionality. Other tools are optional but recommended.
 
 ### Keyboard Shortcuts
 
@@ -678,6 +733,441 @@ make test
 ```bash
 make lint
 ```
+
+### Verifying Dependencies
+
+Before contributing or running the TUI, verify all dependencies are installed:
+
+```bash
+# Check required dependencies
+make check-task-master
+
+# Check optional dependencies
+make check-crush
+make check-gemini
+
+# Install any missing dependencies
+make install-all
+```
+
+## Troubleshooting
+
+### Task Master CLI Not Found
+
+If you see "task-master binary not found" errors:
+
+#### 1. Check Installation Status
+
+```bash
+make check-task-master
+```
+
+If not installed, run:
+```bash
+make install-task-master
+```
+
+#### 2. Verify npm Global Bin Location
+
+```bash
+npm config get prefix
+```
+
+The `task-master` binary will be installed to `<prefix>/bin/task-master`.
+
+#### 3. Update PATH if Needed
+
+**For npm with default config**:
+```bash
+export PATH="$(npm config get prefix)/bin:$PATH"
+
+# Make permanent (add to ~/.zshrc or ~/.bash_profile):
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**For npm installed via Homebrew (macOS)**:
+```bash
+export PATH="$HOME/.npm-global/bin:$PATH"
+```
+
+**For nvm users**:
+```bash
+# PATH is usually configured automatically by nvm
+# If not working, reinstall Node.js via nvm:
+nvm reinstall-packages $(nvm current)
+```
+
+#### 4. Alternative: Use npx
+
+If PATH configuration is problematic, use `npx` as a workaround:
+```bash
+npx task-master-ai next
+npx task-master-ai list
+```
+
+**Note**: tm-tui will still expect `task-master` in PATH. This is a temporary workaround.
+
+### Permission Errors During Installation
+
+If you encounter EACCES or permission errors when running `make install-task-master`:
+
+#### Option 1: Use Node Version Manager - nvm (Recommended)
+
+Using nvm avoids permission issues entirely:
+```bash
+# Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Restart your shell or source the profile
+source ~/.bashrc  # or ~/.zshrc for Zsh
+
+# Install Node.js 20+
+nvm install 20
+nvm use 20
+nvm alias default 20
+
+# Retry installation
+make install-task-master
+```
+
+**Why this works**: nvm installs Node.js and npm in your home directory (`~/.nvm`), avoiding system-wide permission requirements.
+
+#### Option 2: Fix npm Permissions
+
+```bash
+# Create npm global directory in home folder
+mkdir -p ~/.npm-global
+
+# Configure npm to use this directory
+npm config set prefix '~/.npm-global'
+
+# Add to PATH
+export PATH="$HOME/.npm-global/bin:$PATH"
+echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Retry installation
+make install-task-master
+```
+
+See [npm documentation](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally) for more details.
+
+#### Option 3: Use sudo (Not Recommended)
+
+```bash
+sudo npm install -g task-master-ai
+```
+
+⚠️ **Warning**: Using sudo with npm can cause permission issues with future installs. **Strongly prefer Options 1 or 2**.
+
+### Node.js Not Installed or Wrong Version
+
+Task Master AI requires **Node.js 20 or later**. If you see "npm not found" or version errors:
+
+#### Check Your Node.js Version
+
+```bash
+node --version
+# Should show v20.x.x or higher
+```
+
+#### Install/Upgrade Node.js
+
+**Recommended: nvm (Node Version Manager)**
+```bash
+# Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Install Node.js 20+
+nvm install 20
+nvm use 20
+nvm alias default 20
+
+# Verify version
+node --version  # Should show v20.x.x or higher
+```
+
+**macOS (Homebrew)**
+```bash
+brew install node
+# Or upgrade existing installation
+brew upgrade node
+```
+
+**Ubuntu/Debian**
+```bash
+# ⚠️ DO NOT use apt - it installs outdated Node.js 12.x
+# Use NodeSource repository instead:
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+**Alpine Linux**
+```bash
+# Use apk (musl-compatible)
+apk add --no-cache nodejs npm
+
+# ⚠️ DO NOT use nvm on Alpine - glibc/musl incompatibility
+```
+
+**Windows**
+- Download installer from [nodejs.org](https://nodejs.org/) (LTS version 20+)
+- Or use [nvm-windows](https://github.com/coreybutler/nvm-windows)
+
+After installing/upgrading Node.js, retry:
+```bash
+make install-task-master
+```
+
+### Multiple Node.js Installations (nvm + Homebrew/System)
+
+If you have multiple Node.js installations (common on macOS with both nvm and Homebrew):
+
+#### Understanding PATH Precedence
+
+```bash
+# Check which Node.js is active
+which -a node
+# Output example:
+# /Users/you/.nvm/versions/node/v22.21.1/bin/node (nvm - first in PATH)
+# /usr/local/bin/node (Homebrew - second in PATH)
+
+# Check which task-master will be used
+which task-master
+# Will use the first one found in PATH
+```
+
+**Key Behavior**: The **first** installation in your PATH takes precedence.
+
+#### nvm Takes Priority (Typical Setup)
+
+When nvm is initialized in your shell config (`~/.zshrc` or `~/.bashrc`), it adds its directory to the **beginning** of PATH:
+
+```bash
+# nvm initialization (typically in ~/.zshrc)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# This makes nvm's Node.js take priority over Homebrew
+```
+
+**Result**: `task-master` installs to nvm's directory and works correctly.
+
+#### Switching Between Installations
+
+```bash
+# Use nvm Node.js
+nvm use 20
+
+# Temporarily use Homebrew Node.js (if needed)
+# Remove nvm from PATH for current session
+export PATH=$(echo $PATH | tr ':' '\n' | grep -v nvm | tr '\n' ':')
+
+# Restore by opening new terminal or:
+source ~/.zshrc
+```
+
+#### Recommendation
+
+- **Keep it simple**: Use **one** Node.js installation method (prefer nvm)
+- **If using nvm**: Let nvm manage all Node.js versions
+- **If using Homebrew**: Remove nvm to avoid conflicts
+- **Multiple installs**: Works fine, just be aware which is active
+
+#### npm Prefix Locations by Installation Method
+
+| Method | npm prefix | task-master location | Auto-PATH? |
+|--------|-----------|---------------------|-----------|
+| nvm | `~/.nvm/versions/node/<version>` | `~/.nvm/versions/node/<version>/bin/` | ✅ Yes |
+| Homebrew (macOS) | `/usr/local` | `/usr/local/bin/` | ✅ Yes |
+| apt (Ubuntu) | `/usr` | `/usr/bin/` | ✅ Yes |
+| NodeSource (Ubuntu) | `/usr` | `/usr/bin/` | ✅ Yes |
+| Manual npm config | `~/.npm-global` | `~/.npm-global/bin/` | ⚠️ Manual |
+
+### Platform-Specific Installation Notes
+
+#### macOS
+
+**Recommended**: Use **nvm** for best compatibility and flexibility.
+
+**Homebrew Installation**:
+- ✅ Works correctly with Task Master TUI
+- ✅ Automatic PATH configuration
+- ⚠️ May have slightly older Node.js version
+- ⚠️ Possible engine warnings if Node < 20.18.1 (non-critical)
+
+**nvm Installation**:
+- ✅ Latest Node.js versions available
+- ✅ Easy version switching
+- ✅ No permission issues
+- ✅ Recommended for development
+
+**Testing Results**: Both methods fully tested and working (see `.taskmaster/installation-upgrade/9.1.log`).
+
+#### Linux (Ubuntu/Debian)
+
+**❌ DO NOT use apt's default Node.js**:
+```bash
+# This installs ancient Node.js 12.x - WILL NOT WORK
+sudo apt install nodejs npm  # ❌ WRONG
+```
+
+**✅ Use NodeSource repository**:
+```bash
+# Install Node.js 20.x from NodeSource
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify version
+node --version  # Should be v20.x.x
+```
+
+**✅ Or use nvm** (preferred for development):
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+```
+
+**Testing Results**: Full test suite in Docker containers, all scenarios validated (see `tests/installation/LINUX_TEST_RESULTS.md`).
+
+#### Linux (Alpine)
+
+**⚠️ CRITICAL: Alpine uses musl libc, not glibc**
+
+**✅ ONLY use apk package manager**:
+```bash
+apk add --no-cache nodejs npm
+```
+
+**❌ NEVER use nvm on Alpine**:
+```bash
+# This will FAIL at runtime due to musl/glibc incompatibility
+curl -o- https://nvm.sh/install.sh | bash  # ❌ DO NOT DO THIS
+nvm install 20  # Binary downloads are glibc-linked, won't run on musl
+```
+
+**Why**: nvm downloads pre-built Node.js binaries compiled for glibc. Alpine uses musl libc (different ABI), causing runtime failures:
+```
+Error relocating /root/.nvm/versions/node/v20.x.x/bin/node: __register_atfork: symbol not found
+```
+
+**Testing Results**: Alpine + apk ✅ works perfectly. Alpine + nvm ❌ fails due to ABI incompatibility (see `.taskmaster/installation-upgrade/9.2.log`).
+
+#### Windows
+
+**Recommended**: Use **Git Bash** or **WSL2** for best experience.
+
+**Requirements**:
+- Node.js 20+ (from [nodejs.org](https://nodejs.org/) or nvm-windows)
+- Git for Windows (includes Git Bash and make)
+- Or use WSL2 with Ubuntu and follow Linux instructions
+
+**PATH Configuration**:
+- npm automatically configures PATH during Node.js installation
+- Verify with: `where task-master` (should show path in `%APPDATA%\npm\`)
+
+**Testing Results**: Full Docker-based simulation tested successfully (see `tests/windows/TEST-REPORT.md`).
+
+### Edge Cases and Known Issues
+
+#### Issue 1: npm Not Found After Node.js Installation
+
+**Symptom**: `make install-task-master` fails with "npm: command not found"
+
+**Cause**: npm binary directory not in PATH
+
+**Solution**:
+```bash
+# Check npm prefix
+npm config get prefix
+
+# Add to PATH (adjust for your prefix)
+export PATH="$(npm config get prefix)/bin:$PATH"
+
+# Make permanent
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+#### Issue 2: task-master Installed But Not Found
+
+**Symptom**: `make check-task-master` reports "not installed" but `npm list -g task-master-ai` shows it's installed
+
+**Cause**: npm bin directory not in PATH, or using different Node.js installation than expected
+
+**Solutions**:
+
+1. **Check which Node.js is active**:
+   ```bash
+   which node
+   npm config get prefix
+   # Should match
+   ```
+
+2. **Add npm bin to PATH**:
+   ```bash
+   export PATH="$(npm config get prefix)/bin:$PATH"
+   ```
+
+3. **Verify task-master location**:
+   ```bash
+   find $(npm config get prefix) -name task-master 2>/dev/null
+   # Should show the binary location
+   ```
+
+#### Issue 3: Old npm Version Warnings
+
+**Symptom**: Warnings about outdated npm during installation
+
+**Solution**:
+```bash
+# Update npm to latest
+npm install -g npm@latest
+
+# Verify version
+npm --version  # Should be 9.x or higher
+```
+
+#### Issue 4: Disk Space Errors During Installation
+
+**Symptom**: `ENOSPC: no space left on device`
+
+**Solution**:
+```bash
+# Check available space
+df -h
+
+# Clean npm cache
+npm cache clean --force
+
+# Clean old Node.js versions (if using nvm)
+nvm list
+nvm uninstall <old-version>
+```
+
+#### Issue 5: Network Errors / Timeouts
+
+**Symptom**: Installation fails with network timeout or ETIMEDOUT errors
+
+**Solution**:
+```bash
+# Use different npm registry mirror
+npm config set registry https://registry.npmjs.org/
+
+# Or increase timeout
+npm config set fetch-timeout 60000
+
+# Retry installation
+make install-task-master
+```
+
+For more edge cases and comprehensive test documentation, see:
+- `tests/edge-cases/README.md` - Edge case test framework
+- `tests/edge-cases/FINDINGS.md` - Detailed analysis and recommendations
+- `EDGE_CASE_TESTING_SUMMARY.md` - Quick reference
 
 ## Project Structure
 

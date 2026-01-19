@@ -18,12 +18,11 @@ const (
 
 // Project root markers to search for when detecting project root
 var projectRootMarkers = []string{
-	".taskmaster",  // Task Master project
-	".git",         // Git repository
-	"go.mod",       // Go module
-	".crush.json",  // Existing Crush config
+	".taskmaster", // Task Master project
+	".git",        // Git repository
+	"go.mod",      // Go module
+	".crush.json", // Existing Crush config
 }
-
 
 // SelectedModel represents a single model configuration entry
 // Used in the models map to specify a model ID and its provider
@@ -75,11 +74,11 @@ func (c *CrushConfig) UnmarshalJSON(data []byte) error {
 
 	// Create a temporary struct without our custom fields to unmarshal known fields
 	type tempCrushConfig struct {
-		Schema  string                     `json:"$schema,omitempty"`
-		Models  map[string]SelectedModel   `json:"models,omitempty"`
-		Version string                     `json:"version,omitempty"`
-		Options CrushOptions               `json:"options,omitempty"`
-		Extra   map[string]interface{}     `json:"-"`
+		Schema  string                   `json:"$schema,omitempty"`
+		Models  map[string]SelectedModel `json:"models,omitempty"`
+		Version string                   `json:"version,omitempty"`
+		Options CrushOptions             `json:"options,omitempty"`
+		Extra   map[string]interface{}   `json:"-"`
 	}
 
 	// First, unmarshal into a generic map to capture all fields
@@ -108,12 +107,12 @@ func (c *CrushConfig) UnmarshalJSON(data []byte) error {
 		if c.Models == nil {
 			c.Models = make(map[string]SelectedModel)
 		}
-		
+
 		if _, hasLargeModel := c.Models["large"]; !hasLargeModel {
 			// Extract model string from legacy field
 			var modelStr string
 			var providerStr string
-			
+
 			// Legacy format could be just a string, or a structured object
 			switch v := legacyModel.(type) {
 			case string:
@@ -131,7 +130,7 @@ func (c *CrushConfig) UnmarshalJSON(data []byte) error {
 					providerStr = inferProviderFromModel(modelStr)
 				}
 			}
-			
+
 			// Migrate to Models["large"] if we have a model string
 			if modelStr != "" {
 				c.Models["large"] = SelectedModel{
@@ -206,7 +205,7 @@ func (c *CrushConfig) MarshalJSON() ([]byte, error) {
 
 // GetCrushConfigPath returns the path to the .crush.json file
 // It searches upward from the current directory to find the project root.
-// 
+//
 // Resolution order:
 // 1. CRUSH_CONFIG_PATH environment variable (if set and valid)
 // 2. CRUSH_PROJECT_ROOT environment variable (if set) + .crush.json
@@ -324,7 +323,6 @@ func GetCrushConfigPathOrDefault(fallback string) string {
 	}
 	return fallback
 }
-
 
 // LoadCrushConfig loads and parses the .crush.json file
 // Returns default configuration if file doesn't exist
@@ -484,9 +482,9 @@ func getDefaultCrushConfig() *CrushConfig {
 		Version:     "1.0",
 		ExtraFields: make(map[string]interface{}),
 		Options: CrushOptions{
-			ContextPaths:  []string{},
-			SkillsPaths:   []string{"./.crush/skills"},
-			ExtraOptions:  make(map[string]interface{}),
+			ContextPaths: []string{},
+			SkillsPaths:  []string{"./.crush/skills"},
+			ExtraOptions: make(map[string]interface{}),
 		},
 	}
 }
@@ -558,48 +556,48 @@ func inferProviderFromModel(model string) string {
 	if model == "" {
 		return ""
 	}
-	
+
 	// Check for common provider patterns in model names
 	modelLower := strings.ToLower(model)
-	
+
 	// OpenAI models
-	if strings.Contains(modelLower, "gpt") || 
-	   strings.Contains(modelLower, "davinci") || 
-	   strings.Contains(modelLower, "curie") ||
-	   strings.Contains(modelLower, "babbage") ||
-	   strings.Contains(modelLower, "ada") {
+	if strings.Contains(modelLower, "gpt") ||
+		strings.Contains(modelLower, "davinci") ||
+		strings.Contains(modelLower, "curie") ||
+		strings.Contains(modelLower, "babbage") ||
+		strings.Contains(modelLower, "ada") {
 		return "openai"
 	}
-	
+
 	// Anthropic models
 	if strings.Contains(modelLower, "claude") {
 		return "anthropic"
 	}
-	
+
 	// Google models
-	if strings.Contains(modelLower, "gemini") || 
-	   strings.Contains(modelLower, "palm") ||
-	   strings.Contains(modelLower, "bard") {
+	if strings.Contains(modelLower, "gemini") ||
+		strings.Contains(modelLower, "palm") ||
+		strings.Contains(modelLower, "bard") {
 		return "google"
 	}
-	
+
 	// Meta models
 	if strings.Contains(modelLower, "llama") {
 		return "meta"
 	}
-	
+
 	// Mistral models
 	if strings.Contains(modelLower, "mistral") ||
-	   strings.Contains(modelLower, "mixtral") {
+		strings.Contains(modelLower, "mixtral") {
 		return "mistral"
 	}
-	
+
 	// Cohere models
 	if strings.Contains(modelLower, "cohere") ||
-	   strings.Contains(modelLower, "command") {
+		strings.Contains(modelLower, "command") {
 		return "cohere"
 	}
-	
+
 	// Default: cannot infer, return empty
 	return ""
 }

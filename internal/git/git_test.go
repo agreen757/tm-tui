@@ -234,7 +234,7 @@ func BenchmarkIsGitAvailable(b *testing.B) {
 // TestGetStatusValidRepository tests GitStatus retrieval for a valid git repository
 func TestGetStatusValidRepository(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Get the current working directory (which should be in a git repo)
 	currentDir, err := os.Getwd()
 	if err != nil {
@@ -257,7 +257,7 @@ func TestGetStatusValidRepository(t *testing.T) {
 // TestGetStatusBranchDetection tests that branch name is correctly detected
 func TestGetStatusBranchDetection(t *testing.T) {
 	ctx := context.Background()
-	
+
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
@@ -268,7 +268,7 @@ func TestGetStatusBranchDetection(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error for branch detection, got: %v", err)
 	}
-	
+
 	// Branch should not be empty and should not contain whitespace
 	if status.Branch != filepath.Base(status.Branch) {
 		t.Errorf("Expected branch to not contain path separators, got: %s", status.Branch)
@@ -278,7 +278,7 @@ func TestGetStatusBranchDetection(t *testing.T) {
 // TestGetStatusDirtyState tests dirty/clean state detection
 func TestGetStatusDirtyState(t *testing.T) {
 	ctx := context.Background()
-	
+
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
@@ -289,7 +289,7 @@ func TestGetStatusDirtyState(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error for dirty state detection, got: %v", err)
 	}
-	
+
 	// IsDirty should be a valid boolean
 	if status.IsDirty != (status.IsDirty == true) && status.IsDirty != (status.IsDirty == false) {
 		t.Errorf("Expected IsDirty to be a valid boolean, got: %v", status.IsDirty)
@@ -335,7 +335,7 @@ func TestGetStatusContextCancellation(t *testing.T) {
 // TestGetStatusUpstreamDetection tests HasUpstream field
 func TestGetStatusUpstreamDetection(t *testing.T) {
 	ctx := context.Background()
-	
+
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
@@ -346,7 +346,7 @@ func TestGetStatusUpstreamDetection(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error for upstream detection, got: %v", err)
 	}
-	
+
 	// HasUpstream should be set based on whether upstream branch exists
 	if status.HasUpstream {
 		// If upstream exists, ahead and behind should be integers >= 0
@@ -360,7 +360,7 @@ func TestGetStatusUpstreamDetection(t *testing.T) {
 // TestGetStatusAheadBehindCounts tests ahead/behind tracking
 func TestGetStatusAheadBehindCounts(t *testing.T) {
 	ctx := context.Background()
-	
+
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
@@ -371,7 +371,7 @@ func TestGetStatusAheadBehindCounts(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error for ahead/behind counts, got: %v", err)
 	}
-	
+
 	// Verify Ahead and Behind are non-negative
 	if status.Ahead < 0 {
 		t.Errorf("Expected Ahead to be >= 0, got: %d", status.Ahead)
@@ -436,7 +436,7 @@ func TestGitStatusStructFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Verify struct can be instantiated and fields are accessible
-			if tt.status.Branch != "main" && tt.status.Branch != "feature/new" && 
+			if tt.status.Branch != "main" && tt.status.Branch != "feature/new" &&
 				tt.status.Branch != "develop" && tt.status.Branch != "" {
 				// Just verify we can access the field
 			}
@@ -1379,7 +1379,7 @@ func TestGetRecentCommitsStructure(t *testing.T) {
 
 	if len(commits) > 0 {
 		commit := commits[0]
-		
+
 		// Verify all fields exist and are strings
 		if reflect.TypeOf(commit.Hash).Kind() != reflect.String {
 			t.Errorf("Expected Hash to be string, got %T", commit.Hash)

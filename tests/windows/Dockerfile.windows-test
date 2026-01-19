@@ -1,0 +1,48 @@
+# Dockerfile for testing Task Master TUI installation on Windows/Git Bash simulation
+# This simulates a Git Bash environment on Windows using Ubuntu as the base
+
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install basic dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    make \
+    build-essential \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20.x (LTS) - required by task-master-ai
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify installations
+RUN node --version && npm --version && make --version
+
+# Create a user similar to Windows environment
+RUN useradd -m -s /bin/bash testuser
+
+# Switch to test user
+USER testuser
+WORKDIR /home/testuser
+
+# Set up npm global directory (similar to Windows user directory)
+RUN mkdir -p ~/.npm-global \
+    && npm config set prefix '~/.npm-global'
+
+# Add npm global bin to PATH (simulating Windows PATH modification)
+ENV PATH="/home/testuser/.npm-global/bin:${PATH}"
+
+# Create a workspace directory
+RUN mkdir -p /home/testuser/workspace
+
+WORKDIR /home/testuser/workspace
+
+# Default command
+CMD ["/bin/bash"]

@@ -11,45 +11,45 @@ import (
 // messages are sent to the output in the Task Runner
 func TestErrorMessageIntegration(t *testing.T) {
 	tests := []struct {
-		name           string
-		stderr         string
-		args           string
-		expectType     string
+		name               string
+		stderr             string
+		args               string
+		expectType         string
 		expectInSuggestion []string
 	}{
 		{
-			name:       "Branch exists error",
-			stderr:     "fatal: A branch named 'feature' already exists.",
-			args:       "checkout -b feature",
-			expectType: "BranchExistsError",
+			name:               "Branch exists error",
+			stderr:             "fatal: A branch named 'feature' already exists.",
+			args:               "checkout -b feature",
+			expectType:         "BranchExistsError",
 			expectInSuggestion: []string{"feature", "already exists", "checkout", "git"},
 		},
 		{
-			name:       "Branch not found error",
-			stderr:     "error: pathspec 'nonexistent' did not match any files in the index.",
-			args:       "checkout nonexistent",
-			expectType: "BranchNotFoundError",
+			name:               "Branch not found error",
+			stderr:             "error: pathspec 'nonexistent' did not match any files in the index.",
+			args:               "checkout nonexistent",
+			expectType:         "BranchNotFoundError",
 			expectInSuggestion: []string{"nonexistent", "not found", "Fetch"},
 		},
 		{
-			name:       "Permission denied error",
-			stderr:     "fatal: Permission denied (.git/refs/heads)",
-			args:       "checkout main",
-			expectType: "GitPermissionError",
+			name:               "Permission denied error",
+			stderr:             "fatal: Permission denied (.git/refs/heads)",
+			args:               "checkout main",
+			expectType:         "GitPermissionError",
 			expectInSuggestion: []string{"Permission", "denied", "Check"},
 		},
 		{
-			name:       "Network error",
-			stderr:     "fatal: unable to access 'https://github.com/user/repo.git/': Connection refused",
-			args:       "fetch",
-			expectType: "GitNetworkError",
+			name:               "Network error",
+			stderr:             "fatal: unable to access 'https://github.com/user/repo.git/': Connection refused",
+			args:               "fetch",
+			expectType:         "GitNetworkError",
 			expectInSuggestion: []string{"Network", "connection", "Check"},
 		},
 		{
-			name:       "Merge conflict error",
-			stderr:     "CONFLICT (content): Merge conflict in main.go",
-			args:       "merge feature",
-			expectType: "MergeConflictError",
+			name:               "Merge conflict error",
+			stderr:             "CONFLICT (content): Merge conflict in main.go",
+			args:               "merge feature",
+			expectType:         "MergeConflictError",
 			expectInSuggestion: []string{"conflict", "resolve", "git"},
 		},
 	}
@@ -156,10 +156,10 @@ func TestUserFriendlyMessages(t *testing.T) {
 			ChangedFiles: []string{"README.md"},
 		}: true,
 		&AheadBehindError{
-			Message:     "ahead of origin",
-			AheadCount:  3,
-			BranchName:  "main",
-			RemoteName:  "origin",
+			Message:    "ahead of origin",
+			AheadCount: 3,
+			BranchName: "main",
+			RemoteName: "origin",
 		}: true,
 		&GenericGitError{
 			Message:   "unknown error",

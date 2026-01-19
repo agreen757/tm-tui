@@ -11,20 +11,20 @@ import (
 
 // ExpandTaskPreviewDialog displays a preview of the task expansion as a tree view
 type ExpandTaskPreviewDialog struct {
-	title           string
-	description     string
-	drafts          []taskmaster.SubtaskDraft
-	flattened       []taskmaster.FlattenedDraft
-	selectedIndex   int
-	scrollOffset    int
-	width           int
-	height          int
-	style           *DialogStyle
-	focused         bool
-	cancelCallback  func()
+	title            string
+	description      string
+	drafts           []taskmaster.SubtaskDraft
+	flattened        []taskmaster.FlattenedDraft
+	selectedIndex    int
+	scrollOffset     int
+	width            int
+	height           int
+	style            *DialogStyle
+	focused          bool
+	cancelCallback   func()
 	continueCallback func()
-	expandedNodes   map[string]bool
-	maxHeight       int // Max displayable lines
+	expandedNodes    map[string]bool
+	maxHeight        int // Max displayable lines
 }
 
 // NewExpandTaskPreviewDialog creates a new preview dialog for expanded tasks
@@ -79,7 +79,6 @@ func (d *ExpandTaskPreviewDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	return d, nil
 }
 
-
 func (d *ExpandTaskPreviewDialog) ensureVisible() {
 	if d.selectedIndex < d.scrollOffset {
 		d.scrollOffset = d.selectedIndex
@@ -91,7 +90,7 @@ func (d *ExpandTaskPreviewDialog) ensureVisible() {
 // View implements tea.Model
 func (d *ExpandTaskPreviewDialog) View() string {
 	content := d.renderContent()
-	
+
 	borderColor := d.style.BorderColor
 	if d.focused {
 		borderColor = d.style.FocusedBorderColor
@@ -204,7 +203,7 @@ func (d *ExpandTaskPreviewDialog) renderTreeItem(fd taskmaster.FlattenedDraft, i
 
 func (d *ExpandTaskPreviewDialog) renderFooter() string {
 	// Show item count and navigation hints
-	info := fmt.Sprintf("[%d/%d] ↑↓:Navigate Enter:Continue Esc:Cancel", 
+	info := fmt.Sprintf("[%d/%d] ↑↓:Navigate Enter:Continue Esc:Cancel",
 		d.selectedIndex+1, len(d.flattened))
 
 	// Right-align additional info

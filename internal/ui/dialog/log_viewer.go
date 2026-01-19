@@ -30,37 +30,37 @@ type LogViewerErrorMsg struct {
 
 // LogViewerPanel displays log file contents with scrolling, word-wrap, and markdown rendering
 type LogViewerPanel struct {
-	viewport         viewport.Model
-	content          string
-	renderedContent  string
-	filePath         string
-	width            int
-	height           int
-	focused          bool
-	showLineNumbers  bool
-	wordWrap         bool
-	markdownEnabled  bool   // Enable markdown rendering
-	style            *DialogStyle
-	scrollPos        string // Current scroll position indicator (e.g., "25%")
-	loadError        error  // Stores any file loading errors
-	isLoaded         bool   // Tracks if content has been loaded
-	lineLimited      bool   // Indicates if content was truncated due to line limit
-	fileSizeWarning  bool   // Indicates if file was large (>1MB)
-	actualFileSize   int64  // Stores the actual file size in bytes
+	viewport        viewport.Model
+	content         string
+	renderedContent string
+	filePath        string
+	width           int
+	height          int
+	focused         bool
+	showLineNumbers bool
+	wordWrap        bool
+	markdownEnabled bool // Enable markdown rendering
+	style           *DialogStyle
+	scrollPos       string // Current scroll position indicator (e.g., "25%")
+	loadError       error  // Stores any file loading errors
+	isLoaded        bool   // Tracks if content has been loaded
+	lineLimited     bool   // Indicates if content was truncated due to line limit
+	fileSizeWarning bool   // Indicates if file was large (>1MB)
+	actualFileSize  int64  // Stores the actual file size in bytes
 
 	// Performance optimization fields
-	dirty            bool              // Dirty flag indicating content needs re-rendering
-	renderCache      map[int]string    // Cache rendered lines: line number -> rendered content
-	lineCacheMutex   sync.RWMutex      // Thread-safe access to render cache
+	dirty            bool                        // Dirty flag indicating content needs re-rendering
+	renderCache      map[int]string              // Cache rendered lines: line number -> rendered content
+	lineCacheMutex   sync.RWMutex                // Thread-safe access to render cache
 	lastViewportSize struct{ width, height int } // Track last viewport size for cache invalidation
-	contentLines     []string          // Pre-split content lines for efficient re-rendering
-	scrollBuffer     int               // Number of lines to load beyond viewport (±buffer)
-	
+	contentLines     []string                    // Pre-split content lines for efficient re-rendering
+	scrollBuffer     int                         // Number of lines to load beyond viewport (±buffer)
+
 	// Lazy loading fields
-	lazyLoadEnabled  bool              // Enable lazy loading for large files
-	totalFileLines   int               // Total number of lines in the file (for lazy loading)
-	visibleStartLine int               // Start line of currently loaded visible range
-	visibleEndLine   int               // End line of currently loaded visible range
+	lazyLoadEnabled  bool // Enable lazy loading for large files
+	totalFileLines   int  // Total number of lines in the file (for lazy loading)
+	visibleStartLine int  // Start line of currently loaded visible range
+	visibleEndLine   int  // End line of currently loaded visible range
 }
 
 // renderCacheEntry holds a cached rendered line with metadata
@@ -77,7 +77,7 @@ type renderCacheEntry struct {
 func NewLogViewerPanel(width, height int, style *DialogStyle) *LogViewerPanel {
 	vp := viewport.New(width, height)
 	vp.KeyMap = viewport.KeyMap{} // Disable default viewport keybindings to handle manually
-	
+
 	if style == nil {
 		style = DefaultDialogStyle()
 	}
@@ -91,7 +91,7 @@ func NewLogViewerPanel(width, height int, style *DialogStyle) *LogViewerPanel {
 		height:          height,
 		focused:         false,
 		showLineNumbers: false,
-		wordWrap:        true, // Enable by default
+		wordWrap:        true,  // Enable by default
 		markdownEnabled: false, // Disabled by default
 		style:           style,
 		scrollPos:       "0%",
@@ -140,14 +140,14 @@ func (lv *LogViewerPanel) LoadFileContent(filePath string) error {
 	lv.actualFileSize = 0
 	lv.contentLines = []string{}
 	lv.invalidateCache()
-	
+
 	// Check if path is empty
 	if filePath == "" {
 		lv.loadError = errors.New("file path is empty")
 		lv.renderContent()
 		return lv.loadError
 	}
-	
+
 	// First check file existence and permissions with os.Stat
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -164,35 +164,35 @@ func (lv *LogViewerPanel) LoadFileContent(filePath string) error {
 		lv.renderContent()
 		return lv.loadError
 	}
-	
+
 	// Check if it's a directory
 	if info.IsDir() {
 		lv.loadError = fmt.Errorf("path is a directory, not a file: %s", filePath)
 		lv.renderContent()
 		return lv.loadError
 	}
-	
+
 	// Store actual file size
 	lv.actualFileSize = info.Size()
-	
+
 	// Check file size - warn if over 1MB
 	const maxRecommendedSize = 1 * 1024 * 1024 // 1MB
 	if info.Size() > maxRecommendedSize {
 		lv.fileSizeWarning = true
 	}
-	
+
 	// Try to read file with timeout logic
 	type readResult struct {
 		data []byte
 		err  error
 	}
-	
+
 	readChan := make(chan readResult, 1)
 	go func() {
 		data, err := os.ReadFile(filePath)
 		readChan <- readResult{data, err}
 	}()
-	
+
 	// Wait for read with timeout (useful for large files on slow systems)
 	select {
 	case result := <-readChan:
@@ -208,34 +208,34 @@ func (lv *LogViewerPanel) LoadFileContent(filePath string) error {
 			lv.renderContent()
 			return lv.loadError
 		}
-		
+
 		// Convert to string and split into lines
 		content := string(result.data)
 		lines := strings.Split(content, "\n")
-		
+
 		// Apply 10,000 line limit for performance
 		const maxLines = 10000
 		if len(lines) > maxLines {
 			lines = lines[:maxLines]
 			lv.lineLimited = true
 		}
-		
+
 		// Rejoin limited lines and pre-split for cache
 		lv.content = strings.Join(lines, "\n")
 		lv.contentLines = lines
 		lv.isLoaded = true
-		
+
 	case <-time.After(10 * time.Second):
 		// Timeout (file too large to read in reasonable time)
 		lv.loadError = fmt.Errorf("timeout reading file - file may be too large or I/O is slow")
 		lv.renderContent()
 		return lv.loadError
 	}
-	
+
 	// Render content and update scroll position
 	lv.renderContent()
 	lv.updateScrollPosition()
-	
+
 	return nil
 }
 
@@ -246,16 +246,16 @@ func (lv *LogViewerPanel) lazyLoadContent() tea.Cmd {
 	if !lv.lazyLoadEnabled || lv.filePath == "" {
 		return nil
 	}
-	
+
 	// Calculate visible range based on viewport position
 	startLine := max(0, lv.viewport.YOffset-lv.scrollBuffer)
 	endLine := min(lv.totalFileLines, lv.viewport.YOffset+lv.viewport.Height+lv.scrollBuffer)
-	
+
 	// Check if we already have this range loaded
 	if startLine >= lv.visibleStartLine && endLine <= lv.visibleEndLine {
 		return nil // Already loaded
 	}
-	
+
 	// Return command to load the visible lines
 	filePath := lv.filePath
 	return func() tea.Msg {
@@ -279,26 +279,26 @@ func readFileLines(filePath string, startLine, numLines int) ([]string, error) {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
-	
+
 	scanner := bufio.NewScanner(file)
 	lines := make([]string, 0, numLines)
 	currentLine := 0
-	
+
 	// Skip lines until we reach startLine
 	for currentLine < startLine && scanner.Scan() {
 		currentLine++
 	}
-	
+
 	// Read the requested number of lines
 	for currentLine < startLine+numLines && scanner.Scan() {
 		lines = append(lines, scanner.Text())
 		currentLine++
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading file: %w", err)
 	}
-	
+
 	return lines, nil
 }
 
@@ -308,16 +308,16 @@ func (lv *LogViewerPanel) renderVisible() string {
 	if len(lv.content) == 0 {
 		return "Select a log file to preview"
 	}
-	
+
 	lines := lv.contentLines
 	if len(lines) == 0 {
 		lines = strings.Split(lv.content, "\n")
 	}
-	
+
 	// Calculate visible range
 	startLine := max(0, lv.viewport.YOffset)
 	endLine := min(len(lines), startLine+lv.viewport.Height)
-	
+
 	// Extract visible lines only
 	var visibleLines []string
 	if startLine < len(lines) {
@@ -326,7 +326,7 @@ func (lv *LogViewerPanel) renderVisible() string {
 		}
 		visibleLines = lines[startLine:endLine]
 	}
-	
+
 	// Apply markdown rendering if enabled
 	var renderedLines []string
 	if lv.markdownEnabled {
@@ -336,17 +336,17 @@ func (lv *LogViewerPanel) renderVisible() string {
 	} else {
 		renderedLines = visibleLines
 	}
-	
+
 	// Apply word-wrap if enabled
 	if lv.wordWrap {
 		renderedLines = lv.applyWordWrap(renderedLines)
 	}
-	
+
 	// Apply line numbers if enabled (use original line numbers, not visible indices)
 	if lv.showLineNumbers {
 		renderedLines = lv.applyLineNumbersWithOffset(renderedLines, startLine)
 	}
-	
+
 	// Join lines efficiently
 	var builder strings.Builder
 	for i, line := range renderedLines {
@@ -355,7 +355,7 @@ func (lv *LogViewerPanel) renderVisible() string {
 			builder.WriteRune('\n')
 		}
 	}
-	
+
 	return builder.String()
 }
 
@@ -368,12 +368,12 @@ func (lv *LogViewerPanel) applyLineNumbersWithOffset(lines []string, offset int)
 		totalLines = len(lines)
 	}
 	numWidth := len(fmt.Sprintf("%d", totalLines))
-	
+
 	for i, line := range lines {
 		lineNum := offset + i + 1
 		numbered[i] = fmt.Sprintf("%*d │ %s", numWidth, lineNum, line)
 	}
-	
+
 	return numbered
 }
 
@@ -384,17 +384,17 @@ func countFileLines(filePath string) (int, error) {
 		return 0, err
 	}
 	defer file.Close()
-	
+
 	scanner := bufio.NewScanner(file)
 	count := 0
 	for scanner.Scan() {
 		count++
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return 0, err
 	}
-	
+
 	return count, nil
 }
 
@@ -483,26 +483,26 @@ func (lv *LogViewerPanel) IsFocused() bool {
 func (lv *LogViewerPanel) SetSize(width, height int) {
 	lv.width = width
 	lv.height = height
-	
+
 	// Reserve space for footer (1 line)
 	footerHeight := 1
 	viewportHeight := height - footerHeight
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
-	
+
 	// Set viewport dimensions
 	// Width and height are already the available content area (borders handled externally)
 	lv.viewport.Width = width
 	lv.viewport.Height = viewportHeight
-	
+
 	// Check if viewport size changed (triggers cache invalidation due to word-wrap)
 	if lv.lastViewportSize.width != width || lv.lastViewportSize.height != viewportHeight {
 		lv.lastViewportSize.width = width
 		lv.lastViewportSize.height = viewportHeight
 		lv.invalidateCache() // Width changes affect word-wrap caching
 	}
-	
+
 	lv.renderContent() // Re-render with new dimensions
 	lv.updateScrollPosition()
 }
@@ -561,14 +561,14 @@ func (lv *LogViewerPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		lv.renderContent()
 		return lv, nil
 	}
-	
+
 	return lv, nil
 }
 
 // handleKeyMsg handles keyboard input for scrolling and toggles
 func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	
+
 	// Intercept Tab/Shift+Tab/Esc to allow dialog to handle these keys
 	// These keys should NOT be handled by the log viewer
 	switch msg.String() {
@@ -576,7 +576,7 @@ func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Don't handle these keys - let dialog handle
 		return lv, nil
 	}
-	
+
 	switch msg.String() {
 	// Line scrolling
 	case "up", "k":
@@ -587,7 +587,7 @@ func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		lv.viewport.LineDown(1)
 		lv.updateScrollPosition()
 		cmd = lv.lazyLoadContent() // Trigger lazy load if needed
-	
+
 	// Page scrolling
 	case "pgup":
 		lv.viewport.HalfPageUp()
@@ -605,7 +605,7 @@ func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		lv.viewport.HalfPageDown()
 		lv.updateScrollPosition()
 		cmd = lv.lazyLoadContent() // Trigger lazy load if needed
-	
+
 	// Jump to top/bottom
 	case "home", "g":
 		// Handle "gg" for vim-style jump to top
@@ -628,7 +628,7 @@ func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		lv.viewport.GotoBottom()
 		lv.updateScrollPosition()
 		cmd = lv.lazyLoadContent() // Trigger lazy load if needed
-	
+
 	// Toggle features
 	case "n":
 		lv.ToggleLineNumbers()
@@ -637,7 +637,7 @@ func (lv *LogViewerPanel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "m":
 		lv.ToggleMarkdown()
 	}
-	
+
 	return lv, cmd
 }
 
@@ -651,10 +651,10 @@ func (lv *LogViewerPanel) View() string {
 	// Render the viewport content directly without borders
 	// The parent container (wrapPanel) will add borders based on focus state
 	content := lv.viewport.View()
-	
+
 	// Add status footer with scroll position and toggle states
 	footer := lv.renderFooter()
-	
+
 	// Combine content and footer
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -668,12 +668,12 @@ func (lv *LogViewerPanel) renderEmptyState() string {
 	var message string
 	var color lipgloss.Color
 	var suggestions string
-	
+
 	if lv.loadError != nil {
 		// Error state - provide context-aware messages
 		color = lipgloss.Color("#F7768E") // Error red
 		errorMsg := lv.loadError.Error()
-		
+
 		if lv.IsPermissionError() {
 			message = "❌ Permission Denied"
 			suggestions = "Check file permissions or try with different credentials"
@@ -693,10 +693,10 @@ func (lv *LogViewerPanel) renderEmptyState() string {
 			message = "❌ Error Loading File"
 			suggestions = "Details: " + errorMsg
 		}
-		
+
 		// Add full error details
 		message = fmt.Sprintf("%s\n\n%s\n\n%s", message, errorMsg, suggestions)
-		
+
 	} else if !lv.isLoaded {
 		// Not loaded yet
 		message = "📄 Select a log file to preview"
@@ -710,14 +710,14 @@ func (lv *LogViewerPanel) renderEmptyState() string {
 		suggestions = "This file contains no content"
 		message = fmt.Sprintf("%s\n\n%s", message, suggestions)
 	}
-	
+
 	emptyStyle := lipgloss.NewStyle().
 		Foreground(color).
 		Align(lipgloss.Center).
 		Width(lv.width).
 		Height(lv.height).
 		PaddingTop(lv.height / 3)
-	
+
 	return emptyStyle.Render(message)
 }
 
@@ -727,7 +727,7 @@ func (lv *LogViewerPanel) renderFooter() string {
 		Foreground(lipgloss.Color("#AAAAAA")).
 		Background(lipgloss.Color("#333333")).
 		Padding(0, 1)
-	
+
 	// Build toggle indicators
 	toggles := []string{}
 	if lv.showLineNumbers {
@@ -735,23 +735,23 @@ func (lv *LogViewerPanel) renderFooter() string {
 	} else {
 		toggles = append(toggles, "[n] Line Numbers: OFF")
 	}
-	
+
 	if lv.wordWrap {
 		toggles = append(toggles, "[w] Word Wrap: ON")
 	} else {
 		toggles = append(toggles, "[w] Word Wrap: OFF")
 	}
-	
+
 	if lv.markdownEnabled {
 		toggles = append(toggles, "[m] Markdown: ON")
 	} else {
 		toggles = append(toggles, "[m] Markdown: OFF")
 	}
-	
+
 	// Add warnings for content truncation and large files
 	var warningText string
 	warnings := []string{}
-	
+
 	if lv.lineLimited {
 		warnings = append(warnings, "⚠️  Content limited to 10,000 lines")
 	}
@@ -759,18 +759,18 @@ func (lv *LogViewerPanel) renderFooter() string {
 		sizeStr := formatFileSizeForDisplay(lv.actualFileSize)
 		warnings = append(warnings, fmt.Sprintf("⚠️  Large file (%s)", sizeStr))
 	}
-	
+
 	if len(warnings) > 0 {
 		warningText = " | " + strings.Join(warnings, " | ")
 	}
-	
+
 	// Build footer text
 	footerText := fmt.Sprintf("Scroll: %s | %s | ↑↓/k/j: scroll | PgUp/PgDn: page | Home/End: top/bottom%s",
 		lv.scrollPos,
 		strings.Join(toggles, " | "),
 		warningText,
 	)
-	
+
 	return footerStyle.Render(footerText)
 }
 
@@ -779,18 +779,18 @@ func (lv *LogViewerPanel) updateScrollPosition() {
 	// Calculate scroll position
 	totalLines := lv.viewport.TotalLineCount()
 	currentLine := lv.viewport.YOffset
-	
+
 	if totalLines == 0 {
 		lv.scrollPos = "0/0 lines (0%)"
 		return
 	}
-	
+
 	// Calculate percentage
 	percentage := int(float64(currentLine) / float64(totalLines) * 100)
 	if percentage > 100 {
 		percentage = 100
 	}
-	
+
 	// Format as "X/Y lines (Z%)"
 	lv.scrollPos = fmt.Sprintf("%d/%d lines (%d%%)", currentLine, totalLines, percentage)
 }
@@ -802,19 +802,19 @@ func (lv *LogViewerPanel) renderContent() {
 		lv.viewport.SetContent("")
 		return
 	}
-	
+
 	// Only re-render if dirty
 	if !lv.dirty && lv.renderedContent != "" {
 		return
 	}
-	
+
 	content := lv.content
-	
+
 	// Apply markdown rendering if enabled
 	if lv.markdownEnabled {
 		content = lv.renderMarkdown(content)
 	}
-	
+
 	// Use pre-split lines if available for efficiency
 	var lines []string
 	if len(lv.contentLines) > 0 && !lv.markdownEnabled {
@@ -824,26 +824,26 @@ func (lv *LogViewerPanel) renderContent() {
 	} else {
 		lines = strings.Split(content, "\n")
 	}
-	
+
 	// Apply word-wrap if enabled
 	if lv.wordWrap {
 		lines = lv.applyWordWrap(lines)
 	}
-	
+
 	// Apply line numbers if enabled
 	if lv.showLineNumbers {
 		lines = lv.applyLineNumbers(lines)
 	}
-	
+
 	// Use strings.Builder for efficient string concatenation
 	var builder strings.Builder
 	currentLine := lv.viewport.YOffset // Get the current visible line (top of viewport)
-	
+
 	// Apply current line highlighting if focused
 	currentLineStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("#44475a")).
 		Foreground(lipgloss.Color("#f8f8f2"))
-	
+
 	for i, line := range lines {
 		// Highlight the current line if panel is focused
 		if lv.focused && i == currentLine {
@@ -854,7 +854,7 @@ func (lv *LogViewerPanel) renderContent() {
 			builder.WriteRune('\n')
 		}
 	}
-	
+
 	lv.renderedContent = builder.String()
 	lv.viewport.SetContent(lv.renderedContent)
 	lv.dirty = false
@@ -868,20 +868,20 @@ func (lv *LogViewerPanel) applyWordWrap(lines []string) []string {
 	if availableWidth < 20 {
 		availableWidth = 20 // Minimum width
 	}
-	
+
 	wrapped := make([]string, 0, len(lines)*2) // Pre-allocate with expected growth
-	
+
 	for _, line := range lines {
 		if len(line) <= availableWidth {
 			wrapped = append(wrapped, line)
 			continue
 		}
-		
+
 		// Wrap long line using optimized wrapLine function
 		wrappedLines := wrapLineOptimized(line, availableWidth)
 		wrapped = append(wrapped, wrappedLines...)
 	}
-	
+
 	return wrapped
 }
 
@@ -892,15 +892,15 @@ func wrapLineOptimized(line string, width int) []string {
 	if width <= 0 {
 		return []string{line}
 	}
-	
+
 	// Convert to runes for proper Unicode handling
 	runes := []rune(line)
 	lineLen := len(runes)
-	
+
 	if lineLen <= width {
 		return []string{line}
 	}
-	
+
 	// Count leading whitespace for continuation indent
 	leadingSpace := 0
 	for _, r := range runes {
@@ -910,17 +910,17 @@ func wrapLineOptimized(line string, width int) []string {
 			break
 		}
 	}
-	
+
 	// Create indent string for continuation lines
 	indent := ""
 	if leadingSpace > 0 {
 		indent = string(runes[:leadingSpace])
 	}
-	
+
 	wrapped := make([]string, 0, (lineLen/width)+1) // Pre-allocate with expected segments
 	start := 0
 	isFirstLine := true
-	
+
 	for start < lineLen {
 		// For continuation lines, account for the indent we'll prepend
 		effectiveWidth := width
@@ -930,7 +930,7 @@ func wrapLineOptimized(line string, width int) []string {
 				effectiveWidth = 20 // Minimum effective width
 			}
 		}
-		
+
 		// Calculate segment end position
 		end := start + effectiveWidth
 		if end >= lineLen {
@@ -942,11 +942,11 @@ func wrapLineOptimized(line string, width int) []string {
 			wrapped = append(wrapped, segment)
 			break
 		}
-		
+
 		// Find word boundary for breaking
 		breakPoint := end
 		foundSpace := false
-		
+
 		// Search backwards from end position for a space
 		for i := end; i > start; i-- {
 			if runes[i] == ' ' || runes[i] == '\t' {
@@ -955,14 +955,14 @@ func wrapLineOptimized(line string, width int) []string {
 				break
 			}
 		}
-		
+
 		// If no space found, force break at width
 		if !foundSpace {
 			breakPoint = end
 			if breakPoint <= start {
 				breakPoint = start + 1
 			}
-			
+
 			// Add segment with continuation indicator
 			segment := string(runes[start:breakPoint]) + ">"
 			if !isFirstLine && leadingSpace > 0 {
@@ -977,17 +977,17 @@ func wrapLineOptimized(line string, width int) []string {
 				segment = indent + segment
 			}
 			wrapped = append(wrapped, segment)
-			
+
 			// Skip whitespace at break point
 			start = breakPoint
 			for start < lineLen && (runes[start] == ' ' || runes[start] == '\t') {
 				start++
 			}
 		}
-		
+
 		isFirstLine = false
 	}
-	
+
 	return wrapped
 }
 
@@ -999,15 +999,15 @@ func wrapLine(line string, width int) []string {
 	if width <= 0 {
 		return []string{line}
 	}
-	
+
 	// Convert to runes for proper Unicode handling
 	runes := []rune(line)
 	lineLen := len(runes)
-	
+
 	if lineLen <= width {
 		return []string{line}
 	}
-	
+
 	// Count leading whitespace
 	leadingSpace := 0
 	for _, r := range runes {
@@ -1017,10 +1017,10 @@ func wrapLine(line string, width int) []string {
 			break
 		}
 	}
-	
+
 	wrapped := []string{}
 	start := 0
-	
+
 	for start < lineLen {
 		// Calculate segment end position
 		end := start + width
@@ -1029,11 +1029,11 @@ func wrapLine(line string, width int) []string {
 			wrapped = append(wrapped, string(runes[start:]))
 			break
 		}
-		
+
 		// Find word boundary for breaking
 		breakPoint := end
 		foundSpace := false
-		
+
 		// Search backwards from end position for a space
 		for i := end; i > start; i-- {
 			if runes[i] == ' ' || runes[i] == '\t' {
@@ -1042,7 +1042,7 @@ func wrapLine(line string, width int) []string {
 				break
 			}
 		}
-		
+
 		// If no space found and we're not at the start, force break
 		if !foundSpace && end < lineLen {
 			// Leave room for continuation indicator (>)
@@ -1050,7 +1050,7 @@ func wrapLine(line string, width int) []string {
 			if breakPoint <= start {
 				breakPoint = start + 1
 			}
-			
+
 			// Add segment with continuation indicator
 			segment := string(runes[start:breakPoint]) + ">"
 			wrapped = append(wrapped, segment)
@@ -1059,13 +1059,13 @@ func wrapLine(line string, width int) []string {
 			// Break at word boundary
 			segment := string(runes[start:breakPoint])
 			wrapped = append(wrapped, segment)
-			
+
 			// Skip whitespace at break point
 			start = breakPoint
 			for start < lineLen && (runes[start] == ' ' || runes[start] == '\t') {
 				start++
 			}
-			
+
 			// Add leading whitespace to continuation lines
 			if start < lineLen && leadingSpace > 0 {
 				indent := string(runes[:leadingSpace])
@@ -1076,7 +1076,7 @@ func wrapLine(line string, width int) []string {
 			}
 		}
 	}
-	
+
 	return wrapped
 }
 
@@ -1084,11 +1084,11 @@ func wrapLine(line string, width int) []string {
 func (lv *LogViewerPanel) applyLineNumbers(lines []string) []string {
 	numbered := make([]string, len(lines))
 	numWidth := len(fmt.Sprintf("%d", len(lines)))
-	
+
 	for i, line := range lines {
 		numbered[i] = fmt.Sprintf("%*d │ %s", numWidth, i+1, line)
 	}
-	
+
 	return numbered
 }
 
@@ -1152,7 +1152,7 @@ func (lv *LogViewerPanel) renderMarkdown(text string) string {
 	var result strings.Builder
 	inCodeBlock := false
 	codeBlockLang := ""
-	
+
 	// Define styles for markdown elements
 	h1Style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff79c6"))
 	h2Style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#bd93f9"))
@@ -1162,7 +1162,7 @@ func (lv *LogViewerPanel) renderMarkdown(text string) string {
 	h6Style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ffb86c"))
 	codeBlockStyle := lipgloss.NewStyle().Background(lipgloss.Color("#333333")).Foreground(lipgloss.Color("#f8f8f2"))
 	codeBlockMarkerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#75b5aa"))
-	
+
 	for _, line := range lines {
 		// Check for code block markers
 		if strings.HasPrefix(line, "```") {
@@ -1178,14 +1178,14 @@ func (lv *LogViewerPanel) renderMarkdown(text string) string {
 			result.WriteString("\n")
 			continue
 		}
-		
+
 		if inCodeBlock {
 			// Render code block content with background
 			result.WriteString(codeBlockStyle.Render(line))
 			result.WriteString("\n")
 			continue
 		}
-		
+
 		// Handle headers
 		if strings.HasPrefix(line, "# ") {
 			result.WriteString(h1Style.Render(line))
@@ -1206,16 +1206,16 @@ func (lv *LogViewerPanel) renderMarkdown(text string) string {
 			// Regular text with inline formatting
 			result.WriteString(lv.renderInlineFormatting(line))
 		}
-		
+
 		result.WriteString("\n")
 	}
-	
+
 	// Remove trailing newline if present
 	resultStr := result.String()
 	if len(resultStr) > 0 && resultStr[len(resultStr)-1] == '\n' {
 		resultStr = resultStr[:len(resultStr)-1]
 	}
-	
+
 	return resultStr
 }
 
@@ -1225,11 +1225,11 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 	boldStyle := lipgloss.NewStyle().Bold(true)
 	italicStyle := lipgloss.NewStyle().Italic(true)
 	inlineCodeStyle := lipgloss.NewStyle().Background(lipgloss.Color("#2d2d2d")).Foreground(lipgloss.Color("#f8f8f2"))
-	
+
 	var result strings.Builder
 	i := 0
 	runes := []rune(line)
-	
+
 	for i < len(runes) {
 		// Check for inline code (`code`)
 		if runes[i] == '`' {
@@ -1238,7 +1238,7 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 			for j < len(runes) && runes[j] != '`' {
 				j++
 			}
-			
+
 			if j < len(runes) {
 				// Found closing backtick - remove backticks for rendering
 				codeContent := string(runes[i+1 : j])
@@ -1247,7 +1247,7 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 				continue
 			}
 		}
-		
+
 		// Check for bold (**text**)
 		if i+1 < len(runes) && runes[i] == '*' && runes[i+1] == '*' {
 			// Find closing **
@@ -1255,7 +1255,7 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 			for j+1 < len(runes) && !(runes[j] == '*' && runes[j+1] == '*') {
 				j++
 			}
-			
+
 			if j+1 < len(runes) && runes[j] == '*' && runes[j+1] == '*' {
 				// Found closing **
 				boldContent := string(runes[i+2 : j])
@@ -1264,7 +1264,7 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 				continue
 			}
 		}
-		
+
 		// Check for italic (*text*)
 		if runes[i] == '*' {
 			// Find closing *
@@ -1272,7 +1272,7 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 			for j < len(runes) && runes[j] != '*' {
 				j++
 			}
-			
+
 			if j < len(runes) {
 				// Found closing *
 				italicContent := string(runes[i+1 : j])
@@ -1281,11 +1281,11 @@ func (lv *LogViewerPanel) renderInlineFormatting(line string) string {
 				continue
 			}
 		}
-		
+
 		// Regular character
 		result.WriteRune(runes[i])
 		i++
 	}
-	
+
 	return result.String()
 }

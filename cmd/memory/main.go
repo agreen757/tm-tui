@@ -19,27 +19,27 @@ func main() {
 	deleteCmd := flag.NewFlagSet("delete", flag.ExitOnError)
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	logCmd := flag.NewFlagSet("log", flag.ExitOnError)
-	
+
 	// store command flags
 	storeKey := storeCmd.String("key", "", "Key for the memory to store")
 	storeFile := storeCmd.String("file", "", "File path to read content from (use '-' for stdin)")
 	storeVal := storeCmd.String("value", "", "Value to store (alternative to file)")
 	storeJSON := storeCmd.Bool("json", false, "Treat input as JSON")
-	
+
 	// get command flags
 	getKey := getCmd.String("key", "", "Key for the memory to retrieve")
-	
+
 	// delete command flags
 	deleteKey := deleteCmd.String("key", "", "Key for the memory to delete")
-	
+
 	// list command flags
 	listPrefix := listCmd.String("prefix", "", "Prefix for filtering keys")
 	listJSON := listCmd.Bool("json", false, "Output as JSON")
-	
+
 	// log command flags
 	logTaskID := logCmd.String("task", "", "Task ID to log activity for")
 	logActivity := logCmd.String("message", "", "Activity message to log")
-	
+
 	// Create helper instance
 	helper, err := memory.DefaultHelper()
 	if err != nil {
@@ -47,17 +47,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer helper.Close()
-	
+
 	// Check if no arguments provided
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
 	}
-	
+
 	// Determine which command is being run
 	ctx := context.Background()
 	switch os.Args[1] {
-	
+
 	case "store":
 		storeCmd.Parse(os.Args[2:])
 		if *storeKey == "" {
@@ -65,9 +65,9 @@ func main() {
 			storeCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		
+
 		var data []byte
-		
+
 		// Get data from file or value
 		if *storeFile != "" {
 			var err error
@@ -76,7 +76,7 @@ func main() {
 			} else {
 				data, err = os.ReadFile(*storeFile)
 			}
-			
+
 			if err != nil {
 				fmt.Printf("Error reading file: %v\n", err)
 				os.Exit(1)
@@ -88,7 +88,7 @@ func main() {
 			storeCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		
+
 		// Handle JSON format
 		if *storeJSON {
 			var jsonObj interface{}
@@ -96,7 +96,7 @@ func main() {
 				fmt.Printf("Error parsing JSON: %v\n", err)
 				os.Exit(1)
 			}
-			
+
 			if err := helper.StoreJSON(ctx, *storeKey, jsonObj); err != nil {
 				fmt.Printf("Error storing JSON: %v\n", err)
 				os.Exit(1)
@@ -107,9 +107,9 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		
+
 		fmt.Printf("Successfully stored memory with key: %s\n", *storeKey)
-		
+
 	case "get":
 		getCmd.Parse(os.Args[2:])
 		if *getKey == "" {
@@ -117,7 +117,7 @@ func main() {
 			getCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		
+
 		data, err := helper.Store.Retrieve(ctx, *getKey)
 		if err != nil {
 			if err == memory.ErrKeyNotFound {
@@ -127,10 +127,10 @@ func main() {
 			}
 			os.Exit(1)
 		}
-		
+
 		// Print data to stdout
 		fmt.Print(string(data))
-		
+
 	case "delete":
 		deleteCmd.Parse(os.Args[2:])
 		if *deleteKey == "" {
@@ -138,23 +138,23 @@ func main() {
 			deleteCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		
+
 		if err := helper.Store.Delete(ctx, *deleteKey); err != nil {
 			fmt.Printf("Error deleting data: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Printf("Successfully deleted memory with key: %s\n", *deleteKey)
-		
+
 	case "list":
 		listCmd.Parse(os.Args[2:])
-		
+
 		keys, err := helper.Store.List(ctx, *listPrefix)
 		if err != nil {
 			fmt.Printf("Error listing keys: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		if *listJSON {
 			jsonData, err := json.MarshalIndent(keys, "", "  ")
 			if err != nil {
@@ -171,7 +171,7 @@ func main() {
 				}
 			}
 		}
-		
+
 	case "log":
 		logCmd.Parse(os.Args[2:])
 		if *logTaskID == "" || *logActivity == "" {
@@ -179,21 +179,21 @@ func main() {
 			logCmd.PrintDefaults()
 			os.Exit(1)
 		}
-		
+
 		if err := helper.LogTaskActivity(ctx, *logTaskID, *logActivity); err != nil {
 			fmt.Printf("Error logging activity: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Printf("Successfully logged activity for task: %s\n", *logTaskID)
-		
+
 	case "readmes":
 		readmes, err := helper.ListReadmes(ctx)
 		if err != nil {
 			fmt.Printf("Error listing READMEs: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		if len(readmes) == 0 {
 			fmt.Println("No READMEs found")
 		} else {
@@ -202,10 +202,10 @@ func main() {
 				fmt.Println("-", name)
 			}
 		}
-		
+
 	case "help":
 		printUsage()
-		
+
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		printUsage()

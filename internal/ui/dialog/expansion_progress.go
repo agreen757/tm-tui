@@ -9,15 +9,15 @@ import (
 
 // ExpansionProgressUpdate represents an update to the expansion progress dialog
 type ExpansionProgressUpdate struct {
-	Progress        float64  // Progress as a percentage (0.0 to 1.0)
-	Stage           string   // Current stage: "Analyzing", "Generating", "Applying", "Complete"
-	CurrentTask     string   // Task ID being processed
-	TasksExpanded   int      // Number of tasks expanded so far
-	TotalTasks      int      // Total number of tasks to expand
-	SubtasksCreated int      // Total subtasks created
-	Scope           string   // Scope of expansion: "single", "all", "range", "tag"
-	Message         string   // Status message from CLI
-	Error           error    // Error, if any
+	Progress        float64 // Progress as a percentage (0.0 to 1.0)
+	Stage           string  // Current stage: "Analyzing", "Generating", "Applying", "Complete"
+	CurrentTask     string  // Task ID being processed
+	TasksExpanded   int     // Number of tasks expanded so far
+	TotalTasks      int     // Total number of tasks to expand
+	SubtasksCreated int     // Total subtasks created
+	Scope           string  // Scope of expansion: "single", "all", "range", "tag"
+	Message         string  // Status message from CLI
+	Error           error   // Error, if any
 }
 
 // NewExpansionProgressDialog creates a progress dialog for tracking task expansion
@@ -42,7 +42,7 @@ func UpdateExpansionProgress(
 	update ExpansionProgressUpdate,
 ) {
 	progressDialog.SetProgress(update.Progress)
-	
+
 	description := expansionProgressDescription(
 		update.Scope,
 		update.Stage,
@@ -66,10 +66,10 @@ func UpdateExpansionProgress(
 	// Add custom message if provided and not redundant
 	if update.Message != "" && !strings.Contains(description, update.Message) {
 		// Filter out raw file paths and CLI noise
-		if !strings.Contains(update.Message, "/.taskmaster/") && 
-		   !strings.HasPrefix(update.Message, "/Users/") &&
-		   !strings.HasPrefix(update.Message, "/home/") &&
-		   len(update.Message) < 200 {
+		if !strings.Contains(update.Message, "/.taskmaster/") &&
+			!strings.HasPrefix(update.Message, "/Users/") &&
+			!strings.HasPrefix(update.Message, "/home/") &&
+			len(update.Message) < 200 {
 			description = fmt.Sprintf("%s\n\n%s", description, update.Message)
 		}
 	}

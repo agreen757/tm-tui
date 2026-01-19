@@ -122,7 +122,7 @@ func (m *Model) showTagListDialog(list *taskmaster.TagList) {
 
 	selector := dialog.NewTagSelector(cfg)
 	selector.BaseFocusableDialog.BaseDialog.ID = tagListDialogID
-	
+
 	// Calculate dimensions based on app size
 	width := 72
 	height := 22
@@ -138,26 +138,26 @@ func (m *Model) showTagListDialog(list *taskmaster.TagList) {
 			height = 16
 		}
 	}
-	
+
 	selector.SetRect(width, height, 0, 0)
-	
+
 	m.appState.AddDialog(selector, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
 			m.showErrorDialog("Tag Contexts", "An error occurred: "+err.Error())
 			return nil
 		}
-		
+
 		result, ok := value.(dialog.TagSelectorResult)
 		if !ok {
 			return nil
 		}
-		
+
 		// If user selected "Add New Tag..." option
 		if result.AddNewTag {
 			m.openAddTagDialog()
 			return nil
 		}
-		
+
 		// User selected an existing tag - open action dialog
 		if len(result.SelectedTags) > 0 {
 			// Find the selected tag context and set it for actions
@@ -169,7 +169,7 @@ func (m *Model) showTagListDialog(list *taskmaster.TagList) {
 				}
 			}
 		}
-		
+
 		return nil
 	})
 }

@@ -106,12 +106,12 @@ func TestValidateTasks(t *testing.T) {
 			wantWarnings: 3,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			index, _ := buildTaskIndex(tt.tasks)
 			warnings := validateTasks(tt.tasks, index)
-			
+
 			if len(warnings) != tt.wantWarnings {
 				t.Errorf("validateTasks() warnings = %d, want %d", len(warnings), tt.wantWarnings)
 				for _, w := range warnings {
@@ -202,11 +202,11 @@ func TestValidateTask(t *testing.T) {
 			wantWarnings: 1,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			warnings := validateTask(&tt.task, tt.index)
-			
+
 			if len(warnings) != tt.wantWarnings {
 				t.Errorf("validateTask() warnings = %d, want %d", len(warnings), tt.wantWarnings)
 			}
@@ -275,12 +275,12 @@ func TestDetectCircularDependencies(t *testing.T) {
 			wantWarnings: 0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			index, _ := buildTaskIndex(tt.tasks)
 			warnings := detectCircularDependencies(index)
-			
+
 			if len(warnings) != tt.wantWarnings {
 				t.Errorf("detectCircularDependencies() warnings = %d, want %d", len(warnings), tt.wantWarnings)
 				for _, w := range warnings {
@@ -305,7 +305,7 @@ func TestTask_IsValidStatus(t *testing.T) {
 		{"invalid", false},
 		{"", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.status, func(t *testing.T) {
 			task := Task{Status: tt.status}
@@ -328,7 +328,7 @@ func TestTask_IsValidPriority(t *testing.T) {
 		{"", true}, // Empty is valid
 		{"invalid", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.priority, func(t *testing.T) {
 			task := Task{Priority: tt.priority}
@@ -341,16 +341,16 @@ func TestTask_IsValidPriority(t *testing.T) {
 
 func TestTask_HasBlockedDependencies(t *testing.T) {
 	tests := []struct {
-		name    string
-		task    Task
-		index   map[string]*Task
-		want    bool
+		name  string
+		task  Task
+		index map[string]*Task
+		want  bool
 	}{
 		{
-			name: "no dependencies",
-			task: Task{ID: "1", Dependencies: []string{}},
+			name:  "no dependencies",
+			task:  Task{ID: "1", Dependencies: []string{}},
 			index: map[string]*Task{},
-			want: false,
+			want:  false,
 		},
 		{
 			name: "dependency completed",
@@ -395,13 +395,13 @@ func TestTask_HasBlockedDependencies(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "missing dependency",
-			task: Task{ID: "2", Dependencies: []string{"1"}},
+			name:  "missing dependency",
+			task:  Task{ID: "2", Dependencies: []string{"1"}},
 			index: map[string]*Task{},
-			want: false, // Missing deps don't block
+			want:  false, // Missing deps don't block
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.task.HasBlockedDependencies(tt.index); got != tt.want {

@@ -22,37 +22,37 @@ import (
 type Service struct {
 	// RootDir is the absolute path to the directory containing .taskmaster
 	RootDir string
-	
+
 	// Tasks contains the root-level tasks
 	Tasks []Task
-	
+
 	// TaskIndex provides O(1) lookup by task ID
 	TaskIndex map[string]*Task
-	
+
 	// config stores the application configuration
 	config *config.Config
-	
+
 	// warnings stores validation warnings from the last load
 	warnings []ValidationWarning
-	
+
 	// lastModTime tracks the last modification time of tasks.json for caching
 	lastModTime time.Time
-	
+
 	// available indicates whether a .taskmaster directory was found
 	available bool
-	
+
 	// watcher monitors tasks.json for changes
 	watcher *config.Watcher
-	
+
 	// reloadChan signals when tasks should be reloaded
 	reloadChan chan struct{}
-	
+
 	// mu protects concurrent access to task data
 	mu sync.RWMutex
-	
+
 	// latestComplexityReport caches the most recent complexity analysis
 	latestComplexityReport *ComplexityReport
-	
+
 	// complexityReportMu protects concurrent access to complexity report
 	complexityReportMu sync.RWMutex
 }
@@ -89,11 +89,11 @@ func NewService(cfg *config.Config) (*Service, error) {
 		available:  false,
 		reloadChan: make(chan struct{}, 1),
 	}
-	
+
 	// Try to detect taskmaster root
 	var rootDir string
 	var err error
-	
+
 	if cfg.TaskMasterPath != "" {
 		// Use configured path if available
 		rootDir = cfg.TaskMasterPath
@@ -112,16 +112,16 @@ func NewService(cfg *config.Config) (*Service, error) {
 			return nil, fmt.Errorf("failed to detect taskmaster root: %w", err)
 		}
 	}
-	
+
 	svc.RootDir = rootDir
 	svc.available = true
-	
+
 	// Load tasks initially
 	ctx := context.Background()
 	if err := svc.LoadTasks(ctx); err != nil {
 		return nil, fmt.Errorf("failed to load tasks: %w", err)
 	}
-	
+
 	return svc, nil
 }
 
@@ -131,52 +131,52 @@ func NewService(cfg *config.Config) (*Service, error) {
 func (s *Service) LoadTasks(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if !s.available {
 		return fmt.Errorf("taskmaster not available")
 	}
-	
+
 	tasksPath := filepath.Join(s.RootDir, ".taskmaster", "tasks", "tasks.json")
-	
+
 	// Check if context is cancelled
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	
+
 	// Check modification time for caching
 	info, err := os.Stat(tasksPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat tasks file: %w", err)
 	}
-	
+
 	modTime := info.ModTime()
 	force := ctx.Value("force") != nil && ctx.Value("force").(bool)
-	
+
 	if !force && !s.lastModTime.IsZero() && modTime.Equal(s.lastModTime) {
 		// File hasn't changed, skip reload
 		return nil
 	}
-	
+
 	// Get the active tag from config, default to "master"
 	tag := s.config.ActiveTag
 	if tag == "" {
 		tag = "master"
 	}
-	
+
 	// Load tasks from file with the specified tag
 	tasks, err := LoadTasksFromFile(s.RootDir, tag)
 	if err != nil {
 		return err
 	}
-	
+
 	s.Tasks = tasks
 	s.lastModTime = modTime
-	
+
 	// Rebuild index and validate
 	s.rebuildIndexAndValidate()
-	
+
 	return nil
 }
 
@@ -186,10 +186,10 @@ func (s *Service) rebuildIndexAndValidate() {
 	// Build index and collect warnings
 	index, indexWarnings := buildTaskIndex(s.Tasks)
 	s.TaskIndex = index
-	
+
 	// Validate tasks
 	validationWarnings := validateTasks(s.Tasks, index)
-	
+
 	// Combine all warnings
 	s.warnings = append(indexWarnings, validationWarnings...)
 }
@@ -199,13 +199,13 @@ func (s *Service) rebuildIndexAndValidate() {
 func (s *Service) GetTasks() ([]Task, []string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	// Convert warnings to strings
 	warningStrs := make([]string, len(s.warnings))
 	for i, w := range s.warnings {
 		warningStrs[i] = w.String()
 	}
-	
+
 	return s.Tasks, warningStrs
 }
 
@@ -215,7 +215,7 @@ func (s *Service) GetTasks() ([]Task, []string) {
 func (s *Service) GetActiveTag() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if s.config != nil {
 		return s.config.ActiveTag
 	}
@@ -228,7 +228,7 @@ func (s *Service) GetActiveTag() string {
 func (s *Service) GetTaskByID(id string) (*Task, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	task, ok := s.TaskIndex[id]
 	return task, ok
 }
@@ -238,7 +238,7 @@ func (s *Service) GetTaskByID(id string) (*Task, bool) {
 func (s *Service) GetValidationWarnings() []ValidationWarning {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	warnings := make([]ValidationWarning, len(s.warnings))
 	copy(warnings, s.warnings)
 	return warnings
@@ -248,7 +248,7 @@ func (s *Service) GetValidationWarnings() []ValidationWarning {
 func (s *Service) IsAvailable() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	return s.available
 }
 
@@ -267,7 +267,7 @@ func (s *Service) GetTask(id string) (*Task, error) {
 func (s *Service) GetNextTask() (*Task, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	for i := range s.Tasks {
 		if task := s.findNextTask(&s.Tasks[i]); task != nil {
 			return task, nil
@@ -286,14 +286,14 @@ func (s *Service) findNextTask(task *Task) *Task {
 			return task
 		}
 	}
-	
+
 	// Check subtasks
 	for i := range task.Subtasks {
 		if found := s.findNextTask(&task.Subtasks[i]); found != nil {
 			return found
 		}
 	}
-	
+
 	return nil
 }
 
@@ -302,7 +302,7 @@ func (s *Service) findNextTask(task *Task) *Task {
 func (s *Service) GetTaskCount() map[string]int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	counts := map[string]int{
 		StatusPending:    0,
 		StatusInProgress: 0,
@@ -311,11 +311,11 @@ func (s *Service) GetTaskCount() map[string]int {
 		StatusDeferred:   0,
 		StatusCancelled:  0,
 	}
-	
+
 	for i := range s.Tasks {
 		s.countTaskStatus(&s.Tasks[i], counts)
 	}
-	
+
 	return counts
 }
 
@@ -417,8 +417,6 @@ func (s *Service) ReloadEvents() <-chan struct{} {
 	return s.reloadChan
 }
 
-
-
 // ActiveProjectMetadata returns the currently active project metadata
 func (s *Service) ActiveProjectMetadata() *projects.Metadata {
 	return nil
@@ -430,12 +428,12 @@ func (s *Service) GetActiveTagContext() string {
 	if s.config != nil && s.config.ActiveTag != "" {
 		return s.config.ActiveTag
 	}
-	
+
 	// Look for tag context in environment or other sources
 	if tagCtx := os.Getenv("TASKMASTER_TAG"); tagCtx != "" {
 		return tagCtx
 	}
-	
+
 	// Try to find tag files in .taskmaster directory
 	if s.RootDir != "" {
 		tagDir := filepath.Join(s.RootDir, ".taskmaster", "tags")
@@ -447,7 +445,7 @@ func (s *Service) GetActiveTagContext() string {
 			}
 		}
 	}
-	
+
 	return "tag-management-enhancement" // Default to match current tag in error message
 }
 
@@ -455,16 +453,16 @@ func (s *Service) GetActiveTagContext() string {
 func (s *Service) AnalyzeComplexity(ctx context.Context, scope string, taskID string, tags []string) (*ComplexityReport, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if !s.available {
 		return nil, fmt.Errorf("taskmaster not available")
 	}
-	
+
 	tasksToAnalyze := make([]*Task, 0)
 	for i := range s.Tasks {
 		tasksToAnalyze = append(tasksToAnalyze, &s.Tasks[i])
 	}
-	
+
 	complexities := AnalyzeComplexity(tasksToAnalyze)
 	report := NewComplexityReport(complexities, scope, tags)
 	return report, nil
@@ -478,39 +476,39 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 		return nil, fmt.Errorf("taskmaster not available")
 	}
 	s.mu.RUnlock()
-	
+
 	// Build CLI command args
 	args := BuildAnalyzeComplexityArgs(scope, taskID, tags)
-	
+
 	// Execute command with streaming output
 	cmd := exec.CommandContext(ctx, "task-master", args...)
 	cmd.Dir = s.RootDir
-	
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	
+
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
-	
+
 	// Stream output and parse progress
 	progressCh := make(chan ComplexityProgressState, 10)
 	errCh := make(chan error, 1)
 	var jsonOutput strings.Builder
-	
+
 	// Parse stdout in goroutine
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
-			
+
 			// Check if this line is JSON output (starts with { or [)
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
@@ -528,7 +526,7 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			}
 		}
 	}()
-	
+
 	// Capture stderr
 	go func() {
 		errOutput, _ := io.ReadAll(stderr)
@@ -539,7 +537,7 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			}
 		}
 	}()
-	
+
 	// Forward progress updates to callback
 	go func() {
 		for {
@@ -553,10 +551,10 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			}
 		}
 	}()
-	
+
 	// Wait for completion
 	cmdErr := cmd.Wait()
-	
+
 	// Check for errors
 	if cmdErr != nil {
 		if ctx.Err() == context.Canceled {
@@ -569,12 +567,12 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			return nil, fmt.Errorf("command failed: %w", cmdErr)
 		}
 	}
-	
+
 	// Instead of parsing stdout for JSON (which doesn't happen),
 	// we need to read the report file from disk.
-	// The CLI writes the report to a file like: 
+	// The CLI writes the report to a file like:
 	// .taskmaster/reports/task-complexity-report_tag-management-enhancement.json
-	
+
 	// First try to extract the report file path from the command output
 	var reportPath string
 	outputLines := strings.Split(jsonOutput.String(), "\n")
@@ -588,7 +586,7 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			}
 		}
 	}
-	
+
 	// If we couldn't find the path from output, try to determine it
 	if reportPath == "" {
 		// Get the current tag context
@@ -599,32 +597,32 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			// Try to get the active tag from the task service
 			tagContext = s.GetActiveTagContext()
 		}
-		
+
 		// If still empty, use "default"
 		if tagContext == "" {
 			tagContext = "default"
 		}
-		
+
 		reportPath = filepath.Join(s.RootDir, ".taskmaster", "reports", fmt.Sprintf("task-complexity-report_%s.json", tagContext))
 	}
-	
+
 	// Read the report file
 	reportData, err := os.ReadFile(reportPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read complexity report file at %s: %w", reportPath, err)
 	}
-	
+
 	// Parse the report from the file data
 	report, err := parseComplexityReportFromFile(string(reportData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse complexity report: %w", err)
 	}
-	
+
 	// Cache the report
 	s.complexityReportMu.Lock()
 	s.latestComplexityReport = report
 	s.complexityReportMu.Unlock()
-	
+
 	// Send completion update
 	if onProgress != nil {
 		totalTasks := len(report.Tasks)
@@ -633,7 +631,7 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 			TotalTasks:    totalTasks,
 		})
 	}
-	
+
 	return report, nil
 }
 
@@ -652,22 +650,22 @@ func (s *Service) ExportComplexityReport(ctx context.Context, format string, out
 		return "", fmt.Errorf("taskmaster not available")
 	}
 	s.mu.RUnlock()
-	
+
 	// Build CLI command args
 	args := []string{"complexity-report", "--format", format}
 	if outputPath != "" {
 		args = append(args, "--output", outputPath)
 	}
-	
+
 	// Execute command
 	cmd := exec.CommandContext(ctx, "task-master", args...)
 	cmd.Dir = s.RootDir
-	
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("command failed: %w", err)
 	}
-	
+
 	return string(output), nil
 }
 
@@ -679,7 +677,7 @@ func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mo
 
 	// Build CLI command args
 	args := []string{"parse-prd", inputPath}
-	
+
 	// Add mode flag
 	if mode == ParsePrdModeAppend {
 		args = append(args, "--append")
@@ -780,47 +778,47 @@ func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mo
 func (s *Service) ExpandTaskWithProgress(ctx context.Context, taskID string, opts ExpandTaskOptions, prompt string, onProgress func(ExpandProgressState)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if !s.available {
 		return fmt.Errorf("taskmaster not available")
 	}
-	
+
 	task, ok := s.TaskIndex[taskID]
 	if !ok {
 		return fmt.Errorf("task %s not found", taskID)
 	}
-	
+
 	if onProgress != nil {
 		onProgress(ExpandProgressState{
 			Stage:    "Generating subtask drafts...",
 			Progress: 0.3,
 		})
 	}
-	
+
 	drafts := ExpandTaskDrafts(task, opts)
 	if len(drafts) == 0 {
 		return fmt.Errorf("no subtasks generated")
 	}
-	
+
 	if onProgress != nil {
 		onProgress(ExpandProgressState{
 			Stage:    "Applying subtasks...",
 			Progress: 0.7,
 		})
 	}
-	
+
 	_, err := ApplySubtaskDrafts(task, drafts)
 	if err != nil {
 		return fmt.Errorf("failed to apply subtasks: %w", err)
 	}
-	
+
 	if onProgress != nil {
 		onProgress(ExpandProgressState{
 			Stage:    "Complete",
 			Progress: 1.0,
 		})
 	}
-	
+
 	return nil
 }
 
@@ -991,16 +989,16 @@ func parseExpandProgress(line string) ExpandProgressState {
 	state := ExpandProgressState{}
 
 	line = strings.TrimSpace(line)
-	
+
 	// Filter out raw file paths and CLI noise
 	if strings.Contains(line, "/.taskmaster/") ||
-	   strings.HasPrefix(line, "/Users/") ||
-	   strings.HasPrefix(line, "/home/") ||
-	   strings.HasPrefix(line, "/opt/") ||
-	   strings.HasPrefix(line, "C:\\") ||
-	   strings.HasPrefix(line, "D:\\") ||
-	   len(line) > 200 ||
-	   line == "" {
+		strings.HasPrefix(line, "/Users/") ||
+		strings.HasPrefix(line, "/home/") ||
+		strings.HasPrefix(line, "/opt/") ||
+		strings.HasPrefix(line, "C:\\") ||
+		strings.HasPrefix(line, "D:\\") ||
+		len(line) > 200 ||
+		line == "" {
 		return state // Empty state will be ignored
 	}
 
@@ -1063,10 +1061,10 @@ func parseExpandProgress(line string) ExpandProgressState {
 
 	// Filter out generic/unrecognized output - return empty state to ignore
 	// Only pass through messages that seem intentional/informative
-	if len(line) < 10 || 
-	   strings.Contains(line, "npm") ||
-	   strings.Contains(line, "node") ||
-	   strings.Contains(line, "installed") {
+	if len(line) < 10 ||
+		strings.Contains(line, "npm") ||
+		strings.Contains(line, "node") ||
+		strings.Contains(line, "installed") {
 		state.Message = "" // Will be filtered out
 		return state
 	}
@@ -1082,46 +1080,46 @@ func parseParsePrdProgress(line string) ParsePrdProgressState {
 	state := ParsePrdProgressState{}
 
 	line = strings.TrimSpace(line)
-	
+
 	// Filter out empty lines
 	if line == "" {
 		return state
 	}
-	
+
 	// Filter out Node.js warnings and deprecation notices
 	if strings.Contains(line, "DeprecationWarning") ||
-	   strings.Contains(line, "(node:") ||
-	   strings.Contains(line, "Use `node --trace") ||
-	   strings.Contains(line, "punycode") {
+		strings.Contains(line, "(node:") ||
+		strings.Contains(line, "Use `node --trace") ||
+		strings.Contains(line, "punycode") {
 		return state
 	}
-	
+
 	// Strip [INFO] prefix if present
 	line = strings.TrimPrefix(line, "[INFO] ")
 	line = strings.TrimSpace(line)
-	
+
 	// Parse "Parsing PRD file:" with path
 	if strings.Contains(line, "Parsing PRD file:") {
 		state.Label = "Reading PRD file..."
 		state.Progress = 0.1
 		return state
 	}
-	
+
 	// Parse "Reading PRD content"
 	if strings.Contains(line, "Reading PRD content") {
 		state.Label = "Reading PRD content..."
 		state.Progress = 0.2
 		return state
 	}
-	
+
 	// Parse "Calling AI service" or "Generating"
-	if strings.Contains(line, "Calling AI service") || 
-	   (strings.Contains(line, "Generating") && strings.Contains(line, "task")) {
+	if strings.Contains(line, "Calling AI service") ||
+		(strings.Contains(line, "Generating") && strings.Contains(line, "task")) {
 		state.Label = "Generating tasks with AI..."
 		state.Progress = 0.4
 		return state
 	}
-	
+
 	// Parse "New AI service call"
 	if strings.Contains(line, "New AI service call") {
 		state.Label = "Calling AI service..."
@@ -1142,14 +1140,14 @@ func parseParsePrdProgress(line string) ParsePrdProgressState {
 	}
 
 	// Parse "Saving" or "Writing" or "Appending"
-	if strings.Contains(line, "Saving") || 
-	   strings.Contains(line, "Writing") ||
-	   strings.Contains(line, "Appending to existing") {
+	if strings.Contains(line, "Saving") ||
+		strings.Contains(line, "Writing") ||
+		strings.Contains(line, "Appending to existing") {
 		state.Label = "Saving tasks..."
 		state.Progress = 0.9
 		return state
 	}
-	
+
 	// Parse "Successfully generated" or completion messages
 	if strings.Contains(line, "Successfully") || strings.Contains(line, "Complete") {
 		state.Label = "Complete"
@@ -1161,13 +1159,13 @@ func parseParsePrdProgress(line string) ParsePrdProgressState {
 	if len(line) > 150 {
 		return state
 	}
-	
+
 	// Filter out npm/node installation noise
 	if strings.Contains(line, "npm") ||
-	   strings.Contains(line, "installed") {
+		strings.Contains(line, "installed") {
 		return state
 	}
-	
+
 	// Filter out emoji and tag lines
 	if strings.HasPrefix(line, "🏷️") || strings.HasPrefix(line, "✓") {
 		return state
@@ -1179,7 +1177,7 @@ func parseParsePrdProgress(line string) ParsePrdProgressState {
 		state.Progress = 0.3
 		return state
 	}
-	
+
 	return state
 }
 
@@ -1197,8 +1195,3 @@ func (s *Service) DiscoverProjects(ctx context.Context, roots []string) (int, er
 func (s *Service) ProjectRegistry() *projects.Registry {
 	return nil
 }
-
-
-
-
-

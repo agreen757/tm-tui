@@ -27,16 +27,16 @@ const (
 
 // Config represents the TUI configuration
 type Config struct {
-	TaskMasterPath      string           `json:"taskmasterPath"`
+	TaskMasterPath      string            `json:"taskmasterPath"`
 	KeyBindings         map[string]string `json:"keyBindings"`
-	Theme               ThemeConfig      `json:"theme"`
-	UI                  UIConfig         `json:"ui"`
-	StatePath           string           `json:"statePath"`
-	ProjectRegistryPath string           `json:"projectRegistryPath"`
-	ModelProvider       string           `json:"modelProvider,omitempty"`
-	ModelName           string           `json:"modelName,omitempty"`
-	ActiveTag           string           `json:"activeTag,omitempty"` // Specific tag to use in tasks.json
-	AgentType           types.AgentType  `json:"agentType,omitempty"` // Type of AI agent (Crush or Gemini)
+	Theme               ThemeConfig       `json:"theme"`
+	UI                  UIConfig          `json:"ui"`
+	StatePath           string            `json:"statePath"`
+	ProjectRegistryPath string            `json:"projectRegistryPath"`
+	ModelProvider       string            `json:"modelProvider,omitempty"`
+	ModelName           string            `json:"modelName,omitempty"`
+	ActiveTag           string            `json:"activeTag,omitempty"` // Specific tag to use in tasks.json
+	AgentType           types.AgentType   `json:"agentType,omitempty"` // Type of AI agent (Crush or Gemini)
 }
 
 // ThemeConfig defines color and styling options

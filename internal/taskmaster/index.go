@@ -9,7 +9,7 @@ import (
 func buildTaskIndex(tasks []Task) (map[string]*Task, []ValidationWarning) {
 	index := make(map[string]*Task)
 	warnings := []ValidationWarning{}
-	
+
 	// First pass: build index and populate parent relationships
 	var indexTask func(task *Task, parent *Task)
 	indexTask = func(task *Task, parent *Task) {
@@ -20,16 +20,16 @@ func buildTaskIndex(tasks []Task) (map[string]*Task, []ValidationWarning) {
 				Message: fmt.Sprintf("Duplicate task ID found: %s", task.ID),
 			})
 		}
-		
+
 		// Add to index
 		index[task.ID] = task
-		
+
 		// Set parent relationship
 		task.Parent = parent
 		if parent != nil {
 			task.ParentID = parent.ID
 		}
-		
+
 		// Build children slice and recurse
 		task.Children = make([]*Task, len(task.Subtasks))
 		for i := range task.Subtasks {
@@ -37,18 +37,18 @@ func buildTaskIndex(tasks []Task) (map[string]*Task, []ValidationWarning) {
 			indexTask(&task.Subtasks[i], task)
 		}
 	}
-	
+
 	for i := range tasks {
 		indexTask(&tasks[i], nil)
 	}
-	
+
 	return index, warnings
 }
 
 // flattenTasks returns a flat list of all tasks including subtasks
 func flattenTasks(tasks []Task) []*Task {
 	result := []*Task{}
-	
+
 	var flatten func(task *Task)
 	flatten = func(task *Task) {
 		result = append(result, task)
@@ -56,10 +56,10 @@ func flattenTasks(tasks []Task) []*Task {
 			flatten(&task.Subtasks[i])
 		}
 	}
-	
+
 	for i := range tasks {
 		flatten(&tasks[i])
 	}
-	
+
 	return result
 }

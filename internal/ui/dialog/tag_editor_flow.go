@@ -49,17 +49,17 @@ func (e *FlowError) Unwrap() error {
 
 // TagEditorFlow manages the flow between tag selector and tag creation
 type TagEditorFlow struct {
-	currentState   TagEditorFlowState
-	config         TagSelectorConfig
-	selector       *TagSelector
-	tagService     *taskmaster.Service
-	refreshFunc    TagRefreshFunc
-	result         TagSelectorResult
-	cancelled      bool
-	lastTagList    *taskmaster.TagList
-	newTagCreated  string
-	lastError      error
-	errorCount     int
+	currentState  TagEditorFlowState
+	config        TagSelectorConfig
+	selector      *TagSelector
+	tagService    *taskmaster.Service
+	refreshFunc   TagRefreshFunc
+	result        TagSelectorResult
+	cancelled     bool
+	lastTagList   *taskmaster.TagList
+	newTagCreated string
+	lastError     error
+	errorCount    int
 }
 
 // NewTagEditorFlow creates a new tag editor flow
@@ -162,7 +162,7 @@ func (f *TagEditorFlow) HandleNewTagCreatedWithRefresh(ctx context.Context, newT
 	f.newTagCreated = newTagName
 
 	var refreshErr error
-	
+
 	// Try to refresh tag list
 	if f.refreshFunc != nil {
 		list, err := f.refreshFunc(ctx)

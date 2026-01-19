@@ -145,7 +145,7 @@ func (d *GitStatusDialog) renderStatus() string {
 	var upstreamValue string
 	if d.status.HasUpstream {
 		upstreamValue = successStyle.Render("Tracked")
-		
+
 		// Show ahead/behind if tracked
 		if d.status.Ahead > 0 || d.status.Behind > 0 {
 			var parts []string
@@ -174,7 +174,7 @@ func (d *GitStatusDialog) renderStatus() string {
 	lines = append(lines, timeStyle.Render("Last updated: "+d.status.LastUpdated.Format("15:04:05")))
 
 	content := strings.Join(lines, "\n")
-	
+
 	containerStyle := lipgloss.NewStyle().
 		Width(d.width - 4).
 		PaddingTop(1)

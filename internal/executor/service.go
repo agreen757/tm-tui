@@ -70,7 +70,7 @@ func NewService(cfg *config.Config) (*Service, error) {
 	return &Service{
 		config:  cfg,
 		running: false,
-		outCh:   make(chan string, 100), // Buffered channel for output
+		outCh:   make(chan string, 100),      // Buffered channel for output
 		doneCh:  make(chan CommandResult, 1), // Buffered channel for completion
 		history: []Command{},
 		logFile: logFile,
@@ -308,12 +308,22 @@ func (s *Service) GetHistory() []Command {
 // Close closes the log file and cleans up resources
 func (s *Service) Close() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+
+	// Cancel any running command before closing
+	if s.running && s.cancelFn != nil {
+		s.cancelFn()
+		s.running = false
+		s.cancelFn = nil
+	}
 
 	if s.logFile != nil {
 		timestamp := time.Now().Format(time.RFC3339)
 		fmt.Fprintf(s.logFile, "\n=== TUI Session Ended: %s ===\n", timestamp)
-		return s.logFile.Close()
+		err := s.logFile.Close()
+		s.mu.Unlock()
+		return err
 	}
+
+	s.mu.Unlock()
 	return nil
 }

@@ -68,12 +68,12 @@ func (m Model) calculateLayout() LayoutDimensions {
 	logHeight := 0
 	if m.showLogPanel {
 		rawLogHeight := contentHeight / 3 // Log takes 1/3 of content height
-		
+
 		// Reduce to account for border overhead in the final rendering
 		// Main content will have borders, log panel will have borders
 		// We subtract from log height to ensure total fits in contentHeight
 		logHeight = rawLogHeight - 4
-		
+
 		if logHeight < 4 {
 			logHeight = 4 // Absolute minimum for usability
 		}
@@ -115,7 +115,7 @@ func (m Model) calculateLayout() LayoutDimensions {
 	layout.TaskListHeight = mainHeight
 	layout.DetailsWidth = detailsWidth
 	layout.DetailsHeight = mainHeight
-	
+
 	// Calculate LogWidth with proper constraints to ensure it never exceeds terminal width
 	logWidth := m.width
 	const minMargin = 2
@@ -151,13 +151,13 @@ func abbreviateTag(tag string, maxLength int) string {
 func (m Model) renderHeader() string {
 	// Calculate progress
 	done, total, percentage := m.calculateTaskProgress()
-	
+
 	// Get active tag or default
 	activeTag := "master" // Default
 	if m.config != nil && m.config.ActiveTag != "" {
 		activeTag = m.config.ActiveTag
 	}
-	
+
 	// Determine layout based on terminal width
 	if m.width >= 100 {
 		return m.renderWideHeader(activeTag, done, total, percentage)
@@ -180,7 +180,7 @@ func (m Model) renderWideHeader(tag string, done, total int, percentage float64)
 		m.styles.Subtle.Render("Tag: "),
 		tagDisplay,
 	)
-	
+
 	// Git branch with brackets and highlight color
 	branchInfo := ""
 	if m.gitAvailable && m.gitRepoInfo.IsRepo {
@@ -209,7 +209,7 @@ func (m Model) renderWideHeader(tag string, done, total int, percentage float64)
 		m.styles.Subtle.Render(" │ "),
 		tagInfo,
 	)
-	
+
 	// Add branch info if available
 	if branchInfo != "" {
 		headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
@@ -218,7 +218,7 @@ func (m Model) renderWideHeader(tag string, done, total int, percentage float64)
 			branchInfo,
 		)
 	}
-	
+
 	// Add progress display
 	headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
 		headerContent,
@@ -246,7 +246,7 @@ func (m Model) renderMediumHeader(tag string, done, total int, percentage float6
 
 	// Tag with brackets and highlight color (no "Tag:" prefix)
 	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", tag))
-	
+
 	// Git branch with brackets and highlight color (compact version, no label)
 	branchDisplay := ""
 	if m.gitAvailable && m.gitRepoInfo.IsRepo {
@@ -266,7 +266,7 @@ func (m Model) renderMediumHeader(tag string, done, total int, percentage float6
 		m.styles.Subtle.Render(" │ "),
 		tagDisplay,
 	)
-	
+
 	// Add branch if available
 	if branchDisplay != "" {
 		headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
@@ -275,7 +275,7 @@ func (m Model) renderMediumHeader(tag string, done, total int, percentage float6
 			branchDisplay,
 		)
 	}
-	
+
 	// Add progress display
 	headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
 		headerContent,
@@ -306,7 +306,7 @@ func (m Model) renderNarrowHeader(tag string, percentage float64) string {
 	// Shorten tag if too long
 	shortTag := abbreviateTag(tag, tagMaxLength)
 	tagDisplay := m.styles.Highlight.Render(fmt.Sprintf("[%s]", shortTag))
-	
+
 	// Abbreviated git branch with brackets and highlight color
 	branchDisplay := ""
 	if m.gitAvailable && m.gitRepoInfo.IsRepo {
@@ -328,7 +328,7 @@ func (m Model) renderNarrowHeader(tag string, percentage float64) string {
 		m.styles.Subtle.Render(" │ "),
 		tagDisplay,
 	)
-	
+
 	// Add branch if available
 	if branchDisplay != "" {
 		headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
@@ -337,7 +337,7 @@ func (m Model) renderNarrowHeader(tag string, percentage float64) string {
 			branchDisplay,
 		)
 	}
-	
+
 	// Add progress percentage
 	headerContent = lipgloss.JoinHorizontal(lipgloss.Left,
 		headerContent,

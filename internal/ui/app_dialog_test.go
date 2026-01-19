@@ -5,8 +5,8 @@ import (
 
 	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestLogBrowserKeyBinding tests that Ctrl+F is bound in the keymap

@@ -62,10 +62,10 @@ const (
 
 // ExecutionQueue manages the queue of tasks selected for execution
 type ExecutionQueue struct {
-	TaskIDs         []string            // IDs of tasks to execute
-	CurrentIndex    int                 // Index of current task
-	ModelSelections map[string]string   // taskID -> modelID mapping
-	TaskStatus      map[string]string   // taskID -> status ("pending", "selecting", "executing", "done", "skipped")
+	TaskIDs         []string          // IDs of tasks to execute
+	CurrentIndex    int               // Index of current task
+	ModelSelections map[string]string // taskID -> modelID mapping
+	TaskStatus      map[string]string // taskID -> status ("pending", "selecting", "executing", "done", "skipped")
 }
 
 // CurrentTask returns the current task ID based on CurrentIndex
@@ -282,10 +282,10 @@ type Model struct {
 	prdCreationPending bool
 
 	// Execution queue state
-	executionQueue          *ExecutionQueue                    // Queue of tasks to execute
-	activeTaskModelDialog   *dialog.TaskModelSelectionDialog   // Currently active task model selection dialog
-	showTaskModelDialog     bool                               // Whether to show the task model selection dialog
-	taskModelSelectionDone  map[string]bool                    // Track which tasks got model selected
+	executionQueue         *ExecutionQueue                  // Queue of tasks to execute
+	activeTaskModelDialog  *dialog.TaskModelSelectionDialog // Currently active task model selection dialog
+	showTaskModelDialog    bool                             // Whether to show the task model selection dialog
+	taskModelSelectionDone map[string]bool                  // Track which tasks got model selected
 
 	// Styles
 	styles *Styles
@@ -346,44 +346,44 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 	appState := NewAppState(dialogManager, &keyMap)
 
 	m := &Model{
-		config:            cfg,
-		configManager:     configManager,
-		taskService:       taskService,
-		execService:       execService,
-		tasks:             tasks,
-		taskIndex:         make(map[string]*taskmaster.Task),
-		visibleTasks:      []*taskmaster.Task{},
-		selectedIndex:     0,
-		ready:             false,
-		viewMode:          ViewModeTree,
-		focusedPanel:      PanelTaskList,
-		expandedNodes:     make(map[string]bool),
-		selectedIDs:       make(map[string]bool),
-		taskListViewport:  taskListVP,
-		detailsViewport:   detailsVP,
-		logViewport:       logVP,
-		helpViewport:      helpVP,
-		helpModel:         help.New(),
-		keyMap:            keyMap,
-		appState:          appState,
-		taskRunner:        nil, // TaskRunnerModal will be initialized on demand
-		taskRunnerVisible: false,
-		agentRunChannels:  make(map[string]chan tea.Msg), // Initialize agent run channels map
-		selectedAgentType: types.AgentTypeCrush,          // Default to Crush
-		showDetailsPanel:  true,
-		showLogPanel:      false,
-		showHelp:          false,
-		commandMode:       false,
-		commandInput:      "",
-		searchInput:         searchInput,
-		styles:              NewStyles(),
-		logLines:            []string{},
-		projectRegistry:     taskService.ProjectRegistry(),
-		activeProject:       taskService.ActiveProjectMetadata(),
-		prdCreationState:    NewPrdCreationState(),
-		executionQueue:      nil,
-		activeTaskModelDialog: nil,
-		showTaskModelDialog: false,
+		config:                 cfg,
+		configManager:          configManager,
+		taskService:            taskService,
+		execService:            execService,
+		tasks:                  tasks,
+		taskIndex:              make(map[string]*taskmaster.Task),
+		visibleTasks:           []*taskmaster.Task{},
+		selectedIndex:          0,
+		ready:                  false,
+		viewMode:               ViewModeTree,
+		focusedPanel:           PanelTaskList,
+		expandedNodes:          make(map[string]bool),
+		selectedIDs:            make(map[string]bool),
+		taskListViewport:       taskListVP,
+		detailsViewport:        detailsVP,
+		logViewport:            logVP,
+		helpViewport:           helpVP,
+		helpModel:              help.New(),
+		keyMap:                 keyMap,
+		appState:               appState,
+		taskRunner:             nil, // TaskRunnerModal will be initialized on demand
+		taskRunnerVisible:      false,
+		agentRunChannels:       make(map[string]chan tea.Msg), // Initialize agent run channels map
+		selectedAgentType:      types.AgentTypeCrush,          // Default to Crush
+		showDetailsPanel:       true,
+		showLogPanel:           false,
+		showHelp:               false,
+		commandMode:            false,
+		commandInput:           "",
+		searchInput:            searchInput,
+		styles:                 NewStyles(),
+		logLines:               []string{},
+		projectRegistry:        taskService.ProjectRegistry(),
+		activeProject:          taskService.ActiveProjectMetadata(),
+		prdCreationState:       NewPrdCreationState(),
+		executionQueue:         nil,
+		activeTaskModelDialog:  nil,
+		showTaskModelDialog:    false,
 		taskModelSelectionDone: make(map[string]bool),
 	}
 
@@ -749,11 +749,14 @@ func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
 
 // showTaskModelDialogCmd displays the task model selection dialog for the current task in the execution queue
 func (m *Model) showTaskModelDialogCmd() tea.Cmd {
+	m.addLogLine("DEBUG: showTaskModelDialogCmd() called")
+
 	// Validate execution queue
 	if m.executionQueue == nil || len(m.executionQueue.TaskIDs) == 0 {
 		m.addLogLine("Error: No tasks in execution queue")
 		return nil
 	}
+	m.addLogLine(fmt.Sprintf("DEBUG: Execution queue has %d tasks", len(m.executionQueue.TaskIDs)))
 
 	// Get current task ID
 	taskID := m.executionQueue.CurrentTask()
@@ -761,6 +764,7 @@ func (m *Model) showTaskModelDialogCmd() tea.Cmd {
 		m.addLogLine("Error: No current task in execution queue")
 		return nil
 	}
+	m.addLogLine(fmt.Sprintf("DEBUG: Current task ID: %s", taskID))
 
 	// Get task details from taskService
 	taskSvc, ok := m.taskService.(*taskmaster.Service)
@@ -768,12 +772,14 @@ func (m *Model) showTaskModelDialogCmd() tea.Cmd {
 		m.addLogLine("Error: Unable to access task service for multi-task execution")
 		return nil
 	}
+	m.addLogLine("DEBUG: Got task service")
 
 	task, found := taskSvc.GetTaskByID(taskID)
 	if !found || task == nil {
 		m.addLogLine(fmt.Sprintf("Error: Task %s not found in execution queue", taskID))
 		return nil
 	}
+	m.addLogLine(fmt.Sprintf("DEBUG: Found task: %s - %s", task.ID, task.Title))
 
 	// Create task model selection dialog with queue information
 	// Wrap GetTaskByID to match the expected signature
@@ -790,6 +796,7 @@ func (m *Model) showTaskModelDialogCmd() tea.Cmd {
 		m.executionQueue.ModelSelections,
 		getTaskByID,
 	)
+	m.addLogLine("DEBUG: Created TaskModelSelectionDialog")
 
 	// Update task status
 	m.executionQueue.TaskStatus[taskID] = "selecting"
@@ -800,13 +807,14 @@ func (m *Model) showTaskModelDialogCmd() tea.Cmd {
 
 	// Push dialog to display it
 	m.appState.PushDialog(dlg)
-	m.addLogLine(fmt.Sprintf("Displaying model selection for task %d/%d: %s",
+	m.addLogLine(fmt.Sprintf("DEBUG: Pushed dialog. Displaying model selection for task %d/%d: %s",
 		m.executionQueue.CurrentIndex+1,
 		len(m.executionQueue.TaskIDs),
 		task.Title))
 
-	// Start 30-second timeout for this dialog
-	return m.startExecutionTimeout()
+	// Return nil - no timeout for multi-task model selection
+	// Users should have unlimited time to select models for each task
+	return nil
 }
 
 func (m *Model) handleTagOperationMsg(msg TagOperationMsg) tea.Cmd {
@@ -1634,6 +1642,10 @@ func (m *Model) executeMultipleTasks(taskIDs []string, modelSelections map[strin
 
 	// Show task runner modal
 	m.taskRunnerVisible = true
+
+	// Reset model selection dialog state since we're done configuring
+	m.showTaskModelDialog = false
+	m.activeTaskModelDialog = nil
 
 	m.addLogLine(fmt.Sprintf("Successfully started %d tasks concurrently", len(cmds)))
 
@@ -3837,7 +3849,7 @@ func (m *Model) View() string {
 		modalHeight := lipgloss.Height(modalContent)
 		modalX := 0
 		modalY := 0
-		
+
 		// Position based on minimized state
 		if m.taskRunner.GetMinimized() {
 			// When minimized, place at top right corner
@@ -3951,18 +3963,18 @@ func (m Model) renderLogPanel(layout LayoutDimensions) string {
 
 	// Measure the raw content height (without borders/padding)
 	rawHeight := lipgloss.Height(logContent) - 2
-	
+
 	// Calculate how much vertical space we have inside the border
 	// layout.LogHeight is the TARGET total height
 	// Borders add 2 lines (top + bottom), so interior space is LogHeight - 2
 	interiorHeight := layout.LogHeight - 2
-	
+
 	// Calculate how many blank lines to add to fill the interior space
 	paddingLines := interiorHeight - rawHeight
 	if paddingLines < 0 {
 		paddingLines = 0
 	}
-	
+
 	// Build final content with padding to fill the allocated space
 	finalContent := logContent
 	for i := 0; i < paddingLines; i++ {
@@ -3986,17 +3998,17 @@ func (m Model) renderLogPanel(layout LayoutDimensions) string {
 func (m *Model) renderHelpOverlay() string {
 	// Build the full help content (independent of viewport size)
 	helpContent := m.buildHelpContent()
-	
+
 	// Set viewport content and return rendered view
 	m.helpViewport.SetContent(helpContent)
 	viewportContent := m.helpViewport.View()
-	
+
 	// Apply border OUTSIDE the viewport to ensure it displays completely
 	overlayStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(lipgloss.Color(ColorHighlight)).
 		Padding(1, 2)
-	
+
 	return overlayStyle.Render(viewportContent)
 }
 

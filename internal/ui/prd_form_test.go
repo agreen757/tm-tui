@@ -119,11 +119,11 @@ func TestPrdFormValidation(t *testing.T) {
 			expectedError: "Summary is required",
 		},
 		{
-			name:          "missing filename",
-			title:         "Test PRD",
-			summary:       "A test PRD",
-			filename:      "",
-			shouldFail:    false, // Should auto-generate
+			name:       "missing filename",
+			title:      "Test PRD",
+			summary:    "A test PRD",
+			filename:   "",
+			shouldFail: false, // Should auto-generate
 		},
 		{
 			name:       "filename without .md extension",
@@ -228,10 +228,10 @@ func TestPrdFormValidation(t *testing.T) {
 
 func TestPrdFormDestinationPath(t *testing.T) {
 	tests := []struct {
-		name             string
-		config           *config.Config
-		expectedPath     string
-		description      string
+		name         string
+		config       *config.Config
+		expectedPath string
+		description  string
 	}{
 		{
 			name: "with taskmaster path that doesn't exist",
@@ -242,18 +242,18 @@ func TestPrdFormDestinationPath(t *testing.T) {
 			description:  "Falls back to default when TaskMasterPath doesn't exist",
 		},
 		{
-			name:             "nil config",
-			config:           nil,
-			expectedPath:     ".taskmaster/docs",
-			description:      "Uses default when config is nil",
+			name:         "nil config",
+			config:       nil,
+			expectedPath: ".taskmaster/docs",
+			description:  "Uses default when config is nil",
 		},
 		{
 			name: "empty taskmaster path",
 			config: &config.Config{
 				TaskMasterPath: "",
 			},
-			expectedPath:     ".taskmaster/docs",
-			description:      "Uses default when TaskMasterPath is empty",
+			expectedPath: ".taskmaster/docs",
+			description:  "Uses default when TaskMasterPath is empty",
 		},
 	}
 

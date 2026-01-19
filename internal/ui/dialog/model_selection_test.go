@@ -270,7 +270,7 @@ func TestCycleProviderFilter(t *testing.T) {
 
 	// Cycle to next provider
 	dialog.CycleProviderFilter()
-	
+
 	if dialog.selectedProvider == "" {
 		t.Error("Should have cycled to a specific provider")
 	}

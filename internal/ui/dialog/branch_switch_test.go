@@ -64,7 +64,7 @@ func TestBranchItem_Interface(t *testing.T) {
 func TestNewBranchSwitchDialog_Creation(t *testing.T) {
 	// Create a temporary git repository for testing
 	tempDir := t.TempDir()
-	
+
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tempDir
@@ -142,7 +142,7 @@ func TestNewBranchSwitchDialog_Creation(t *testing.T) {
 // TestNewBranchSwitchDialog_InvalidPath tests error handling for invalid repository
 func TestNewBranchSwitchDialog_InvalidPath(t *testing.T) {
 	invalidPath := "/nonexistent/path"
-	
+
 	onSwitch := func(branch, output string, err error) {}
 	dialog, err := NewBranchSwitchDialog(invalidPath, onSwitch, "")
 
@@ -158,7 +158,7 @@ func TestNewBranchSwitchDialog_InvalidPath(t *testing.T) {
 // TestBranchSwitchDialog_HandleKey tests keyboard input handling
 func TestBranchSwitchDialog_HandleKey(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tempDir
@@ -218,7 +218,7 @@ func TestBranchSwitchDialog_HandleKey(t *testing.T) {
 // TestBranchSwitchDialog_View tests the view rendering
 func TestBranchSwitchDialog_View(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tempDir
@@ -286,7 +286,7 @@ func TestBranchItem_FilterValue(t *testing.T) {
 // TestBranchSwitchDialog_LaunchGitSwitchBranch tests the launchGitSwitchBranch method
 func TestBranchSwitchDialog_LaunchGitSwitchBranch(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tempDir
@@ -335,7 +335,7 @@ func TestBranchSwitchDialog_LaunchGitSwitchBranch(t *testing.T) {
 // TestBranchSwitchDialog_Enter_StartsSwitch tests Enter key triggers switch
 func TestBranchSwitchDialog_Enter_StartsSwitch(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tempDir
@@ -371,7 +371,7 @@ func TestBranchSwitchDialog_Enter_StartsSwitch(t *testing.T) {
 	// Test Enter key
 	if dialog.list.SelectedItem() != nil {
 		result, cmd := dialog.HandleKey(tea.KeyMsg{Type: tea.KeyEnter})
-		
+
 		// Should return DialogResultClose to close the dialog
 		if result != DialogResultClose {
 			t.Errorf("HandleKey(Enter) returned %v, expected DialogResultClose", result)

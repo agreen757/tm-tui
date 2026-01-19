@@ -289,7 +289,7 @@ func TestStandardFooterHints(t *testing.T) {
 	if len(formHints) == 0 {
 		t.Error("Expected form footer hints to be non-empty")
 	}
-	
+
 	// Check for Tab hint in form
 	hasTab := false
 	for _, hint := range formHints {

@@ -367,7 +367,7 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 
 		// Parse the error using our custom error parser
 		gitErr := ParseGitError(stderrOutput, strings.Join(args, " "))
-		
+
 		// Send user-friendly error message
 		outCh <- TaskOutputMsg{
 			TaskID: commandID,
@@ -403,7 +403,7 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 			TaskID: commandID,
 			Output: "════════════════════════════════════════════════════════",
 		}
-		
+
 		// Send failure message
 		outCh <- TaskFailedMsg{
 			TaskID:  commandID,
@@ -416,4 +416,3 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 		}
 	}
 }
-

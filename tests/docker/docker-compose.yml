@@ -1,0 +1,85 @@
+# Docker Compose configuration for Task Master TUI cross-platform testing
+# This orchestrates multiple test environments for comprehensive installation testing
+
+version: '3.8'
+
+services:
+  # Ubuntu 22.04 with apt-installed Node.js
+  ubuntu-apt:
+    build:
+      context: ../installation/ubuntu
+      dockerfile: Dockerfile.apt
+    image: tm-test-ubuntu-apt:latest
+    container_name: tm-test-ubuntu-apt
+    volumes:
+      - ../../:/workspace:ro
+    working_dir: /workspace
+    command: /test-apt.sh
+    networks:
+      - tm-test-network
+
+  # Ubuntu 22.04 with nvm-installed Node.js
+  ubuntu-nvm:
+    build:
+      context: ../installation/ubuntu
+      dockerfile: Dockerfile.nvm
+    image: tm-test-ubuntu-nvm:latest
+    container_name: tm-test-ubuntu-nvm
+    volumes:
+      - ../../:/workspace:ro
+    working_dir: /workspace
+    command: /test-nvm.sh
+    networks:
+      - tm-test-network
+
+  # Alpine Linux with apk-installed Node.js
+  alpine-apk:
+    build:
+      context: ../installation/alpine
+      dockerfile: Dockerfile.apk
+    image: tm-test-alpine-apk:latest
+    container_name: tm-test-alpine-apk
+    volumes:
+      - ../../:/workspace:ro
+    working_dir: /workspace
+    command: /test-apk.sh
+    networks:
+      - tm-test-network
+
+  # Alpine Linux with nvm-installed Node.js
+  alpine-nvm:
+    build:
+      context: ../installation/alpine
+      dockerfile: Dockerfile.nvm
+    image: tm-test-alpine-nvm:latest
+    container_name: tm-test-alpine-nvm
+    volumes:
+      - ../../:/workspace:ro
+    working_dir: /workspace
+    command: /test-nvm.sh
+    networks:
+      - tm-test-network
+
+  # Windows Server Core with Git Bash simulation
+  # Note: Requires Docker Desktop with Windows containers enabled
+  windows-gitbash:
+    build:
+      context: .
+      dockerfile: Dockerfile.windows
+    image: tm-test-windows:latest
+    container_name: tm-test-windows
+    volumes:
+      - ../../:/workspace:ro
+    working_dir: /workspace
+    command: cmd /c C:\\test-windows.bat
+    networks:
+      - tm-test-network
+    platform: windows/amd64
+    # Only run on Windows hosts or Docker Desktop with Windows containers
+    profiles:
+      - windows
+
+networks:
+  tm-test-network:
+    driver: bridge
+    name: tm-test-network

@@ -157,7 +157,7 @@ func TestGitMenuDialog_View(t *testing.T) {
 
 func TestGitMenuDialog_Update(t *testing.T) {
 	dialog := NewGitMenuDialog(nil)
-	
+
 	// Test window resize message
 	updatedDialog, _ := dialog.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 	if updatedDialog == nil {

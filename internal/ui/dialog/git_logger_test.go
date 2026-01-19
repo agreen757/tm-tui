@@ -109,7 +109,7 @@ func TestLogFields_Present(t *testing.T) {
 			t.Errorf("Log missing required field: %s", field)
 		}
 	}
-	
+
 	// Check for time field (zerolog outputs it as "time" not "timestamp")
 	if !gitLoggerTestContains(logStr, "time") {
 		t.Error("Log missing time field")
@@ -147,7 +147,7 @@ func TestDuration_Accurate(t *testing.T) {
 	if !gitLoggerTestContains(logStr, "duration_ms") {
 		t.Fatal("Log missing duration_ms field")
 	}
-	
+
 	// Check for time field
 	if !gitLoggerTestContains(logStr, "time") {
 		t.Error("Log missing time field")

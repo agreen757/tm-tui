@@ -8,27 +8,27 @@ import (
 
 // Task represents a task from the Task Master system
 type Task struct {
-	ID              string            `json:"id"`
-	Title           string            `json:"title"`
-	Description     string            `json:"description"`
-	Status          string            `json:"status"`
-	Priority        string            `json:"priority"`
-	Dependencies    []string          `json:"dependencies"`
-	Details         string            `json:"details"`
-	TestStrategy    string            `json:"testStrategy"`
-	Subtasks        []Task            `json:"subtasks"`
-	Complexity      int               `json:"complexity"`
-	Metadata        map[string]string `json:"metadata"`
-	CreatedAt       time.Time         `json:"createdAt"`
-	UpdatedAt       time.Time         `json:"updatedAt"`
-	ParentID        string            `json:"parentId,omitempty"`
-	EstimatedHours  float64           `json:"estimatedHours,omitempty"`
-	ActualHours     float64           `json:"actualHours,omitempty"`
-	Notes           []string          `json:"notes,omitempty"`
-	Tags            []string          `json:"tags,omitempty"`
-	IsCategory      bool              `json:"isCategory,omitempty"`
-	IsRoot          bool              `json:"isRoot,omitempty"`
-	
+	ID             string            `json:"id"`
+	Title          string            `json:"title"`
+	Description    string            `json:"description"`
+	Status         string            `json:"status"`
+	Priority       string            `json:"priority"`
+	Dependencies   []string          `json:"dependencies"`
+	Details        string            `json:"details"`
+	TestStrategy   string            `json:"testStrategy"`
+	Subtasks       []Task            `json:"subtasks"`
+	Complexity     int               `json:"complexity"`
+	Metadata       map[string]string `json:"metadata"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	UpdatedAt      time.Time         `json:"updatedAt"`
+	ParentID       string            `json:"parentId,omitempty"`
+	EstimatedHours float64           `json:"estimatedHours,omitempty"`
+	ActualHours    float64           `json:"actualHours,omitempty"`
+	Notes          []string          `json:"notes,omitempty"`
+	Tags           []string          `json:"tags,omitempty"`
+	IsCategory     bool              `json:"isCategory,omitempty"`
+	IsRoot         bool              `json:"isRoot,omitempty"`
+
 	// Navigation helpers (not serialized)
 	Parent   *Task   `json:"-"`
 	Children []*Task `json:"-"`
@@ -124,11 +124,11 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(t),
 	}
-	
+
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	
+
 	// Convert ID to string
 	switch v := aux.ID.(type) {
 	case string:
@@ -142,7 +142,7 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 			t.ID = fmt.Sprintf("%v", v)
 		}
 	}
-	
+
 	// Convert dependencies to strings
 	if aux.Dependencies != nil {
 		t.Dependencies = make([]string, len(aux.Dependencies))
@@ -161,6 +161,6 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
-	
+
 	return nil
 }

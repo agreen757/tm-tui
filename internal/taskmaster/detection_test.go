@@ -9,7 +9,7 @@ import (
 func TestFindTaskmasterRoot(t *testing.T) {
 	// Create temporary directory structure for testing
 	tmpDir := t.TempDir()
-	
+
 	tests := []struct {
 		name      string
 		setup     func(string) string // Returns the start directory
@@ -59,13 +59,13 @@ func TestFindTaskmasterRoot(t *testing.T) {
 				// Create .taskmaster in root
 				tmDir1 := filepath.Join(root, ".taskmaster")
 				os.Mkdir(tmDir1, 0755)
-				
+
 				// Create .taskmaster in subdirectory
 				subDir := filepath.Join(root, "subdir")
 				os.Mkdir(subDir, 0755)
 				tmDir2 := filepath.Join(subDir, ".taskmaster")
 				os.Mkdir(tmDir2, 0755)
-				
+
 				// Start from deeper level
 				deepDir := filepath.Join(subDir, "deep")
 				os.Mkdir(deepDir, 0755)
@@ -75,24 +75,24 @@ func TestFindTaskmasterRoot(t *testing.T) {
 			wantRoot:  "subdir",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			startDir := tt.setup(tmpDir)
-			
+
 			got, err := findTaskmasterRoot(startDir)
-			
+
 			if tt.wantFound {
 				if err != nil {
 					t.Errorf("findTaskmasterRoot() error = %v, want nil", err)
 					return
 				}
-				
+
 				expectedRoot := tmpDir
 				if tt.wantRoot != "" {
 					expectedRoot = filepath.Join(tmpDir, tt.wantRoot)
 				}
-				
+
 				if got != expectedRoot {
 					t.Errorf("findTaskmasterRoot() = %v, want %v", got, expectedRoot)
 				}
@@ -114,13 +114,13 @@ func TestFindTaskmasterRoot_NonExistentStart(t *testing.T) {
 
 func TestFindTaskmasterRoot_FileNotDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create a file named .taskmaster instead of a directory
 	tmFile := filepath.Join(tmpDir, ".taskmaster")
 	if err := os.WriteFile(tmFile, []byte("not a directory"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	_, err := findTaskmasterRoot(tmpDir)
 	if err != ErrNotFound {
 		t.Errorf("findTaskmasterRoot() with .taskmaster file should return ErrNotFound, got %v", err)

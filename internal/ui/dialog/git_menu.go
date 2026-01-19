@@ -127,7 +127,7 @@ func (d *GitMenuDialog) renderItem(item menuItem, focused bool, width int) strin
 	descStyle := lipgloss.NewStyle().
 		Width(width).
 		PaddingLeft(4)
-	
+
 	if focused {
 		descStyle = descStyle.
 			Foreground(d.Style.TextColor).

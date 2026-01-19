@@ -43,18 +43,18 @@ func TestStatusIndicator(t *testing.T) {
 // TestComplexityIndicator tests that complexity indicators provide text alternatives for accessibility
 func TestComplexityIndicator(t *testing.T) {
 	tests := []struct {
-		complexity       int
-		expectedLabel    string
+		complexity        int
+		expectedLabel     string
 		expectedIndicator string
 	}{
 		{1, "LOW", "LOW(1)"},
 		{3, "LOW", "LOW(3)"},
 		{4, "MEDIUM", "MEDIUM(4)"},
 		{6, "MEDIUM", "MEDIUM(6)"},
-		{7, "MEDIUM", "MEDIUM(7)"},    // Fixed: 7 is at Medium threshold (4-7)
-		{8, "HIGH", "HIGH(8)"},        // Added: 8 starts High range (8-12)
+		{7, "MEDIUM", "MEDIUM(7)"}, // Fixed: 7 is at Medium threshold (4-7)
+		{8, "HIGH", "HIGH(8)"},     // Added: 8 starts High range (8-12)
 		{10, "HIGH", "HIGH(10)"},
-		{12, "HIGH", "HIGH(12)"},      // Added: 12 is at High threshold
+		{12, "HIGH", "HIGH(12)"},           // Added: 12 is at High threshold
 		{13, "VERY HIGH", "VERY HIGH(13)"}, // Added: 13+ is Very High
 		{15, "VERY HIGH", "VERY HIGH(15)"}, // Added: test well above threshold
 		{0, "", ""},

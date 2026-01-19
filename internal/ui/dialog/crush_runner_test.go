@@ -154,7 +154,7 @@ func TestGetCrushCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			args := GetCrushCommand(tt.prompt, tt.model)
-			
+
 			if len(args) != len(tt.expected) {
 				t.Errorf("Expected %d args, got %d: %v", len(tt.expected), len(args), args)
 				return
@@ -256,12 +256,12 @@ func TestRunCommandCrushNotInstalled(t *testing.T) {
 
 func TestRunCommandParameterValidation(t *testing.T) {
 	tests := []struct {
-		name       string
-		commandID  string
-		prompt     string
-		model      string
-		expectErr  bool
-		errSubstr  string
+		name      string
+		commandID string
+		prompt    string
+		model     string
+		expectErr bool
+		errSubstr string
 	}{
 		{
 			name:      "valid parameters",

@@ -20,11 +20,11 @@ func NewBadgerMemory(path string) (*BadgerMemory, error) {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err
 	}
-	
+
 	// Basic options for a simple BadgerDB instance
 	opts := badger.DefaultOptions(path)
-	opts.Logger = nil           // Disable logging for simplicity
-	
+	opts.Logger = nil // Disable logging for simplicity
+
 	// Open the database
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -94,15 +94,15 @@ func (b *BadgerMemory) List(ctx context.Context, prefix string) ([]string, error
 	err := b.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false // Keys only, don't fetch values
-		
+
 		it := txn.NewIterator(opts)
 		defer it.Close()
-		
+
 		prefixBytes := []byte(prefix)
 		for it.Seek(prefixBytes); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
-			
+
 			// Convert key to string
 			key := string(k)
 			if prefix == "" || strings.HasPrefix(key, prefix) {
@@ -111,11 +111,11 @@ func (b *BadgerMemory) List(ctx context.Context, prefix string) ([]string, error
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return keys, nil
 }
 
@@ -131,7 +131,7 @@ func (b *BadgerMemory) Close() error {
 func (b *BadgerMemory) RunGC() error {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	
+
 	// Cleanup in the background
 	for range ticker.C {
 	again:
@@ -140,6 +140,6 @@ func (b *BadgerMemory) RunGC() error {
 			goto again
 		}
 	}
-	
+
 	return nil
 }

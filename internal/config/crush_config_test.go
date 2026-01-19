@@ -269,7 +269,7 @@ func pathsEqual(a, b string) bool {
 
 func TestCrushConfigMarshalUnmarshal(t *testing.T) {
 	config := &CrushConfig{
-		Schema:  "https://charm.land/crush.json",
+		Schema: "https://charm.land/crush.json",
 		Models: map[string]SelectedModel{
 			"large": {Model: "gpt-4", Provider: "openai"},
 		},
@@ -297,7 +297,7 @@ func TestCrushConfigMarshalUnmarshal(t *testing.T) {
 	if loaded.Schema != config.Schema {
 		t.Errorf("Schema mismatch: got %q, want %q", loaded.Schema, config.Schema)
 	}
-	
+
 	// Verify models
 	largeModel, ok := loaded.Models["large"]
 	if !ok {
@@ -306,7 +306,7 @@ func TestCrushConfigMarshalUnmarshal(t *testing.T) {
 	if largeModel.Model != "gpt-4" {
 		t.Errorf("Model mismatch: got %q, want %q", largeModel.Model, "gpt-4")
 	}
-	
+
 	if len(loaded.Options.ContextPaths) != len(config.Options.ContextPaths) {
 		t.Errorf("ContextPaths length mismatch: got %d, want %d", len(loaded.Options.ContextPaths), len(config.Options.ContextPaths))
 	}
@@ -460,7 +460,7 @@ func TestSaveCrushConfig(t *testing.T) {
 	}
 
 	config := &CrushConfig{
-		Schema:  "https://charm.land/crush.json",
+		Schema: "https://charm.land/crush.json",
 		Models: map[string]SelectedModel{
 			"large": {Model: "gpt-4-turbo", Provider: "openai"},
 		},
@@ -700,7 +700,7 @@ func TestInitCrushConfig(t *testing.T) {
 	if config.Models == nil {
 		t.Errorf("Models map should be initialized")
 	}
-	
+
 	// Verify other model types can be compared after loading
 	if len(config.Models) != 0 {
 		t.Errorf("Default config should have empty models map")
@@ -730,7 +730,7 @@ func TestInitCrushConfigWithExistingFile(t *testing.T) {
 
 	// Create existing config with new models structure
 	existingConfig := &CrushConfig{
-		Schema:      "https://charm.land/crush.json",
+		Schema: "https://charm.land/crush.json",
 		Models: map[string]SelectedModel{
 			"large": {Model: "existing-model", Provider: "test"},
 		},
@@ -915,7 +915,7 @@ func contains(s, substr string) bool {
 // BenchmarkMarshalCrushConfig benchmarks config marshaling
 func BenchmarkMarshalCrushConfig(b *testing.B) {
 	config := &CrushConfig{
-		Schema:  "https://charm.land/crush.json",
+		Schema: "https://charm.land/crush.json",
 		Models: map[string]SelectedModel{
 			"large": {Model: "gpt-4", Provider: "openai"},
 		},
@@ -949,7 +949,7 @@ func TestSaveCrushConfigAtomic(t *testing.T) {
 	}
 
 	config := &CrushConfig{
-		Schema:      "https://charm.land/crush.json",
+		Schema: "https://charm.land/crush.json",
 		Models: map[string]SelectedModel{
 			"large": {Model: "gpt-4", Provider: "openai"},
 		},
@@ -1013,7 +1013,7 @@ func TestSaveCrushConfigPreservesPermissions(t *testing.T) {
 
 	// Create initial config with custom permissions
 	initialConfig := &CrushConfig{
-		Schema:      "https://charm.land/crush.json",
+		Schema: "https://charm.land/crush.json",
 		Models: map[string]SelectedModel{
 			"large": {Model: "initial", Provider: "test"},
 		},
@@ -1657,4 +1657,3 @@ func TestLegacyModelMigrationNullModel(t *testing.T) {
 		t.Errorf("Should not migrate null model")
 	}
 }
-

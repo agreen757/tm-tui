@@ -391,7 +391,7 @@ func TestGetConfiguredProviders(t *testing.T) {
 		}
 
 		providers := GetConfiguredProviders()
-		
+
 		// Check that our unset providers are not in the list
 		for _, provider := range providers {
 			if provider == "openai" || provider == "anthropic" || provider == "google" {
@@ -404,7 +404,7 @@ func TestGetConfiguredProviders(t *testing.T) {
 // TestGetEnv tests environment variable retrieval with fallback
 func TestGetEnv(t *testing.T) {
 	testKey := "TEST_CONFIG_VAR"
-	
+
 	// Save original value
 	originalValue := os.Getenv(testKey)
 	defer func() {

@@ -40,14 +40,14 @@ func LogStartupError(commandID string, args []string, tagName string, errorMsg s
 
 	// Write error as JSON
 	entry := map[string]interface{}{
-		"level":      "error",
-		"time":       time.Now().Format(time.RFC3339Nano),
-		"command_id": commandID,
-		"tag":        tagName,
-		"git_args":   args,
-		"event":      "startup_failed",
-		"command":    "git",
-		"error":      errorMsg,
+		"level":       "error",
+		"time":        time.Now().Format(time.RFC3339Nano),
+		"command_id":  commandID,
+		"tag":         tagName,
+		"git_args":    args,
+		"event":       "startup_failed",
+		"command":     "git",
+		"error":       errorMsg,
 		"duration_ms": 0,
 	}
 

@@ -134,12 +134,12 @@ func TestGitMenuToStatusDialog_NavigateToOtherOptions(t *testing.T) {
 	// Test navigating through all menu items
 	for i := 0; i < 4; i++ {
 		menuDialog := NewGitMenuDialog(nil)
-		
+
 		// Navigate to item i
 		for j := 0; j < i; j++ {
 			menuDialog.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
 		}
-		
+
 		if menuDialog.selectedIndex != i {
 			t.Errorf("Expected index %d, got %d", i, menuDialog.selectedIndex)
 		}
@@ -153,13 +153,13 @@ func TestGitMenuToStatusDialog_NavigateToOtherOptions(t *testing.T) {
 		if cmd == nil {
 			t.Fatal("Expected command to be returned from HandleKey")
 		}
-		
+
 		msg := cmd()
 		selectionMsg, ok := msg.(GitMenuSelectionMsg)
 		if !ok {
 			t.Fatalf("Expected GitMenuSelectionMsg, got %T", msg)
 		}
-		
+
 		selectedIDs = append(selectedIDs, selectionMsg.SelectedIndex)
 
 		if selectionMsg.SelectedIndex != i {

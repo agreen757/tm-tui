@@ -22,12 +22,12 @@ const (
 
 // AppError represents a standardized application error
 type AppError struct {
-	Category   ErrorCategory
-	Title      string
-	Message    string
-	Details    string
+	Category      ErrorCategory
+	Title         string
+	Message       string
+	Details       string
 	RecoveryHints []string
-	Underlying error
+	Underlying    error
 }
 
 // NewAppError creates a new app error

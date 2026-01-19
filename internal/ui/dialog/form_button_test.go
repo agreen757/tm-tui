@@ -40,8 +40,8 @@ func TestFormFieldTypeButton_WithCallback(t *testing.T) {
 	}
 
 	field := FormField{
-		ID:           "test-button",
-		Type:         FormFieldTypeButton,
+		ID:             "test-button",
+		Type:           FormFieldTypeButton,
 		ButtonCallback: callback,
 	}
 
@@ -301,4 +301,3 @@ func TestFormDialog_ButtonFieldNoCallback(t *testing.T) {
 		_ = cmd()
 	}
 }
-

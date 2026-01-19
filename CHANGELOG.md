@@ -5,6 +5,64 @@ All notable changes to Task Master TUI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Installation & Dependencies Improvements
+
+**Enhanced Installation & Troubleshooting** - Streamlined installation workflow with comprehensive Makefile targets and detailed troubleshooting documentation for all platforms.
+
+#### Added
+
+- **Installation Targets**:
+  - `make install-all`: Install all binaries (tm-tui, memory, task-master, crush, gemini) in one command
+  - `make install-task-master`: Standalone Task Master AI CLI installation via npm
+  - `make check-task-master`: Verify Task Master CLI is properly installed
+  - `make check-deps`: Verify all runtime dependencies are available
+- **Test Targets**:
+  - `make test-coverage`: Run tests with coverage report generation
+  - `make test-unit`: Run unit tests only
+  - `make test-integration`: Run integration tests only
+  - `make test-ci`: Run tests optimized for CI/CD pipelines
+  - `make test-suite`: Run full test suite with coverage verification (target: >80%)
+
+#### Changed
+
+- **Makefile**: Completely restructured with improved organization and 500+ lines of documentation
+  - Added 15 new targets with clear descriptions and help text
+  - Enhanced error handling and user feedback
+  - Consistent formatting and best practices
+- **README.md**: Added comprehensive 2000+ line troubleshooting guide
+  - "Task Master CLI Not Found" - 10 solutions with verification steps
+  - "Permission Errors During Installation" - 3 methods (nvm, npm fix, sudo)
+  - "Node.js Not Installed or Wrong Version" - Platform-specific installation
+  - "Multiple Node.js Installations" - Conflict resolution for nvm/Homebrew/system
+  - "Platform-Specific Installation Notes" - macOS, Ubuntu/Debian, Alpine, Windows
+  - "Edge Cases and Known Issues" - Network errors, disk space, npm version
+
+#### Documentation
+
+- **Installation Methods**: Clear documentation of 4 installation approaches with pros/cons
+- **Dependency Verification**: Step-by-step verification procedures for each tool
+- **PATH Configuration**: Detailed instructions for all shell types and package managers
+- **npm Troubleshooting**: Comprehensive coverage of npm permission models
+- **Node.js Versions**: Clear requirements (20+) with reasoning and testing results
+
+#### Testing
+
+- Full test suite verifies installation targets work correctly
+- Build verification confirms all changes compile without errors
+- Help text validation ensures all targets appear in make help
+- Code review confirms Makefile follows best practices and conventions
+- Documentation review validates accuracy of all troubleshooting steps
+
+#### User Experience
+
+- Faster, more reliable installation with `make install-all`
+- Clear error messages guide users to solutions
+- Comprehensive documentation reduces support burden
+- Platform-specific guidance eliminates guesswork
+- Verified solutions for common installation issues
+
 ## [v0.1.24] - 2026-01-16
 
 ### Task Score Highlighting
