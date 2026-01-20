@@ -694,3 +694,229 @@ func TestExecuteNextWithNonExecutableBinary(t *testing.T) {
 		t.Errorf("expected 'task-master binary not executable' error, got: %v", err)
 	}
 }
+
+// TestAddToHistoryBounded tests that history is bounded to max size
+func TestAddToHistoryBounded(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	// Set a small max history size
+	service.SetMaxHistorySize(5)
+
+	// Add 10 commands to history
+	for i := 0; i < 10; i++ {
+		service.mu.Lock()
+		service.addToHistory(Command{
+			Cmd:      fmt.Sprintf("cmd%d", i),
+			Args:     []string{},
+			When:     time.Now(),
+			ExitCode: 0,
+			Err:      nil,
+		})
+		service.mu.Unlock()
+	}
+
+	// Verify history is bounded to max size
+	history := service.GetHistory()
+	if len(history) != 5 {
+		t.Errorf("expected history size 5, got %d", len(history))
+	}
+
+	// Verify only the most recent commands are kept (commands 5-9)
+	if history[0].Cmd != "cmd5" {
+		t.Errorf("expected first command to be 'cmd5', got '%s'", history[0].Cmd)
+	}
+	if history[4].Cmd != "cmd9" {
+		t.Errorf("expected last command to be 'cmd9', got '%s'", history[4].Cmd)
+	}
+}
+
+// TestSetMaxHistorySize tests that max history size can be configured
+func TestSetMaxHistorySize(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	// Change max history size
+	service.SetMaxHistorySize(3)
+
+	// Add 5 commands
+	for i := 0; i < 5; i++ {
+		service.mu.Lock()
+		service.addToHistory(Command{
+			Cmd:      fmt.Sprintf("cmd%d", i),
+			Args:     []string{},
+			When:     time.Now(),
+			ExitCode: 0,
+			Err:      nil,
+		})
+		service.mu.Unlock()
+	}
+
+	// Verify history is bounded to new size
+	history := service.GetHistory()
+	if len(history) != 3 {
+		t.Errorf("expected history size 3, got %d", len(history))
+	}
+
+	// Verify the most recent 3 commands are kept
+	if history[0].Cmd != "cmd2" {
+		t.Errorf("expected first command to be 'cmd2', got '%s'", history[0].Cmd)
+	}
+	if history[2].Cmd != "cmd4" {
+		t.Errorf("expected last command to be 'cmd4', got '%s'", history[2].Cmd)
+	}
+}
+
+// TestOldestCommandsRemoved tests that oldest commands are removed when limit reached
+func TestOldestCommandsRemoved(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	service.SetMaxHistorySize(3)
+
+	// Add commands and verify oldest are removed
+	cmds := []string{"cmd1", "cmd2", "cmd3", "cmd4"}
+
+	for i, cmd := range cmds {
+		service.mu.Lock()
+		service.addToHistory(Command{
+			Cmd:      cmd,
+			Args:     []string{},
+			When:     time.Now().Add(time.Duration(i) * time.Second),
+			ExitCode: 0,
+			Err:      nil,
+		})
+		service.mu.Unlock()
+
+		history := service.GetHistory()
+
+		// After first 3 commands, size should be 3
+		if i < 3 {
+			expectedSize := i + 1
+			if len(history) != expectedSize {
+				t.Errorf("at step %d: expected history size %d, got %d", i, expectedSize, len(history))
+			}
+		} else {
+			// After 4th command, oldest should be removed
+			if len(history) != 3 {
+				t.Errorf("at step %d: expected history size 3, got %d", i, len(history))
+			}
+			// First command should be cmd2 (cmd1 was removed)
+			if history[0].Cmd != "cmd2" {
+				t.Errorf("at step %d: expected oldest command to be 'cmd2', got '%s'", i, history[0].Cmd)
+			}
+		}
+	}
+}
+
+// TestRecentCommandsAccessible tests that most recent commands are accessible
+func TestRecentCommandsAccessible(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	service.SetMaxHistorySize(10)
+
+	// Add 20 commands
+	for i := 0; i < 20; i++ {
+		service.mu.Lock()
+		service.addToHistory(Command{
+			Cmd:      fmt.Sprintf("cmd%d", i),
+			Args:     []string{},
+			When:     time.Now(),
+			ExitCode: 0,
+			Err:      nil,
+		})
+		service.mu.Unlock()
+	}
+
+	history := service.GetHistory()
+
+	// Verify we have the last 10 commands
+	if len(history) != 10 {
+		t.Errorf("expected 10 commands in history, got %d", len(history))
+	}
+
+	// Verify most recent command is cmd19
+	if history[9].Cmd != "cmd19" {
+		t.Errorf("expected most recent command to be 'cmd19', got '%s'", history[9].Cmd)
+	}
+
+	// Verify oldest kept command is cmd10
+	if history[0].Cmd != "cmd10" {
+		t.Errorf("expected oldest kept command to be 'cmd10', got '%s'", history[0].Cmd)
+	}
+}
+
+// TestMaxHistorySizeInitialization tests default max history size
+func TestMaxHistorySizeInitialization(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	// Default max history size should be 1000
+	if service.maxHistorySize != 1000 {
+		t.Errorf("expected default max history size 1000, got %d", service.maxHistorySize)
+	}
+}
+
+// TestSetMaxHistorySizeInvalid tests that invalid max history size is rejected
+func TestSetMaxHistorySizeInvalid(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	// Try to set invalid (zero or negative) max history size
+	service.SetMaxHistorySize(0)
+	if service.maxHistorySize != 1000 {
+		t.Errorf("expected max history size to remain 1000 after setting 0, got %d", service.maxHistorySize)
+	}
+
+	service.SetMaxHistorySize(-10)
+	if service.maxHistorySize != 1000 {
+		t.Errorf("expected max history size to remain 1000 after setting -10, got %d", service.maxHistorySize)
+	}
+}
+
+// TestMemoryBehaviorWithLargeHistory benchmarks memory usage with large history
+func TestMemoryBehaviorWithLargeHistory(t *testing.T) {
+	service, _, cleanup := setupTestService(t)
+	defer cleanup()
+
+	// Test with large history size (1000 instead of 10000 for faster test)
+	service.SetMaxHistorySize(1000)
+
+	// Add many commands to test memory behavior
+	for i := 0; i < 1000; i++ {
+		service.mu.Lock()
+		service.addToHistory(Command{
+			Cmd:      fmt.Sprintf("cmd%d", i),
+			Args:     []string{"arg1", "arg2", "arg3"},
+			When:     time.Now(),
+			ExitCode: 0,
+			Err:      nil,
+		})
+		service.mu.Unlock()
+	}
+
+	history := service.GetHistory()
+
+	// Verify history size is bounded correctly
+	if len(history) != 1000 {
+		t.Errorf("expected history size 1000, got %d", len(history))
+	}
+
+	// Add one more command to trigger trimming
+	service.mu.Lock()
+	service.addToHistory(Command{
+		Cmd:      "cmd1000",
+		Args:     []string{},
+		When:     time.Now(),
+		ExitCode: 0,
+		Err:      nil,
+	})
+	service.mu.Unlock()
+
+	// History should still be bounded to 1000
+	history = service.GetHistory()
+	if len(history) != 1000 {
+		t.Errorf("after exceeding max size, expected history size 1000, got %d", len(history))
+	}
+}

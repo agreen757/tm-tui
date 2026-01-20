@@ -14,10 +14,11 @@ import (
 
 // LogRotator manages log file rotation and compression
 type LogRotator struct {
-	maxFiles      int
-	maxSizeBytes  int64
-	mu            sync.Mutex
-	lastCheckTime map[string]time.Time
+	maxFiles       int
+	maxSizeBytes   int64
+	mu             sync.Mutex
+	lastCheckTime  map[string]time.Time
+	cleanupCounter int
 }
 
 // NewLogRotator creates a new log rotator with sensible defaults
@@ -46,6 +47,14 @@ func NewLogRotator(maxFiles int, maxSizeBytes int64) *LogRotator {
 func (lr *LogRotator) CheckAndRotate(logPath string) error {
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
+
+	// Increment cleanup counter
+	lr.cleanupCounter++
+
+	// Run cleanup every 100 operations
+	if lr.cleanupCounter >= 100 {
+		lr.cleanupLastCheckTimeMap()
+	}
 
 	// Extract the log directory and pattern
 	logDir := filepath.Dir(logPath)
@@ -81,6 +90,19 @@ func (lr *LogRotator) CheckAndRotate(logPath string) error {
 	}
 
 	return nil
+}
+
+// cleanupLastCheckTimeMap removes entries for directories that no longer exist
+func (lr *LogRotator) cleanupLastCheckTimeMap() {
+	for dir := range lr.lastCheckTime {
+		// Check if directory still exists
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			// Directory no longer exists, remove from map
+			delete(lr.lastCheckTime, dir)
+		}
+	}
+	// Reset counter after cleanup
+	lr.cleanupCounter = 0
 }
 
 // rotateLog renames current log and optionally compresses it

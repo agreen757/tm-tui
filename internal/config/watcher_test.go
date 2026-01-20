@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -257,6 +258,253 @@ func TestDebounce(t *testing.T) {
 		case <-timeout:
 			if eventCount != 1 {
 				t.Errorf("Expected 1 debounced event, got %d (timeout)", eventCount)
+			}
+			return
+		}
+	}
+}
+
+// TestDebounce_ImmediateClosure tests that closing input immediately doesn't panic
+func TestDebounce_ImmediateClosure(t *testing.T) {
+	input := make(chan struct{})
+	output := Debounce(100*time.Millisecond, input)
+
+	// Close input immediately
+	close(input)
+
+	// Should receive no events and output should close without panic
+	timeout := time.After(500 * time.Millisecond)
+	select {
+	case _, ok := <-output:
+		if ok {
+			t.Fatal("Expected output channel to close immediately")
+		}
+		// Success - channel closed as expected
+	case <-timeout:
+		t.Fatal("Timeout waiting for output channel to close")
+	}
+}
+
+// TestDebounce_RapidInputs tests that rapid inputs are properly debounced
+func TestDebounce_RapidInputs(t *testing.T) {
+	input := make(chan struct{})
+	debounceInterval := 50 * time.Millisecond
+	output := Debounce(debounceInterval, input)
+
+	// Send 100 rapid inputs
+	go func() {
+		for i := 0; i < 100; i++ {
+			input <- struct{}{}
+		}
+		// Wait for debounce to complete
+		time.Sleep(debounceInterval + 50*time.Millisecond)
+		close(input)
+	}()
+
+	// Should receive exactly one debounced event
+	eventCount := 0
+	timeout := time.After(1 * time.Second)
+
+	for {
+		select {
+		case _, ok := <-output:
+			if !ok {
+				// Channel closed
+				if eventCount != 1 {
+					t.Errorf("Expected 1 debounced event from 100 inputs, got %d", eventCount)
+				}
+				return
+			}
+			eventCount++
+		case <-timeout:
+			t.Errorf("Timeout: received %d events (expected 1)", eventCount)
+			return
+		}
+	}
+}
+
+// TestDebounce_ClosedChannelSafety tests that sending on closed channel doesn't panic
+func TestDebounce_ClosedChannelSafety(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Debounce panicked on closed channel: %v", r)
+		}
+	}()
+
+	input := make(chan struct{})
+	output := Debounce(50*time.Millisecond, input)
+
+	// Send one input and then immediately close
+	go func() {
+		input <- struct{}{}
+		// Give timer callback time to prepare (but not fire)
+		time.Sleep(10 * time.Millisecond)
+		close(input)
+	}()
+
+	// Drain output channel if anything comes through
+	timeout := time.After(500 * time.Millisecond)
+	for {
+		select {
+		case _, ok := <-output:
+			if !ok {
+				return
+			}
+		case <-timeout:
+			return
+		}
+	}
+}
+
+// TestDebounce_MultipleRoundTrips tests multiple send/close cycles
+func TestDebounce_MultipleRoundTrips(t *testing.T) {
+	for cycle := 0; cycle < 10; cycle++ {
+		input := make(chan struct{})
+		output := Debounce(30*time.Millisecond, input)
+
+		go func() {
+			// Send a few inputs
+			for i := 0; i < 3; i++ {
+				input <- struct{}{}
+				time.Sleep(5 * time.Millisecond)
+			}
+			// Close channel
+			time.Sleep(50 * time.Millisecond)
+			close(input)
+		}()
+
+		// Wait for output
+		timeout := time.After(500 * time.Millisecond)
+		eventCount := 0
+		for {
+			select {
+			case _, ok := <-output:
+				if !ok {
+					if eventCount != 1 {
+						t.Errorf("Cycle %d: Expected 1 event, got %d", cycle, eventCount)
+					}
+					goto nextCycle
+				}
+				eventCount++
+			case <-timeout:
+				t.Errorf("Cycle %d: Timeout (got %d events)", cycle, eventCount)
+				goto nextCycle
+			}
+		}
+		nextCycle:
+	}
+}
+
+// TestDebounce_GoroutineLeakDetection tests that no goroutines are leaked
+func TestDebounce_GoroutineLeakDetection(t *testing.T) {
+	initialGoroutines := runtime.NumGoroutine()
+
+	for i := 0; i < 20; i++ {
+		input := make(chan struct{})
+		output := Debounce(10*time.Millisecond, input)
+
+		// Send inputs and close
+		go func() {
+			for j := 0; j < 5; j++ {
+				input <- struct{}{}
+				time.Sleep(2 * time.Millisecond)
+			}
+			time.Sleep(20 * time.Millisecond)
+			close(input)
+		}()
+
+		// Drain output
+		timeout := time.After(1 * time.Second)
+		for {
+			select {
+			case _, ok := <-output:
+				if !ok {
+					goto done
+				}
+			case <-timeout:
+				goto done
+			}
+		}
+		done:
+	}
+
+	// Give goroutines time to clean up
+	time.Sleep(100 * time.Millisecond)
+
+	finalGoroutines := runtime.NumGoroutine()
+	leakedGoroutines := finalGoroutines - initialGoroutines
+
+	// Allow for a few goroutines (timer cleanup, GC), but shouldn't grow significantly
+	if leakedGoroutines > 5 {
+		t.Errorf("Possible goroutine leak: started with %d, ended with %d (leaked ~%d)",
+			initialGoroutines, finalGoroutines, leakedGoroutines)
+	}
+}
+
+// TestDebounce_VeryShortInterval tests debounce with very short intervals
+func TestDebounce_VeryShortInterval(t *testing.T) {
+	input := make(chan struct{})
+	output := Debounce(1*time.Millisecond, input)
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			input <- struct{}{}
+		}
+		time.Sleep(20 * time.Millisecond)
+		close(input)
+	}()
+
+	// Should receive one debounced event
+	eventCount := 0
+	timeout := time.After(500 * time.Millisecond)
+
+	for {
+		select {
+		case _, ok := <-output:
+			if !ok {
+				if eventCount != 1 {
+					t.Errorf("Expected 1 debounced event, got %d", eventCount)
+				}
+				return
+			}
+			eventCount++
+		case <-timeout:
+			t.Errorf("Timeout: got %d events", eventCount)
+			return
+		}
+	}
+}
+
+// TestDebounce_TimerExpiration tests that timer fires correctly
+func TestDebounce_TimerExpiration(t *testing.T) {
+	input := make(chan struct{})
+	debounceInterval := 100 * time.Millisecond
+	output := Debounce(debounceInterval, input)
+
+	// Send one input
+	input <- struct{}{}
+
+	// Record when event arrives
+	eventReceived := false
+	timeout := time.After(500 * time.Millisecond)
+	startTime := time.Now()
+
+	for {
+		select {
+		case _, ok := <-output:
+			if !ok {
+				return
+			}
+			elapsed := time.Since(startTime)
+			eventReceived = true
+			// Should fire approximately at debounceInterval
+			if elapsed < debounceInterval-20*time.Millisecond {
+				t.Errorf("Event fired too early: %v (expected ~%v)", elapsed, debounceInterval)
+			}
+			close(input)
+		case <-timeout:
+			if !eventReceived {
+				t.Fatal("Timeout waiting for debounced event")
 			}
 			return
 		}

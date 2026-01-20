@@ -14,6 +14,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/agreen757/tm-tui/internal/executor"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -322,17 +323,18 @@ func StartCrushExecution(taskID, taskTitle, model, prompt string, modal *TaskRun
 
 // ExecuteCrushSubprocess performs the actual subprocess execution with streaming
 // It immediately returns a subscription message, then spawns the subprocess in a goroutine
+// Uses cancellable contexts with operation-specific timeouts (Crush executions get 30 minutes)
 // tagName is used for organizing log files in tag-specific directories
 func ExecuteCrushSubprocess(taskID, model, prompt, tagName string) tea.Cmd {
 	// Create a larger buffered channel to handle bursts of output
 	// Increased from 100 to 1000 to better handle high-volume streaming
 	outCh := make(chan tea.Msg, 1000)
 
-	// Create a cancellable context
-	ctx, cancel := context.WithCancel(context.Background())
+	// Create a cancellable context that can be terminated by the UI
+	parentCtx, cancel := context.WithCancel(context.Background())
 
 	// Start the subprocess in a goroutine
-	go runCrushProcess(ctx, taskID, model, prompt, tagName, outCh, cancel)
+	go runCrushProcess(parentCtx, taskID, model, prompt, tagName, outCh, cancel)
 
 	// Return subscription message immediately
 	return func() tea.Msg {
@@ -344,10 +346,20 @@ func ExecuteCrushSubprocess(taskID, model, prompt, tagName string) tea.Cmd {
 }
 
 // runCrushProcess executes the Crush subprocess and streams output to the channel
+// Uses operation-specific timeouts (Crush operations get 30 minute timeout)
 // tagName determines the log directory structure (.taskmaster/<tagName>/<taskID>.log)
-func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string, outCh chan tea.Msg, cancel context.CancelFunc) {
+// parentCtx allows external cancellation via the UI
+func runCrushProcess(parentCtx context.Context, taskID, model, prompt, tagName string, outCh chan tea.Msg, cancel context.CancelFunc) {
 	defer close(outCh)
 	defer cancel()
+
+	// Determine the operation type (Crush execution) and apply appropriate timeout
+	timeout := executor.GetTimeoutForOperation(executor.OperationTypeCrushExecution)
+
+	// Create a timeout context from the parent context
+	// This allows the UI to cancel anytime, but also applies operation-specific timeout
+	ctx, timeoutCancel := context.WithTimeout(parentCtx, timeout)
+	defer timeoutCancel()
 
 	// Create log file for this run using tag-based directory structure
 	logFile, logPath, err := createCrushLogFile(taskID, tagName)
@@ -369,12 +381,19 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 			TaskID: taskID,
 			Output: fmt.Sprintf("📝 Logging to: %s", logPath),
 		}
+
+		// Log timeout information
+		fmt.Fprintf(logWriter, "Operation timeout: %v\n", timeout)
 	}
 
-	// Create the command
+	// Create the command with timeout context
 	// Note: crush run takes the prompt as an argument, not stdin
 	// The model selection is stored in crush's config, not passed via CLI flag
 	cmd := exec.CommandContext(ctx, "crush", "run", prompt)
+
+	// Configure the process to run in its own process group
+	// This allows graceful termination of the entire process tree
+	cmd.SysProcAttr = executor.ConfigureProcessGroup()
 
 	// Set up stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
@@ -494,11 +513,13 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 	// Wait for the process to complete
 	err = cmd.Wait()
 
-	// Write completion status to log file
+	// Write completion status to log file with context information
 	if logWriter != nil {
 		fmt.Fprintf(logWriter, "\n===================\n")
 		fmt.Fprintf(logWriter, "Completed: %s\n", time.Now().Format(time.RFC3339))
-		if ctx.Err() != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			fmt.Fprintf(logWriter, "Status: Timeout after %v\n", timeout)
+		} else if ctx.Err() == context.Canceled {
 			fmt.Fprintf(logWriter, "Status: Cancelled\n")
 		} else if err != nil {
 			fmt.Fprintf(logWriter, "Status: Failed - %v\n", err)
@@ -508,8 +529,32 @@ func runCrushProcess(ctx context.Context, taskID, model, prompt, tagName string,
 		fmt.Fprintf(logWriter, "===================\n")
 	}
 
-	if ctx.Err() != nil {
-		// Context was cancelled
+	if ctx.Err() == context.DeadlineExceeded {
+		// Timeout exceeded
+		timeoutMsg := fmt.Sprintf("Crush execution timed out after %v. Complex tasks may require more time.", timeout)
+		outCh <- TaskOutputMsg{
+			TaskID: taskID,
+			Output: "",
+		}
+		outCh <- TaskOutputMsg{
+			TaskID: taskID,
+			Output: "════════════════════════════════════════════════════════",
+		}
+		outCh <- TaskOutputMsg{
+			TaskID: taskID,
+			Output: fmt.Sprintf("⏱️  Timeout: %s", timeoutMsg),
+		}
+		outCh <- TaskOutputMsg{
+			TaskID: taskID,
+			Output: "════════════════════════════════════════════════════════",
+		}
+		outCh <- TaskFailedMsg{
+			TaskID:  taskID,
+			Error:   timeoutMsg,
+			Message: "Crush execution timed out",
+		}
+	} else if ctx.Err() == context.Canceled {
+		// Context was cancelled by the UI
 		outCh <- TaskCancelledMsg{
 			TaskID: taskID,
 		}

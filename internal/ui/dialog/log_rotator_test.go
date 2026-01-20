@@ -229,3 +229,282 @@ func TestTimestampDetection(t *testing.T) {
 		}
 	}
 }
+
+// TestCleanupLastCheckTimeMap_RemovesDeletedDirs tests cleanup removes entries for deleted directories
+func TestCleanupLastCheckTimeMap_RemovesDeletedDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	rotator := NewLogRotator(10, 1024*1024)
+
+	// Create subdirectories and add them to lastCheckTime
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2")
+	dir3 := filepath.Join(tmpDir, "dir3")
+
+	os.Mkdir(dir1, 0755)
+	os.Mkdir(dir2, 0755)
+	os.Mkdir(dir3, 0755)
+
+	// Add entries to the map
+	rotator.mu.Lock()
+	rotator.lastCheckTime[dir1] = time.Now()
+	rotator.lastCheckTime[dir2] = time.Now()
+	rotator.lastCheckTime[dir3] = time.Now()
+	rotator.mu.Unlock()
+
+	// Verify map has all 3 entries
+	rotator.mu.Lock()
+	if len(rotator.lastCheckTime) != 3 {
+		t.Errorf("Expected 3 entries in map before cleanup, got %d", len(rotator.lastCheckTime))
+	}
+	rotator.mu.Unlock()
+
+	// Delete one directory
+	os.RemoveAll(dir2)
+
+	// Run cleanup
+	rotator.mu.Lock()
+	rotator.cleanupLastCheckTimeMap()
+	rotator.mu.Unlock()
+
+	// Verify only 2 entries remain (dir1 and dir3)
+	rotator.mu.Lock()
+	if len(rotator.lastCheckTime) != 2 {
+		t.Errorf("Expected 2 entries in map after cleanup, got %d", len(rotator.lastCheckTime))
+	}
+
+	// Verify dir2 was removed
+	if _, exists := rotator.lastCheckTime[dir2]; exists {
+		t.Error("Expected dir2 entry to be removed from map")
+	}
+
+	// Verify dir1 and dir3 still exist
+	if _, exists := rotator.lastCheckTime[dir1]; !exists {
+		t.Error("Expected dir1 entry to remain in map")
+	}
+	if _, exists := rotator.lastCheckTime[dir3]; !exists {
+		t.Error("Expected dir3 entry to remain in map")
+	}
+	rotator.mu.Unlock()
+}
+
+// TestCleanupCounter_TriggersAfter100Ops tests that cleanup is triggered after 100 operations
+func TestCleanupCounter_TriggersAfter100Ops(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	os.Mkdir(logDir, 0755)
+
+	rotator := NewLogRotator(10, 1024*1024)
+
+	// Add some entries to the map
+	toDelete := filepath.Join(tmpDir, "to-delete")
+	os.Mkdir(toDelete, 0755)
+
+	rotator.mu.Lock()
+	rotator.lastCheckTime[toDelete] = time.Now()
+	rotator.mu.Unlock()
+
+	logPath := filepath.Join(logDir, "test.log")
+
+	// Create the log file
+	f, _ := os.Create(logPath)
+	f.Close()
+
+	// Delete the directory before cleanup
+	os.RemoveAll(toDelete)
+
+	// Call CheckAndRotate 100 times - cleanup should trigger at 100
+	for i := 0; i < 100; i++ {
+		rotator.CheckAndRotate(logPath)
+	}
+
+	// At this point, cleanup should have run once (on the 100th call)
+	// The counter should be reset to 0 after cleanup
+
+	// Make one more call to verify counter increments from 0
+	rotator.CheckAndRotate(logPath)
+
+	rotator.mu.Lock()
+	// After the 101st call, counter should be 1 (incremented from reset 0)
+	if rotator.cleanupCounter != 1 {
+		t.Errorf("Expected cleanupCounter to be 1 after 101 calls, got %d", rotator.cleanupCounter)
+	}
+
+	// Verify the deleted directory entry is gone (cleanup ran)
+	if _, exists := rotator.lastCheckTime[toDelete]; exists {
+		t.Error("Expected toDelete entry to be removed after cleanup")
+	}
+	rotator.mu.Unlock()
+}
+
+// TestCleanupCounter_Reset tests that cleanup counter resets after cleanup runs
+func TestCleanupCounter_Reset(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	os.Mkdir(logDir, 0755)
+
+	rotator := NewLogRotator(10, 1024*1024)
+
+	logPath := filepath.Join(logDir, "test.log")
+	f, _ := os.Create(logPath)
+	f.Close()
+
+	// Call CheckAndRotate 100 times
+	for i := 0; i < 100; i++ {
+		rotator.CheckAndRotate(logPath)
+	}
+
+	// Verify counter was reset to 0
+	rotator.mu.Lock()
+	if rotator.cleanupCounter > 5 {
+		t.Errorf("Expected cleanupCounter to be reset, got %d", rotator.cleanupCounter)
+	}
+	rotator.mu.Unlock()
+}
+
+// TestCleanupLastCheckTimeMap_KeepsExistingDirs tests that existing directories are preserved
+func TestCleanupLastCheckTimeMap_KeepsExistingDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	rotator := NewLogRotator(10, 1024*1024)
+
+	// Create directories
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2")
+
+	os.Mkdir(dir1, 0755)
+	os.Mkdir(dir2, 0755)
+
+	// Add to map
+	rotator.mu.Lock()
+	rotator.lastCheckTime[dir1] = time.Now()
+	rotator.lastCheckTime[dir2] = time.Now()
+	rotator.mu.Unlock()
+
+	// Run cleanup (all dirs exist)
+	rotator.mu.Lock()
+	rotator.cleanupLastCheckTimeMap()
+	rotator.mu.Unlock()
+
+	// Both should still be in map
+	rotator.mu.Lock()
+	if len(rotator.lastCheckTime) != 2 {
+		t.Errorf("Expected 2 entries after cleanup, got %d", len(rotator.lastCheckTime))
+	}
+
+	if _, exists := rotator.lastCheckTime[dir1]; !exists {
+		t.Error("Expected dir1 to remain in map")
+	}
+	if _, exists := rotator.lastCheckTime[dir2]; !exists {
+		t.Error("Expected dir2 to remain in map")
+	}
+	rotator.mu.Unlock()
+}
+
+// TestMapGrowthPrevention_LargeNumberOfDirs tests map cleanup prevents unbounded growth
+func TestMapGrowthPrevention_LargeNumberOfDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	os.Mkdir(logDir, 0755)
+
+	rotator := NewLogRotator(10, 1024*1024)
+
+	logPath := filepath.Join(logDir, "test.log")
+	f, _ := os.Create(logPath)
+	f.Close()
+
+	// Create and delete 1000+ directories with CheckAndRotate
+	for i := 0; i < 1100; i++ {
+		tempDir := filepath.Join(tmpDir, "temp", "dir"+string(rune(i)))
+		os.MkdirAll(tempDir, 0755)
+
+		rotator.mu.Lock()
+		rotator.lastCheckTime[tempDir] = time.Now()
+		rotator.mu.Unlock()
+
+		// Every 100 operations, delete directories
+		if i > 0 && i%100 == 0 {
+			os.RemoveAll(filepath.Join(tmpDir, "temp"))
+			os.Mkdir(filepath.Join(tmpDir, "temp"), 0755)
+		}
+
+		// Trigger CheckAndRotate which increments counter
+		rotator.CheckAndRotate(logPath)
+	}
+
+	// Map should be cleaned up periodically, not growing unbounded
+	rotator.mu.Lock()
+	mapSize := len(rotator.lastCheckTime)
+	rotator.mu.Unlock()
+
+	// Map should be much smaller than 1100 entries due to cleanup
+	if mapSize > 200 {
+		t.Errorf("Map grew too large: %d entries (should be cleaned up)", mapSize)
+	}
+}
+
+// TestCleanupWithRaceDetector is designed to be run with -race flag
+func TestCleanupWithRaceDetector(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	os.Mkdir(logDir, 0755)
+
+	rotator := NewLogRotator(10, 1024*1024)
+
+	logPath := filepath.Join(logDir, "test.log")
+	f, _ := os.Create(logPath)
+	f.Close()
+
+	// Create multiple goroutines calling CheckAndRotate concurrently
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			for j := 0; j < 50; j++ {
+				rotator.CheckAndRotate(logPath)
+			}
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Should complete without race conditions
+}
+
+// TestCleanupNormalOperationUnaffected tests that normal rotation logic still works
+func TestCleanupNormalOperationUnaffected(t *testing.T) {
+	tmpDir := t.TempDir()
+	logDir := filepath.Join(tmpDir, "logs")
+	os.Mkdir(logDir, 0755)
+
+	rotator := NewLogRotator(3, 50) // Keep 3 files, 50 bytes max
+
+	logPath := filepath.Join(logDir, "test.log")
+
+	// Create multiple files and trigger rotation
+	for i := 0; i < 10; i++ {
+		f, _ := os.Create(logPath)
+		f.WriteString(string(make([]byte, 100))) // Exceed 50 byte limit
+		f.Close()
+
+		rotator.CheckAndRotate(logPath)
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Verify rotation still happened correctly
+	entries, _ := os.ReadDir(logDir)
+	count := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			count++
+		}
+	}
+
+	// Should have limited files due to rotation
+	if count > 10 {
+		t.Errorf("Expected <= 10 files, got %d", count)
+	}
+}

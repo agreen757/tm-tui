@@ -75,15 +75,23 @@ func (w *Watcher) processEvents(debounceInterval time.Duration) {
 	defer close(w.events)
 	defer close(w.errors)
 
-	var debounceTimer *time.Timer
+	// Create reusable timer
+	debounceTimer := time.NewTimer(debounceInterval)
+	// Drain initial timer if it fires
+	if !debounceTimer.Stop() {
+		<-debounceTimer.C
+	}
+	
+	var mu sync.Mutex
 	var pendingEvent bool
+	var timerActive bool
 
 	for {
 		select {
 		case <-w.ctx.Done():
-			if debounceTimer != nil {
-				debounceTimer.Stop()
-			}
+			mu.Lock()
+			debounceTimer.Stop()
+			mu.Unlock()
 			return
 
 		case event, ok := <-w.watcher.Events:
@@ -101,23 +109,21 @@ func (w *Watcher) processEvents(debounceInterval time.Duration) {
 				event.Op&fsnotify.Create == fsnotify.Create ||
 				event.Op&fsnotify.Rename == fsnotify.Rename {
 
+				mu.Lock()
 				pendingEvent = true
 
 				// Reset debounce timer
-				if debounceTimer != nil {
-					debounceTimer.Stop()
-				}
-
-				debounceTimer = time.AfterFunc(debounceInterval, func() {
-					if pendingEvent {
+				if timerActive {
+					if !debounceTimer.Stop() {
 						select {
-						case w.events <- struct{}{}:
+						case <-debounceTimer.C:
 						default:
-							// Channel full, event already pending
 						}
-						pendingEvent = false
 					}
-				})
+				}
+				debounceTimer.Reset(debounceInterval)
+				timerActive = true
+				mu.Unlock()
 			}
 
 		case err, ok := <-w.watcher.Errors:
@@ -129,6 +135,19 @@ func (w *Watcher) processEvents(debounceInterval time.Duration) {
 			case <-w.ctx.Done():
 				return
 			}
+			
+		case <-debounceTimer.C:
+			mu.Lock()
+			if pendingEvent {
+				select {
+				case w.events <- struct{}{}:
+				default:
+					// Channel full, event already pending
+				}
+				pendingEvent = false
+			}
+			timerActive = false
+			mu.Unlock()
 		}
 	}
 }
@@ -174,15 +193,63 @@ func Debounce(interval time.Duration, input <-chan struct{}) <-chan struct{} {
 
 	go func() {
 		defer close(output)
-		var timer *time.Timer
+		
+		// Use explicit timer with proper cleanup
+		timer := time.NewTimer(interval)
+		// Drain initial timer if fired
+		if !timer.Stop() {
+			<-timer.C
+		}
+		
+		var mu sync.Mutex
+		var pendingEvent bool
+		var timerRunning bool
 
-		for range input {
-			if timer != nil {
-				timer.Stop()
+		for {
+			select {
+			case _, ok := <-input:
+				if !ok {
+					// Input closed, set pending flag and stop timer
+					mu.Lock()
+					timerRunning = false
+					pendingEvent = false
+					timer.Stop()
+					mu.Unlock()
+					return
+				}
+				
+				mu.Lock()
+				pendingEvent = true
+
+				// Reset timer if not running
+				if !timerRunning {
+					timer.Reset(interval)
+					timerRunning = true
+				} else {
+					// Stop and restart to reset the interval
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					timer.Reset(interval)
+				}
+				mu.Unlock()
+
+			case <-timer.C:
+				mu.Lock()
+				if pendingEvent {
+					select {
+					case output <- struct{}{}:
+					default:
+						// Channel buffer full, skip this one
+					}
+					pendingEvent = false
+				}
+				timerRunning = false
+				mu.Unlock()
 			}
-			timer = time.AfterFunc(interval, func() {
-				output <- struct{}{}
-			})
 		}
 	}()
 

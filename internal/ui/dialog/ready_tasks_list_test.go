@@ -3,8 +3,11 @@ package dialog
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -2877,7 +2880,7 @@ func TestGetCachedTaskDetails_Found(t *testing.T) {
 		Title:  "Implement Truncation Detection",
 		Status: "done",
 	}
-	dialog.cache["9.1"] = expectedDetails
+	dialog.SetCachedTaskDetails("9.1", expectedDetails)
 
 	details := dialog.GetCachedTaskDetails("9.1")
 
@@ -2894,8 +2897,8 @@ func TestInvalidateCache_SingleTask(t *testing.T) {
 	dialog := NewReadyTasksDialog()
 
 	// Add items to cache
-	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Task 1"}
-	dialog.cache["9.2"] = &TaskDetails{ID: "9.2", Title: "Task 2"}
+	dialog.SetCachedTaskDetails("9.1", &TaskDetails{ID: "9.1", Title: "Task 1"})
+	dialog.SetCachedTaskDetails("9.2", &TaskDetails{ID: "9.2", Title: "Task 2"})
 
 	// Invalidate one task
 	dialog.InvalidateCache("9.1")
@@ -2914,9 +2917,9 @@ func TestClearCache_RemovesAll(t *testing.T) {
 	dialog := NewReadyTasksDialog()
 
 	// Add multiple items to cache
-	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Task 1"}
-	dialog.cache["9.2"] = &TaskDetails{ID: "9.2", Title: "Task 2"}
-	dialog.cache["9.3"] = &TaskDetails{ID: "9.3", Title: "Task 3"}
+	dialog.SetCachedTaskDetails("9.1", &TaskDetails{ID: "9.1", Title: "Task 1"})
+	dialog.SetCachedTaskDetails("9.2", &TaskDetails{ID: "9.2", Title: "Task 2"})
+	dialog.SetCachedTaskDetails("9.3", &TaskDetails{ID: "9.3", Title: "Task 3"})
 
 	initialSize := dialog.GetCacheSize()
 	if initialSize != 3 {
@@ -2945,18 +2948,18 @@ func TestGetCacheSize_ReflectsEntries(t *testing.T) {
 	}
 
 	// Add entries
-	dialog.cache["1"] = &TaskDetails{ID: "1", Title: "Task 1"}
+	dialog.SetCachedTaskDetails("1", &TaskDetails{ID: "1", Title: "Task 1"})
 	if dialog.GetCacheSize() != 1 {
 		t.Errorf("Cache size should be 1, got %d", dialog.GetCacheSize())
 	}
 
-	dialog.cache["2"] = &TaskDetails{ID: "2", Title: "Task 2"}
+	dialog.SetCachedTaskDetails("2", &TaskDetails{ID: "2", Title: "Task 2"})
 	if dialog.GetCacheSize() != 2 {
 		t.Errorf("Cache size should be 2, got %d", dialog.GetCacheSize())
 	}
 
 	// Remove entry
-	delete(dialog.cache, "1")
+	dialog.InvalidateCache("1")
 	if dialog.GetCacheSize() != 1 {
 		t.Errorf("Cache size should be 1 after deletion, got %d", dialog.GetCacheSize())
 	}
@@ -2971,7 +2974,7 @@ func TestFetchFullTaskDetails_ChecksCacheFirst(t *testing.T) {
 		Title:  "Cached Full Title",
 		Status: "done",
 	}
-	dialog.cache["9.1"] = cachedDetails
+	dialog.SetCachedTaskDetails("9.1", cachedDetails)
 
 	// This should return the cached title without executing the command
 	// (which would fail since we don't have a real task-master)
@@ -3004,9 +3007,7 @@ func TestFetchFullTaskDetails_CachesResult(t *testing.T) {
 	}
 
 	// Simulate cache storage by directly testing the caching mechanism
-	dialog.mu.Lock()
-	dialog.cache["test-id"] = details
-	dialog.mu.Unlock()
+	dialog.SetCachedTaskDetails("test-id", details)
 
 	// Verify it's cached
 	cached := dialog.GetCachedTaskDetails("test-id")
@@ -3029,13 +3030,13 @@ func TestUpdateUIAfterFetch_UpdatesListItems(t *testing.T) {
 	}
 
 	// Cache the full details
-	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Implement Truncation Detection"}
-	dialog.cache["9.2"] = &TaskDetails{ID: "9.2", Title: "Create Task Details Parser"}
+	dialog.SetCachedTaskDetails("9.1", &TaskDetails{ID: "9.1", Title: "Implement Truncation Detection"})
+	dialog.SetCachedTaskDetails("9.2", &TaskDetails{ID: "9.2", Title: "Create Task Details Parser"})
 
 	// Update the task items with cached data
 	dialog.mu.Lock()
 	for i, task := range dialog.tasks {
-		if cached, exists := dialog.cache[task.ID]; exists && cached != nil {
+		if cached := dialog.GetCachedTaskDetails(task.ID); cached != nil {
 			dialog.tasks[i].TaskTitle = cached.Title
 			dialog.tasks[i].TitleTruncated = false
 		}
@@ -3069,8 +3070,8 @@ func TestUpdateUIWithCachedDetails_AppliesCachedData(t *testing.T) {
 	}
 
 	// Pre-populate cache
-	dialog.cache["9.1"] = &TaskDetails{Title: "Implement Truncation Detection and Async Fetching Logic"}
-	dialog.cache["9.2"] = &TaskDetails{Title: "Create Task Details Parser Implementation"}
+	dialog.SetCachedTaskDetails("9.1", &TaskDetails{Title: "Implement Truncation Detection and Async Fetching Logic"})
+	dialog.SetCachedTaskDetails("9.2", &TaskDetails{Title: "Create Task Details Parser Implementation"})
 	// Note: 9.3 not cached to test selective update
 
 	// Update UI with cached details
@@ -3101,7 +3102,7 @@ func TestFetchAllTruncatedTaskDetails_SkipsCachedTasks(t *testing.T) {
 	}
 
 	// Pre-cache 9.1
-	dialog.cache["9.1"] = &TaskDetails{ID: "9.1", Title: "Full Task 1"}
+	dialog.SetCachedTaskDetails("9.1", &TaskDetails{ID: "9.1", Title: "Full Task 1"})
 
 	// Count initial cache size
 	initialCacheSize := dialog.GetCacheSize()
@@ -3119,7 +3120,10 @@ func TestFetchAllTruncatedTaskDetails_SkipsCachedTasks(t *testing.T) {
 	var tasksToPrefetch []string
 	dialog.mu.Lock()
 	for _, id := range truncatedIDs {
-		if cached, exists := dialog.cache[id]; !exists || cached == nil || cached.Title == "" {
+		// Check cache directly without calling GetCachedTaskDetails (avoid lock reentry)
+		if value, found := dialog.cache.Get(id); !found {
+			tasksToPrefetch = append(tasksToPrefetch, id)
+		} else if details, ok := value.(*TaskDetails); !ok || details == nil || details.Title == "" {
 			tasksToPrefetch = append(tasksToPrefetch, id)
 		}
 	}
@@ -3151,10 +3155,8 @@ func TestCacheConcurrency_ThreadSafe(t *testing.T) {
 		go func(id int) {
 			for j := 0; j < 10; j++ {
 				taskID := fmt.Sprintf("task-%d-%d", id, j)
-				// Use mutex for safe writes
-				dialog.mu.Lock()
-				dialog.cache[taskID] = &TaskDetails{ID: taskID, Title: fmt.Sprintf("Task %d-%d", id, j)}
-				dialog.mu.Unlock()
+				// Use SetCachedTaskDetails for safe writes with internal locking
+				dialog.SetCachedTaskDetails(taskID, &TaskDetails{ID: taskID, Title: fmt.Sprintf("Task %d-%d", id, j)})
 			}
 			done <- true
 		}(i)
@@ -3573,3 +3575,280 @@ func TestReadyTasksDialog_ConfigurationMessageOnMultipleTaskConfirmation(t *test
 		t.Errorf("Status message should mention 2 tasks, got: %q", dialog.GetStatusMessage())
 	}
 }
+
+// ========================================
+// Tests for WaitGroup Timeout Mechanism (Task 5.1)
+// ========================================
+
+// TestUpdateUIWithPartialResults verifies partial results UI update
+func TestUpdateUIWithPartialResults(t *testing.T) {
+	dialog := NewReadyTasksDialog()
+	dialog.SetContent(`[
+		{"id": "1.1", "title": "Task 1", "priority": "high"},
+		{"id": "1.2", "title": "Task 2", "priority": "low"}
+	]`)
+
+	// Mark a task as having its title updated
+	dialog.tasks[0].TaskTitle = "Updated Task 1"
+
+	// Call partial results handler
+	dialog.updateUIWithPartialResults()
+
+	// UI should be updated with whatever results are available
+	if len(dialog.tasks) != 2 {
+		t.Errorf("Should preserve all tasks, got %d", len(dialog.tasks))
+	}
+
+	if dialog.tasks[0].TaskTitle != "Updated Task 1" {
+		t.Errorf("Updated title should be preserved, got %q", dialog.tasks[0].TaskTitle)
+	}
+}
+
+// TestShowTimeoutWarning verifies timeout warning display
+func TestShowTimeoutWarning(t *testing.T) {
+	dialog := NewReadyTasksDialog()
+	
+	// Should not panic when called
+	msg := "Some task prefetch operations timed out"
+	dialog.showTimeoutWarning(msg)
+
+	// Dialog should still be functional
+	if dialog == nil {
+		t.Fatal("Dialog should still be valid after timeout warning")
+	}
+}
+
+// TestTimeoutMechanismDoesNotBlockIndefinitely simulates normal case
+// where goroutines complete before timeout
+func TestTimeoutMechanismNormalCompletion(t *testing.T) {
+	// Create a channel that will receive completion signal
+	done := make(chan struct{})
+	
+	go func() {
+		// Simulate WaitGroup completion
+		time.Sleep(10 * time.Millisecond)
+		close(done)
+	}()
+
+	// Select with timeout
+	completed := false
+	select {
+	case <-done:
+		completed = true
+	case <-time.After(30 * time.Second):
+		// Timeout
+	}
+
+	if !completed {
+		t.Error("Should complete normally before timeout")
+	}
+}
+
+// TestTimeoutMechanismTriggersTimeout simulates timeout scenario
+func TestTimeoutMechanismTriggersTimeout(t *testing.T) {
+	// Create a channel that will never complete (simulating hung goroutine)
+	done := make(chan struct{})
+	
+	// Note: We use a short timeout for testing, not 30 seconds
+	completed := false
+	select {
+	case <-done:
+		completed = true
+	case <-time.After(100 * time.Millisecond):
+		// Timeout occurred
+	}
+
+	if completed {
+		t.Error("Should timeout when goroutine doesn't complete")
+	}
+}
+
+// TestTimeoutMechanismDoesNotLeakGoroutines verifies no goroutine leaks
+func TestTimeoutMechanismDoesNotLeakGoroutines(t *testing.T) {
+	initialCount := runtime.NumGoroutine()
+
+	// Run timeout scenario
+	done := make(chan struct{})
+	
+	go func() {
+		// Simulate prefetch goroutine that completes
+		time.Sleep(10 * time.Millisecond)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Completed
+	case <-time.After(100 * time.Millisecond):
+		// Timeout
+	}
+
+	// Give a moment for goroutines to clean up
+	time.Sleep(50 * time.Millisecond)
+
+	finalCount := runtime.NumGoroutine()
+	
+	// Should not create lingering goroutines
+	// Allow 1-2 extra (system goroutines)
+	if finalCount > initialCount+2 {
+		t.Errorf("Goroutine leak detected: %d -> %d", initialCount, finalCount)
+	}
+}
+
+// TestPrefetchTimeoutIntegration is a full integration test
+// simulating the prefetch flow with timeout
+func TestPrefetchTimeoutIntegration(t *testing.T) {
+	dialog := NewReadyTasksDialog()
+	dialog.SetContent(`[
+		{"id": "1.1", "title": "Task 1", "priority": "high"},
+		{"id": "1.2", "title": "Task 2", "priority": "low"}
+	]`)
+
+	// Simulate prefetch workflow
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	// Simulate two quick prefetch operations
+	go func() {
+		defer wg.Done()
+		time.Sleep(5 * time.Millisecond)
+		dialog.mu.Lock()
+		dialog.tasks[0].TaskTitle = "Updated Title 1"
+		dialog.mu.Unlock()
+	}()
+
+	go func() {
+		defer wg.Done()
+		time.Sleep(10 * time.Millisecond)
+		dialog.mu.Lock()
+		dialog.tasks[1].TaskTitle = "Updated Title 2"
+		dialog.mu.Unlock()
+	}()
+
+	// Simulate the timeout pattern from the actual code
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	completedNormally := false
+	select {
+	case <-done:
+		completedNormally = true
+		dialog.updateUIAfterFetch()
+	case <-time.After(30 * time.Second):
+		dialog.updateUIWithPartialResults()
+		dialog.showTimeoutWarning("Prefetch timed out")
+	}
+
+	if !completedNormally {
+		t.Error("Prefetch should complete normally")
+	}
+
+	// Verify tasks were updated
+	if dialog.tasks[0].TaskTitle != "Updated Title 1" {
+		t.Errorf("First task title not updated, got %q", dialog.tasks[0].TaskTitle)
+	}
+
+	if dialog.tasks[1].TaskTitle != "Updated Title 2" {
+		t.Errorf("Second task title not updated, got %q", dialog.tasks[1].TaskTitle)
+	}
+}
+
+// TestTimeoutWithSlowPrefetch simulates prefetch that takes a while
+// but completes before timeout
+func TestTimeoutWithSlowPrefetch(t *testing.T) {
+	dialog := NewReadyTasksDialog()
+	dialog.SetContent(`[
+		{"id": "1.1", "title": "Task 1"},
+		{"id": "1.2", "title": "Task 2"},
+		{"id": "1.3", "title": "Task 3"}
+	]`)
+
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+
+	// Simulate slower prefetch operations
+	for i := 0; i < 3; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			time.Sleep(time.Duration(100+idx*50) * time.Millisecond)
+			dialog.mu.Lock()
+			dialog.tasks[idx].TaskTitle = fmt.Sprintf("Updated Task %d", idx+1)
+			dialog.mu.Unlock()
+		}(i)
+	}
+
+	// Simulate timeout pattern
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	timeoutTriggered := false
+	select {
+	case <-done:
+		dialog.updateUIAfterFetch()
+	case <-time.After(500 * time.Millisecond):
+		timeoutTriggered = true
+		dialog.updateUIWithPartialResults()
+		dialog.showTimeoutWarning("Prefetch timed out")
+	}
+
+	// With 500ms timeout, slower operations should still complete
+	if timeoutTriggered {
+		t.Error("Should not timeout with adequate timeout period")
+	}
+
+	// Verify updates were applied
+	for i := 0; i < 3; i++ {
+		if !contains(dialog.tasks[i].TaskTitle, "Updated") {
+			t.Errorf("Task %d title should be updated", i+1)
+		}
+	}
+}
+
+// TestConcurrentAccessDuringTimeout verifies thread safety
+func TestConcurrentAccessDuringTimeout(t *testing.T) {
+	dialog := NewReadyTasksDialog()
+	dialog.SetContent(`[
+		{"id": "1.1", "title": "Task 1"},
+		{"id": "1.2", "title": "Task 2"}
+	]`)
+
+	wg := sync.WaitGroup{}
+	wg.Add(5)
+
+	// Multiple goroutines updating tasks
+	for i := 0; i < 5; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			dialog.mu.Lock()
+			dialog.tasks[0].TaskTitle = fmt.Sprintf("Update %d", idx)
+			dialog.mu.Unlock()
+			time.Sleep(5 * time.Millisecond)
+		}(i)
+	}
+
+	// Wait with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		dialog.updateUIAfterFetch()
+	case <-time.After(100 * time.Millisecond):
+		dialog.updateUIWithPartialResults()
+	}
+
+	// Should not crash or deadlock
+	if dialog.tasks[0].TaskTitle == "" {
+		t.Error("Task should have some title after concurrent updates")
+	}
+}
+

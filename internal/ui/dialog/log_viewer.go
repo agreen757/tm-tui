@@ -61,6 +61,9 @@ type LogViewerPanel struct {
 	totalFileLines   int  // Total number of lines in the file (for lazy loading)
 	visibleStartLine int  // Start line of currently loaded visible range
 	visibleEndLine   int  // End line of currently loaded visible range
+
+	// Timeout warning fields
+	onSlowRead func(filename string) // Callback for slow read notification
 }
 
 // renderCacheEntry holds a cached rendered line with metadata
@@ -181,16 +184,44 @@ func (lv *LogViewerPanel) LoadFileContent(filePath string) error {
 		lv.fileSizeWarning = true
 	}
 
-	// Try to read file with timeout logic
+	// Try to read file with timeout logic and slow read warning
 	type readResult struct {
 		data []byte
 		err  error
 	}
 
 	readChan := make(chan readResult, 1)
+	done := make(chan struct{})
+
+	// Nested goroutine pattern with warning timer for slow I/O detection
 	go func() {
-		data, err := os.ReadFile(filePath)
-		readChan <- readResult{data, err}
+		// Inner goroutine for the actual file read
+		go func() {
+			data, err := os.ReadFile(filePath)
+			readChan <- readResult{data, err}
+			close(done)
+		}()
+
+		// Set up warning timer for slow reads (2 seconds)
+		warningTimer := time.NewTimer(2 * time.Second)
+		defer warningTimer.Stop()
+
+		select {
+		case <-done:
+			// Read completed normally before timeout
+			return
+		case <-warningTimer.C:
+			// Read is taking longer than expected, show warning
+			fmt.Fprintf(os.Stderr, "Warning: File read operation taking longer than expected: %s\n", filePath)
+
+			// Update UI to show loading indicator via callback if provided
+			if lv.onSlowRead != nil {
+				lv.onSlowRead(filePath)
+			}
+
+			// Wait for completion after warning
+			<-done
+		}
 	}()
 
 	// Wait for read with timeout (useful for large files on slow systems)
@@ -661,6 +692,11 @@ func (lv *LogViewerPanel) View() string {
 		content,
 		footer,
 	)
+}
+
+// SetOnSlowRead sets the callback for slow read notifications
+func (lv *LogViewerPanel) SetOnSlowRead(callback func(filename string)) {
+	lv.onSlowRead = callback
 }
 
 // renderEmptyState renders the empty state when no file is loaded

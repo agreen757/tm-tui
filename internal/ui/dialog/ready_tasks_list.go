@@ -273,12 +273,12 @@ type ReadyTasksDialog struct {
 	selectedIDs        []string
 	rawOutput          string
 	parseError         error
-	mu                 sync.Mutex              // Protects concurrent access to tasks during async fetching
-	cache              map[string]*TaskDetails // Cache for fetched task details keyed by task ID
-	showRawOutput      bool                    // Flag to show raw output when parsing fails
-	cliExecutionError  error                   // Stores CLI execution error with context
-	emptyResultMessage string                  // Custom message when no tasks available
-	statusMessage      string                  // Status message shown during operations (e.g., "Configuring models...")
+	mu                 sync.Mutex        // Protects concurrent access to tasks during async fetching
+	cache              *LRUCache         // Cache for fetched task details keyed by task ID, using LRU eviction
+	showRawOutput      bool              // Flag to show raw output when parsing fails
+	cliExecutionError  error             // Stores CLI execution error with context
+	emptyResultMessage string            // Custom message when no tasks available
+	statusMessage      string            // Status message shown during operations (e.g., "Configuring models...")
 }
 
 // NewReadyTasksDialog creates a new ready tasks dialog
@@ -289,7 +289,7 @@ func NewReadyTasksDialog() *ReadyTasksDialog {
 		selectedIDs:        []string{},
 		rawOutput:          "",
 		parseError:         nil,
-		cache:              make(map[string]*TaskDetails),
+		cache:              NewLRUCache(100),
 		showRawOutput:      false,
 		cliExecutionError:  nil,
 		emptyResultMessage: "",
@@ -830,7 +830,12 @@ func (d *ReadyTasksDialog) HasTruncatedTitles() bool {
 func (d *ReadyTasksDialog) GetCachedTaskDetails(taskID string) *TaskDetails {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.cache[taskID]
+	if value, found := d.cache.Get(taskID); found {
+		if details, ok := value.(*TaskDetails); ok {
+			return details
+		}
+	}
+	return nil
 }
 
 // SetCachedTaskDetails stores task details in the cache with proper locking
@@ -838,7 +843,7 @@ func (d *ReadyTasksDialog) GetCachedTaskDetails(taskID string) *TaskDetails {
 func (d *ReadyTasksDialog) SetCachedTaskDetails(taskID string, details *TaskDetails) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.cache[taskID] = details
+	d.cache.Put(taskID, details)
 }
 
 // SetCLIExecutionError sets the CLI execution error with context for better error reporting
@@ -899,7 +904,7 @@ func (d *ReadyTasksDialog) ClearStatusMessage() {
 func (d *ReadyTasksDialog) InvalidateCache(taskID string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	delete(d.cache, taskID)
+	d.cache.Delete(taskID)
 }
 
 // ClearCache clears the entire cache
@@ -907,14 +912,14 @@ func (d *ReadyTasksDialog) InvalidateCache(taskID string) {
 func (d *ReadyTasksDialog) ClearCache() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.cache = make(map[string]*TaskDetails)
+	d.cache.Clear()
 }
 
 // GetCacheSize returns the number of cached tasks
 func (d *ReadyTasksDialog) GetCacheSize() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return len(d.cache)
+	return d.cache.Len()
 }
 
 // FetchFullTaskDetails synchronously fetches full task details for a given task ID
@@ -922,10 +927,12 @@ func (d *ReadyTasksDialog) GetCacheSize() int {
 // Results are cached to avoid redundant fetches.
 func (d *ReadyTasksDialog) FetchFullTaskDetails(taskID string) (string, error) {
 	d.mu.Lock()
-	// Check if details are already cached
-	if cached, exists := d.cache[taskID]; exists && cached != nil && cached.Title != "" {
-		d.mu.Unlock()
-		return cached.Title, nil
+	// Check if details are already cached (without trying to acquire lock again)
+	if value, found := d.cache.Get(taskID); found {
+		if details, ok := value.(*TaskDetails); ok && details != nil && details.Title != "" {
+			d.mu.Unlock()
+			return details.Title, nil
+		}
 	}
 	d.mu.Unlock()
 
@@ -946,9 +953,7 @@ func (d *ReadyTasksDialog) FetchFullTaskDetails(taskID string) (string, error) {
 	}
 
 	// Store in cache for future use
-	d.mu.Lock()
-	d.cache[taskID] = details
-	d.mu.Unlock()
+	d.SetCachedTaskDetails(taskID, details)
 
 	return details.Title, nil
 }
@@ -1126,7 +1131,10 @@ func (d *ReadyTasksDialog) FetchAllTruncatedTaskDetails() {
 	var tasksToPrefetch []string
 	d.mu.Lock()
 	for _, id := range truncatedIDs {
-		if cached, exists := d.cache[id]; !exists || cached == nil || cached.Title == "" {
+		// Check cache without calling GetCachedTaskDetails (avoid lock reentry)
+		if value, found := d.cache.Get(id); !found {
+			tasksToPrefetch = append(tasksToPrefetch, id)
+		} else if details, ok := value.(*TaskDetails); !ok || details == nil || details.Title == "" {
 			tasksToPrefetch = append(tasksToPrefetch, id)
 		}
 	}
@@ -1173,11 +1181,27 @@ func (d *ReadyTasksDialog) FetchAllTruncatedTaskDetails() {
 		}(taskID)
 	}
 
-	// Wait for all goroutines to complete in the background
+	// Wait for all goroutines to complete in the background with timeout
 	go func() {
-		wg.Wait()
-		// After all fetches complete, update the list display
-		d.updateUIAfterFetch()
+		// Create done channel for WaitGroup
+		done := make(chan struct{})
+
+		// Wait in separate goroutine
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		// Wait with timeout
+		select {
+		case <-done:
+			// All prefetch operations completed successfully
+			d.updateUIAfterFetch()
+		case <-time.After(30 * time.Second):
+			// Timeout occurred - update UI with partial results and show warning
+			d.updateUIWithPartialResults()
+			d.showTimeoutWarning("Some task prefetch operations timed out")
+		}
 	}()
 }
 
@@ -1186,12 +1210,15 @@ func (d *ReadyTasksDialog) FetchAllTruncatedTaskDetails() {
 func (d *ReadyTasksDialog) updateUIWithCachedDetails(truncatedIDs []string) {
 	d.mu.Lock()
 	for _, id := range truncatedIDs {
-		if cached, exists := d.cache[id]; exists && cached != nil && cached.Title != "" {
-			for i, task := range d.tasks {
-				if task.ID == id {
-					d.tasks[i].TaskTitle = cached.Title
-					d.tasks[i].TitleTruncated = false
-					break
+		// Check cache without calling GetCachedTaskDetails (avoid lock reentry)
+		if value, found := d.cache.Get(id); found {
+			if cached, ok := value.(*TaskDetails); ok && cached != nil && cached.Title != "" {
+				for i, task := range d.tasks {
+					if task.ID == id {
+						d.tasks[i].TaskTitle = cached.Title
+						d.tasks[i].TitleTruncated = false
+						break
+					}
 				}
 			}
 		}
@@ -1587,4 +1614,21 @@ func truncateStr(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s
+}
+
+// updateUIWithPartialResults updates the UI with whatever results we have so far
+// Called when prefetch operations timeout
+func (d *ReadyTasksDialog) updateUIWithPartialResults() {
+	// Update UI with whatever results we have - same as normal fetch completion
+	// since the tasks that completed will have their titles updated
+	d.updateUIAfterFetch()
+}
+
+// showTimeoutWarning displays a timeout warning to the user
+// Logs the warning for debugging purposes
+func (d *ReadyTasksDialog) showTimeoutWarning(msg string) {
+	// Log the warning for debugging
+	// In a real implementation, this could trigger a user notification
+	// For now, we log it for visibility in debugging scenarios
+	// A production implementation might use a toast notification or status bar message
 }

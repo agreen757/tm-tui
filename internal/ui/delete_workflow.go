@@ -586,8 +586,14 @@ func (m *Model) executeUndo(actionID string) tea.Cmd {
 		m.showErrorDialog("Undo Delete", "Undo action is no longer available.")
 		return nil
 	}
-	if err := m.taskService.UndoAction(context.Background(), actionID); err != nil {
-		m.showErrorDialog("Undo Delete", err.Error())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := m.taskService.UndoAction(ctx, actionID); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			m.showErrorDialog("Undo Delete", fmt.Sprintf("Undo operation timed out after 30 seconds: %v", err))
+		} else {
+			m.showErrorDialog("Undo Delete", err.Error())
+		}
 	} else {
 		m.addLogLine("Undo completed successfully")
 	}

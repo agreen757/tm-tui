@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"context"
 	"testing"
 
 	"github.com/agreen757/tm-tui/internal/git"
@@ -427,4 +428,174 @@ func TestCommitsDialog_Refresh(t *testing.T) {
 	if dialog.err != nil {
 		t.Error("Expected error to be cleared on refresh")
 	}
+}
+
+// TestCommitsDialog_TimeoutContext tests timeout functionality
+func TestCommitsDialog_TimeoutContext(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	
+	// Verify context fields are initialized
+	if dialog.fetchCtx != nil || dialog.fetchCancel != nil {
+		t.Error("Expected fetchCtx and fetchCancel to be nil initially")
+	}
+}
+
+// TestCommitsDialog_LoadCommitsWithTimeout tests that loadCommits creates a timeout context
+func TestCommitsDialog_LoadCommitsWithTimeout(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	
+	cmd := dialog.loadCommits()
+	if cmd == nil {
+		t.Fatal("Expected non-nil command from loadCommits")
+	}
+	
+	// Execute the command to check if context is created
+	msg := cmd()
+	if msg == nil {
+		t.Error("Expected non-nil message from command execution")
+	}
+	
+	// Check that fetchCtx was created
+	if dialog.fetchCtx == nil {
+		t.Error("Expected fetchCtx to be created after loadCommits")
+	}
+	
+	// Check that fetchCancel was created
+	if dialog.fetchCancel == nil {
+		t.Error("Expected fetchCancel to be created after loadCommits")
+	}
+	
+	// Clean up
+	dialog.Close()
+}
+
+// TestCommitsDialog_Close tests the Close method properly cancels context
+func TestCommitsDialog_Close(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	
+	// Create a context by triggering loadCommits
+	cmd := dialog.loadCommits()
+	_ = cmd()
+	
+	// Verify context is active
+	if dialog.fetchCtx == nil || dialog.fetchCancel == nil {
+		t.Fatal("Expected context to be created")
+	}
+	
+	// Close the dialog
+	dialog.Close()
+	
+	// Verify context is cancelled
+	if dialog.fetchCancel != nil {
+		t.Error("Expected fetchCancel to be nil after Close")
+	}
+	
+	if dialog.fetchCtx != nil {
+		t.Error("Expected fetchCtx to be nil after Close")
+	}
+}
+
+// TestCommitsDialog_PreviousFetchCancelled tests that previous fetch is cancelled when new load starts
+func TestCommitsDialog_PreviousFetchCancelled(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	
+	// First load
+	cmd1 := dialog.loadCommits()
+	_ = cmd1()
+	firstCtx := dialog.fetchCtx
+	
+	// Second load should cancel the first one and create a new context
+	cmd2 := dialog.loadCommits()
+	_ = cmd2()
+	
+	// Verify a new context was created
+	if dialog.fetchCtx == firstCtx {
+		t.Error("Expected a new fetchCtx to be created on second loadCommits")
+	}
+	
+	// Verify new context is not nil
+	if dialog.fetchCtx == nil {
+		t.Error("Expected new fetchCtx to be non-nil after second loadCommits")
+	}
+	
+	// Clean up
+	dialog.Close()
+}
+
+// TestCommitsDialog_TimeoutErrorHandling tests timeout error display
+func TestCommitsDialog_TimeoutErrorHandling(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	dialog.loading = false
+	dialog.SetRect(80, 20, 10, 5)
+	
+	// Set error to timeout
+	dialog.err = context.DeadlineExceeded
+	
+	view := dialog.View()
+	if view == "" {
+		t.Error("Expected non-empty view with timeout error")
+	}
+	
+	// Check that timeout error message is displayed
+	if !contains(view, "timed out after 60 seconds") {
+		t.Errorf("Expected timeout error message, view: %s", view)
+	}
+}
+
+// TestCommitsDialog_UpdateWithTimeoutError tests handling timeout error in Update
+func TestCommitsDialog_UpdateWithTimeoutError(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	dialog.loading = true // Set to true since Update will set it to false
+	
+	msg := CommitsRefreshMsg{
+		Commits: nil,
+		Err:     context.DeadlineExceeded,
+	}
+	
+	updatedDialog, _ := dialog.Update(msg)
+	if updatedDialog == nil {
+		t.Error("Expected non-nil dialog after update with timeout")
+	}
+	
+	if dialog.loading {
+		t.Error("Expected loading to be false after update")
+	}
+	
+	if dialog.err != context.DeadlineExceeded {
+		t.Error("Expected error to be set to DeadlineExceeded")
+	}
+}
+
+// TestCommitsDialog_RefreshWithTimeout tests refresh functionality with timeout context
+func TestCommitsDialog_RefreshWithTimeout(t *testing.T) {
+	dialog := NewCommitsDialog("/test/repo", nil)
+	dialog.loading = false
+	dialog.commits = []git.Commit{
+		{Hash: "abc123", Subject: "Old commit", Author: "Alice", RelativeTime: "1 day ago"},
+	}
+	
+	// Trigger refresh
+	result, cmd := dialog.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone for refresh, got %v", result)
+	}
+	
+	if cmd == nil {
+		t.Error("Expected non-nil command for refresh")
+	}
+	
+	if !dialog.loading {
+		t.Error("Expected dialog to be in loading state after refresh")
+	}
+	
+	// Execute command to verify context is created
+	_ = cmd()
+	
+	if dialog.fetchCtx == nil {
+		t.Error("Expected fetchCtx to be created after refresh command execution")
+	}
+	
+	// Clean up
+	dialog.Close()
 }

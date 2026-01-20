@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"context"
+	"time"
 
 	"github.com/agreen757/tm-tui/internal/git"
 	tea "github.com/charmbracelet/bubbletea"
@@ -37,6 +38,8 @@ type CommitsDialog struct {
 	onSelect      func(git.Commit)
 	loading       bool
 	err           error
+	fetchCtx      context.Context
+	fetchCancel   context.CancelFunc
 }
 
 // NewCommitsDialog creates a new commits dialog
@@ -77,6 +80,10 @@ func (d *CommitsDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 		d.loading = false
 		d.commits = msg.Commits
 		d.err = msg.Err
+		// Handle timeout error specifically
+		if msg.Err == context.DeadlineExceeded {
+			d.err = context.DeadlineExceeded
+		}
 		if d.selectedIndex >= len(d.commits) && len(d.commits) > 0 {
 			d.selectedIndex = len(d.commits) - 1
 		}
@@ -124,10 +131,20 @@ func (d *CommitsDialog) renderError() string {
 		Width(d.width - 4).
 		PaddingTop(1)
 
+	// Format specific error message for timeouts
+	var errorMsg string
+	if d.err == context.DeadlineExceeded {
+		errorMsg = "Commit fetching timed out after 60 seconds"
+	} else if d.err != nil {
+		errorMsg = d.err.Error()
+	} else {
+		errorMsg = "Unknown error loading commits"
+	}
+
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		errorStyle.Render("Error loading commits:"),
-		messageStyle.Render(d.err.Error()),
+		messageStyle.Render(errorMsg),
 	)
 }
 
@@ -265,6 +282,15 @@ func (d *CommitsDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
 	return DialogResultNone, nil
 }
 
+// Close cleans up resources used by the dialog
+func (d *CommitsDialog) Close() {
+	if d.fetchCancel != nil {
+		d.fetchCancel()
+		d.fetchCancel = nil
+	}
+	d.fetchCtx = nil
+}
+
 // CommitsRefreshMsg is sent when commits are loaded
 type CommitsRefreshMsg struct {
 	Commits []git.Commit
@@ -274,8 +300,19 @@ type CommitsRefreshMsg struct {
 // loadCommits loads recent commits from the repository
 func (d *CommitsDialog) loadCommits() tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		commits, err := git.GetRecentCommits(ctx, d.repoPath, 20)
+		// Cancel any previous fetch operation
+		if d.fetchCancel != nil {
+			d.fetchCancel()
+		}
+		// Create a new timeout context for this fetch
+		d.fetchCtx, d.fetchCancel = context.WithTimeout(context.Background(), 60*time.Second)
+		commits, err := git.GetRecentCommits(d.fetchCtx, d.repoPath, 20)
+		
+		// Check if the operation timed out
+		if err == nil && d.fetchCtx.Err() == context.DeadlineExceeded {
+			err = context.DeadlineExceeded
+		}
+		
 		return CommitsRefreshMsg{
 			Commits: commits,
 			Err:     err,

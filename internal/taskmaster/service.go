@@ -503,6 +503,12 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 	errCh := make(chan error, 1)
 	var jsonOutput strings.Builder
 
+	// Ensure channels are closed when command completes (both success and error paths)
+	defer func() {
+		close(progressCh)
+		close(errCh)
+	}()
+
 	// Parse stdout in goroutine
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -542,11 +548,19 @@ func (s *Service) AnalyzeComplexityWithProgress(ctx context.Context, scope strin
 	go func() {
 		for {
 			select {
-			case state := <-progressCh:
+			case state, ok := <-progressCh:
+				// Channel closed, exit goroutine
+				if !ok {
+					return
+				}
 				if onProgress != nil {
 					onProgress(state)
 				}
 			case <-ctx.Done():
+				// Drain remaining channel values to prevent sender blocking
+				for range progressCh {
+					// Discard remaining values
+				}
 				return
 			}
 		}
@@ -705,6 +719,12 @@ func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mo
 	progressCh := make(chan ParsePrdProgressState, 10)
 	errCh := make(chan error, 1)
 
+	// Ensure channels are closed when command completes (both success and error paths)
+	defer func() {
+		close(progressCh)
+		close(errCh)
+	}()
+
 	// Parse stdout in goroutine
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -735,11 +755,19 @@ func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mo
 	go func() {
 		for {
 			select {
-			case state := <-progressCh:
+			case state, ok := <-progressCh:
+				// Channel closed, exit goroutine
+				if !ok {
+					return
+				}
 				if onProgress != nil {
 					onProgress(state)
 				}
 			case <-ctx.Done():
+				// Drain remaining channel values to prevent sender blocking
+				for range progressCh {
+					// Discard remaining values
+				}
 				return
 			}
 		}
@@ -914,6 +942,12 @@ func (s *Service) ExecuteExpandWithProgress(
 	progressCh := make(chan ExpandProgressState, 10)
 	errCh := make(chan error, 1)
 
+	// Ensure channels are closed when command completes (both success and error paths)
+	defer func() {
+		close(progressCh)
+		close(errCh)
+	}()
+
 	// Parse stdout in goroutine
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -944,11 +978,19 @@ func (s *Service) ExecuteExpandWithProgress(
 	go func() {
 		for {
 			select {
-			case state := <-progressCh:
+			case state, ok := <-progressCh:
+				// Channel closed, exit goroutine
+				if !ok {
+					return
+				}
 				if onProgress != nil {
 					onProgress(state)
 				}
 			case <-ctx.Done():
+				// Drain remaining channel values to prevent sender blocking
+				for range progressCh {
+					// Discard remaining values
+				}
 				return
 			}
 		}

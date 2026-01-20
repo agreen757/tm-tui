@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agreen757/tm-tui/internal/executor"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -166,16 +167,18 @@ func RunGitCommand(commandID string, args ...string) (chan tea.Msg, error) {
 
 // ExecuteGitCommand performs git command execution with streaming output
 // It returns a subscription message with the output channel
+// Uses cancellable contexts with operation-specific timeouts to prevent hung commands
 // tagName is used for organizing log files in tag-specific directories
 func ExecuteGitCommand(commandID string, args []string, tagName string) tea.Cmd {
 	// Create a larger buffered channel to handle bursts of output
 	outCh := make(chan tea.Msg, 1000)
 
-	// Create a cancellable context
-	ctx, cancel := context.WithCancel(context.Background())
+	// Create a cancellable context that can be terminated by the UI
+	// The parent context uses WithCancel so the UI can cancel long-running operations
+	parentCtx, cancel := context.WithCancel(context.Background())
 
 	// Start the subprocess in a goroutine
-	go runGitProcess(ctx, commandID, args, tagName, outCh, cancel)
+	go runGitProcess(parentCtx, commandID, args, tagName, outCh, cancel)
 
 	// Return subscription message immediately
 	return func() tea.Msg {
@@ -187,10 +190,21 @@ func ExecuteGitCommand(commandID string, args []string, tagName string) tea.Cmd 
 }
 
 // runGitProcess executes the git command and streams output to the channel
+// Uses operation-specific timeouts to prevent hung commands
 // tagName determines the log directory structure (.taskmaster/<tagName>/<commandID>.log)
-func runGitProcess(ctx context.Context, commandID string, args []string, tagName string, outCh chan tea.Msg, cancel context.CancelFunc) {
+// parentCtx allows external cancellation via the UI
+func runGitProcess(parentCtx context.Context, commandID string, args []string, tagName string, outCh chan tea.Msg, cancel context.CancelFunc) {
 	defer close(outCh)
 	defer cancel()
+
+	// Determine the operation type and apply appropriate timeout
+	opType := executor.DetermineGitOperationType(args)
+	timeout := executor.GetTimeoutForOperation(opType)
+
+	// Create a timeout context from the parent context
+	// This allows the UI to cancel anytime, but also applies operation-specific timeout
+	ctx, timeoutCancel := context.WithTimeout(parentCtx, timeout)
+	defer timeoutCancel()
 
 	// Create structured logger for this git operation
 	gitLogger, logPath, err := NewGitLogger(commandID, args, tagName)
@@ -208,14 +222,21 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 			TaskID: commandID,
 			Output: fmt.Sprintf("📝 Logging to: %s", logPath),
 		}
+
+		// Log timeout information
+		gitLogger.LogWarning(fmt.Sprintf("Operation timeout: %v (%s)", timeout, opType.String()), nil)
 	}
 
 	// Store stderr lines for error parsing if command fails
 	stderrLines := make([]string, 0)
 	stderrMutex := &sync.Mutex{}
 
-	// Create the command
+	// Create the command with timeout context
 	cmd := exec.CommandContext(ctx, "git", args...)
+
+	// Configure the process to run in its own process group
+	// This allows graceful termination of the entire process tree
+	cmd.SysProcAttr = executor.ConfigureProcessGroup()
 
 	// Set up stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
@@ -271,6 +292,10 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 1024*1024) // 1MB max line size
 
+		// Create a reusable timer to reduce allocations
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -278,6 +303,16 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 			if gitLogger != nil {
 				gitLogger.LogOutput("stdout", line)
 			}
+
+			// Reset timer for this iteration
+			// Stop the timer and drain the channel if it already fired
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(100 * time.Millisecond)
 
 			// Non-blocking send with timeout to prevent goroutine from hanging
 			select {
@@ -288,7 +323,7 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 				Output: line,
 			}:
 				// Successfully sent
-			case <-time.After(100 * time.Millisecond):
+			case <-timer.C:
 				// Channel is full and TUI is slow - drop message but continue
 				// Log file will still have the complete output
 				if gitLogger != nil {
@@ -305,6 +340,10 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 		buf := make([]byte, 0, 64*1024)
 		scanner.Buffer(buf, 1024*1024) // 1MB max line size
 
+		// Create a reusable timer to reduce allocations
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
 		for scanner.Scan() {
 			line := scanner.Text()
 
@@ -318,6 +357,16 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 				gitLogger.LogOutput("stderr", line)
 			}
 
+			// Reset timer for this iteration
+			// Stop the timer and drain the channel if it already fired
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(100 * time.Millisecond)
+
 			// Non-blocking send with timeout to prevent goroutine from hanging
 			select {
 			case <-ctx.Done():
@@ -327,7 +376,7 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 				Output: "[ERR] " + line,
 			}:
 				// Successfully sent
-			case <-time.After(100 * time.Millisecond):
+			case <-timer.C:
 				// Channel is full and TUI is slow - drop message but continue
 				// Error messages are critical, so we still log them
 				if gitLogger != nil {
@@ -340,9 +389,11 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 	// Wait for the process to complete
 	err = cmd.Wait()
 
-	// Log completion status
+	// Log completion status with context information
 	if gitLogger != nil {
-		if ctx.Err() != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			gitLogger.LogWarning(fmt.Sprintf("Command timed out after %v", timeout), nil)
+		} else if ctx.Err() == context.Canceled {
 			gitLogger.LogCancellation()
 		} else {
 			// Extract exit code for logging
@@ -354,8 +405,32 @@ func runGitProcess(ctx context.Context, commandID string, args []string, tagName
 		}
 	}
 
-	if ctx.Err() != nil {
-		// Context was cancelled
+	if ctx.Err() == context.DeadlineExceeded {
+		// Timeout exceeded
+		timeoutMsg := fmt.Sprintf("Command timed out after %v. This may indicate a slow operation or network issue.", timeout)
+		outCh <- TaskOutputMsg{
+			TaskID: commandID,
+			Output: "",
+		}
+		outCh <- TaskOutputMsg{
+			TaskID: commandID,
+			Output: "════════════════════════════════════════════════════════",
+		}
+		outCh <- TaskOutputMsg{
+			TaskID: commandID,
+			Output: fmt.Sprintf("⏱️  Timeout: %s", timeoutMsg),
+		}
+		outCh <- TaskOutputMsg{
+			TaskID: commandID,
+			Output: "════════════════════════════════════════════════════════",
+		}
+		outCh <- TaskFailedMsg{
+			TaskID:  commandID,
+			Error:   timeoutMsg,
+			Message: "Git command timed out",
+		}
+	} else if ctx.Err() == context.Canceled {
+		// Context was cancelled by the UI
 		outCh <- TaskCancelledMsg{
 			TaskID: commandID,
 		}

@@ -25,14 +25,15 @@ type Command struct {
 
 // Service manages command execution state with async execution and logging
 type Service struct {
-	config   *config.Config
-	mu       sync.Mutex
-	running  bool
-	cancelFn context.CancelFunc
-	outCh    chan string
-	doneCh   chan CommandResult
-	history  []Command
-	logFile  *os.File
+	config           *config.Config
+	mu               sync.Mutex
+	running          bool
+	cancelFn         context.CancelFunc
+	outCh            chan string
+	doneCh           chan CommandResult
+	history          []Command
+	logFile          *os.File
+	maxHistorySize   int // Maximum number of commands to keep in history
 }
 
 // CommandResult represents the result of a command execution
@@ -68,12 +69,13 @@ func NewService(cfg *config.Config) (*Service, error) {
 	}
 
 	return &Service{
-		config:  cfg,
-		running: false,
-		outCh:   make(chan string, 100),      // Buffered channel for output
-		doneCh:  make(chan CommandResult, 1), // Buffered channel for completion
-		history: []Command{},
-		logFile: logFile,
+		config:         cfg,
+		running:        false,
+		outCh:          make(chan string, 100),      // Buffered channel for output
+		doneCh:         make(chan CommandResult, 1), // Buffered channel for completion
+		history:        []Command{},
+		logFile:        logFile,
+		maxHistorySize: 1000, // Default to 1000 commands
 	}, nil
 }
 
@@ -205,7 +207,7 @@ func (s *Service) Execute(cmd string, args ...string) error {
 		s.mu.Lock()
 		s.running = false
 		s.cancelFn = nil
-		s.history = append(s.history, Command{
+		s.addToHistory(Command{
 			Cmd:      cmd,
 			Args:     args,
 			When:     time.Now(),
@@ -292,6 +294,27 @@ func (s *Service) IsRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.running
+}
+
+// SetMaxHistorySize sets the maximum number of commands to keep in history
+func (s *Service) SetMaxHistorySize(size int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if size > 0 {
+		s.maxHistorySize = size
+	}
+}
+
+// addToHistory adds a command to the history and maintains bounded size
+func (s *Service) addToHistory(cmd Command) {
+	s.history = append(s.history, cmd)
+	
+	// Trim history if it exceeds maximum size
+	if len(s.history) > s.maxHistorySize {
+		// Remove oldest entries (at the beginning of the slice)
+		excess := len(s.history) - s.maxHistorySize
+		s.history = s.history[excess:]
+	}
 }
 
 // GetHistory returns a copy of the command history
