@@ -123,24 +123,8 @@ func (m *Model) showTagListDialog(list *taskmaster.TagList) {
 	selector := dialog.NewTagSelector(cfg)
 	selector.BaseFocusableDialog.BaseDialog.ID = tagListDialogID
 
-	// Calculate dimensions based on app size
-	width := 72
-	height := 22
-	if m.width > 0 {
-		width = m.width - 20
-		if width < 60 {
-			width = 60
-		}
-	}
-	if m.height > 0 {
-		height = m.height - 10
-		if height < 16 {
-			height = 16
-		}
-	}
-
-	selector.SetRect(width, height, 0, 0)
-
+	// Let DialogManager handle positioning and sizing via AddDialog
+	// Don't pre-set dimensions - let PositionDialogInBoundsWithConfig handle it
 	m.appState.AddDialog(selector, func(value interface{}, err error) tea.Cmd {
 		if err != nil {
 			m.showErrorDialog("Tag Contexts", "An error occurred: "+err.Error())

@@ -96,11 +96,16 @@ func TestFileSelectionDialog_View_ShowsEntries(t *testing.T) {
 	// Apply default style
 	dialog.Style = DefaultDialogStyle()
 
-	// Initialize and load
-	cmd := dialog.Init()
-	msg := cmd()
-	updatedDialog, _ := dialog.Update(msg)
+	// Simulate window resize to set visibleItems
+	windowMsg := tea.WindowSizeMsg{Width: 100, Height: 40}
+	updatedDialog, _ := dialog.Update(windowMsg)
 	d := updatedDialog.(*FileSelectionDialog)
+
+	// Initialize and load
+	cmd := d.Init()
+	msg := cmd()
+	updatedDialog, _ = d.Update(msg)
+	d = updatedDialog.(*FileSelectionDialog)
 
 	// Render the view
 	view := d.View()

@@ -54,7 +54,8 @@ func (m *Model) openParsePrdWorkflow() tea.Cmd {
 	}
 
 	startDir := pathutil.ResolvePrdDirectoryPath(m.config, m.lastPrdPath)
-	fileDialog := dialog.NewFileSelectionDialog("Select PRD File", startDir, 78, 20, []string{".md", ".txt"})
+	// Use reasonable defaults - let DialogManager handle sizing via PositionDialogInBoundsWithConfig
+	fileDialog := dialog.NewFileSelectionDialog("Select PRD File", startDir, 70, 25, []string{".md", ".txt"})
 	if dm.Style != nil {
 		dialog.ApplyStyleToDialog(fileDialog, dm.Style)
 	}

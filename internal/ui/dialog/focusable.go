@@ -29,8 +29,10 @@ type FocusableDialog interface {
 }
 
 // BaseFocusableDialog implements common functionality for focusable dialogs
+// It embeds BaseFilterable to provide filtering capabilities to all dialogs
 type BaseFocusableDialog struct {
 	BaseDialog
+	*BaseFilterable
 	focusedIndex int
 	numElements  int
 }
@@ -38,9 +40,10 @@ type BaseFocusableDialog struct {
 // NewBaseFocusableDialog creates a new base focusable dialog
 func NewBaseFocusableDialog(title string, width, height int, kind DialogKind, numElements int) BaseFocusableDialog {
 	return BaseFocusableDialog{
-		BaseDialog:   NewBaseDialog(title, width, height, kind),
-		focusedIndex: 0,
-		numElements:  numElements,
+		BaseDialog:     NewBaseDialog(title, width, height, kind),
+		BaseFilterable: NewBaseFilterable(),
+		focusedIndex:   0,
+		numElements:    numElements,
 	}
 }
 
@@ -101,3 +104,7 @@ func (d *BaseFocusableDialog) HandleBaseFocusableKey(msg tea.KeyMsg) (DialogResu
 
 	return DialogResultNone, nil
 }
+
+// Compile-time assertion that BaseFocusableDialog implements FilterableComponent
+var _ FilterableComponent = (*BaseFocusableDialog)(nil)
+

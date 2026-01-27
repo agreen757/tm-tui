@@ -120,16 +120,12 @@ func NewTagSelector(cfg TagSelectorConfig) *TagSelector {
 		IsNew: true,
 	})
 
-	// Calculate visible items based on height
-	// Use a larger height (30) to accommodate more tags
-	dialogHeight := 30
-	availHeight := dialogHeight - 6 // Account for borders, title, footer, etc.
-	if availHeight < 1 {
-		availHeight = 1
-	}
-	visibleItems := availHeight
+	// Initialize visibleItems to a reasonable default
+	// This will be updated by SetRect() called by the dialog manager
+	// Start with minimum visible items to avoid incorrect clipping
+	visibleItems := 5
 
-	bfd := NewBaseFocusableDialog(cfg.Title, 60, dialogHeight, DialogKindList, len(items))
+	bfd := NewBaseFocusableDialog(cfg.Title, 60, 30, DialogKindList, len(items))
 
 	selector := &TagSelector{
 		BaseFocusableDialog: &bfd,
@@ -185,12 +181,11 @@ func (t *TagSelector) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		log.Printf("[TagSelector.Update] WindowSizeMsg: %dx%d", msg.Width, msg.Height)
-		t.Center(msg.Width, msg.Height)
-		availHeight := msg.Height - 6
-		if availHeight < 1 {
-			availHeight = 1
-		}
-		t.visibleItems = availHeight
+		// Only center the dialog, don't change its size
+		// The dialog manager handles sizing via SetRect()
+		t.BaseFocusableDialog.Center(msg.Width, msg.Height)
+		log.Printf("[TagSelector.Update] visibleItems: %d, selectedIndex: %d", 
+			t.visibleItems, t.selectedIndex)
 	case tea.KeyMsg:
 		log.Printf("[TagSelector.Update] KeyMsg received: %s (should not process this - DialogManager handles it)", msg.String())
 	}
@@ -230,26 +225,40 @@ func (t *TagSelector) renderItems(width int) string {
 
 	maxVisible := t.visibleItems
 	if maxVisible < 1 {
-		maxVisible = 1
+		// Failsafe: should never happen, but ensure we show at least 3 items
+		maxVisible = 3
+		log.Printf("[TagSelector.renderItems] WARNING: visibleItems=%d, using failsafe=%d", 
+			t.visibleItems, maxVisible)
+	}
+
+	// Check if we need to reserve space for scroll indicator
+	// If scrolling is needed, reserve 1 line for indicator
+	needsScrolling := len(t.viewItems) > maxVisible
+	itemsToShow := maxVisible
+	if needsScrolling {
+		itemsToShow = maxVisible - 1 // Reserve 1 line for scroll indicator
+		if itemsToShow < 1 {
+			itemsToShow = 1
+		}
 	}
 
 	if t.selectedIndex < t.offset {
 		t.offset = t.selectedIndex
-	} else if t.selectedIndex >= t.offset+maxVisible {
-		t.offset = t.selectedIndex - maxVisible + 1
+	} else if t.selectedIndex >= t.offset+itemsToShow {
+		t.offset = t.selectedIndex - itemsToShow + 1
 		if t.offset < 0 {
 			t.offset = 0
 		}
 	}
 
 	var lines []string
-	endIdx := t.offset + maxVisible
+	endIdx := t.offset + itemsToShow
 	if endIdx > len(t.viewItems) {
 		endIdx = len(t.viewItems)
 	}
 
-	log.Printf("[TagSelector.renderItems] Rendering items %d to %d (offset=%d, maxVisible=%d)",
-		t.offset, endIdx, t.offset, maxVisible)
+	log.Printf("[TagSelector.renderItems] Rendering items %d to %d (offset=%d, itemsToShow=%d, needsScrolling=%v)",
+		t.offset, endIdx, t.offset, itemsToShow, needsScrolling)
 
 	for i := t.offset; i < endIdx; i++ {
 		item := t.viewItems[i]
@@ -259,13 +268,13 @@ func (t *TagSelector) renderItems(width int) string {
 		lines = append(lines, line)
 	}
 
-	// Add scroll indicators when there are more items above or below
-	if t.offset > 0 || endIdx < len(t.viewItems) {
+	// Add scroll indicator on new line if scrolling is needed
+	if needsScrolling {
 		scrollInfo := ""
 		if t.offset > 0 {
 			scrollInfo += "↑ "
 		}
-		scrollInfo += fmt.Sprintf("Showing %d-%d of %d", t.offset+1, endIdx, len(t.viewItems))
+		scrollInfo += fmt.Sprintf("(%d-%d of %d)", t.offset+1, endIdx, len(t.viewItems))
 		if endIdx < len(t.viewItems) {
 			scrollInfo += " ↓"
 		}
@@ -276,7 +285,7 @@ func (t *TagSelector) renderItems(width int) string {
 			Foreground(lipgloss.Color("241")). // Dim gray
 			Italic(true)
 
-		lines = append(lines, "", scrollStyle.Render(scrollInfo))
+		lines = append(lines, scrollStyle.Render(scrollInfo))
 	}
 
 	return strings.Join(lines, "\n")
@@ -456,9 +465,28 @@ func (t *TagSelector) DialogResultValue() (interface{}, error) {
 // SetRect sets the dialog's position and size
 func (t *TagSelector) SetRect(width, height, x, y int) {
 	t.BaseFocusableDialog.SetRect(width, height, x, y)
-	availHeight := height - 6
+	
+	// Calculate visible items same as ListDialog: height - 6 (borders, title, padding)
+	// The scroll indicator (if needed) will be handled gracefully in renderItems
+	availHeight := height - 15
 	if availHeight < 1 {
 		availHeight = 1
 	}
-	t.visibleItems = availHeight
+	
+	// Only update if there's a significant change
+	if availHeight != t.visibleItems {
+		oldVisible := t.visibleItems
+		t.visibleItems = availHeight
+		
+		log.Printf("[TagSelector.SetRect] visibleItems: %d → %d", oldVisible, t.visibleItems)
+		
+		// Ensure selectedIndex is within valid bounds after visibility change
+		if t.selectedIndex >= len(t.viewItems) && len(t.viewItems) > 0 {
+			t.selectedIndex = len(t.viewItems) - 1
+			log.Printf("[TagSelector.SetRect] Adjusted selectedIndex to %d", t.selectedIndex)
+		}
+		if t.selectedIndex < 0 && len(t.viewItems) > 0 {
+			t.selectedIndex = 0
+		}
+	}
 }

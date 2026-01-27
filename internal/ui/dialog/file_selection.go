@@ -23,6 +23,8 @@ type FileSelectionDialog struct {
 	filters     map[string]struct{}
 	requestID   int
 	resultPath  string
+	visibleItems int // Number of entries that fit in dialog height
+	offset      int  // Scroll position offset
 }
 
 type fileEntry struct {
@@ -69,6 +71,8 @@ func NewFileSelectionDialog(title, startPath string, width, height int, extensio
 		BaseFocusableDialog: NewBaseFocusableDialog(title, width, height, DialogKindCustom, 1),
 		currentPath:         abs,
 		filters:             filters,
+		visibleItems:        5, // Conservative default, will be updated by SetRect
+		offset:              0,
 	}
 	d.SetCancellable(true)
 	d.SetFooterHints(
@@ -104,6 +108,19 @@ func (d *FileSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		d.Center(msg.Width, msg.Height)
+		
+		// Calculate visible items based on height (Pattern 1: State-Only Update)
+		// Account for: borders (2) + header/location (2) + status line (1) = 5
+		availHeight := msg.Height - 6
+		if availHeight < 1 {
+			availHeight = 1
+		}
+		d.visibleItems = availHeight
+		
+		// Validate selected index is still in bounds after visibility change
+		if d.selected >= len(d.entries) && len(d.entries) > 0 {
+			d.selected = len(d.entries) - 1
+		}
 
 	case fileSelectionEntriesMsg:
 		if msg.requestID != d.requestID {
@@ -121,6 +138,7 @@ func (d *FileSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 
 		d.currentPath = msg.path
 		d.entries = msg.entries
+		d.offset = 0  // Reset scroll position when navigating to new directory
 
 		// Critical fix: Force-check for PRD files in the .taskmaster/docs directory
 		if strings.Contains(msg.path, ".taskmaster/docs") && len(d.entries) <= 1 {
@@ -200,6 +218,26 @@ func (d *FileSelectionDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) 
 			d.selected++
 		} else {
 			d.selected = 0
+		}
+		return DialogResultNone, nil
+
+	case key.Matches(msg, key.NewBinding(key.WithKeys("pageup"))):
+		if len(d.entries) == 0 {
+			return DialogResultNone, nil
+		}
+		d.selected -= d.visibleItems
+		if d.selected < 0 {
+			d.selected = 0
+		}
+		return DialogResultNone, nil
+
+	case key.Matches(msg, key.NewBinding(key.WithKeys("pagedown"))):
+		if len(d.entries) == 0 {
+			return DialogResultNone, nil
+		}
+		d.selected += d.visibleItems
+		if d.selected >= len(d.entries) {
+			d.selected = len(d.entries) - 1
 		}
 		return DialogResultNone, nil
 
@@ -322,20 +360,77 @@ func (d *FileSelectionDialog) renderEntries(width int) string {
 		return lipgloss.NewStyle().Foreground(d.Style.TextColor).Render("No matching files in this directory")
 	}
 
-	lines := make([]string, len(d.entries))
-	for i, entry := range d.entries {
+	// Calculate visible items with failsafe
+	maxVisible := d.visibleItems
+	if maxVisible < 1 {
+		maxVisible = 3 // Failsafe minimum
+	}
+
+	// Check if we need to reserve space for scroll indicator
+	// If scrolling is needed, reserve 1 line for indicator
+	needsScrolling := len(d.entries) > maxVisible
+	itemsToShow := maxVisible
+	if needsScrolling {
+		itemsToShow = maxVisible - 1 // Reserve 1 line for scroll indicator
+		if itemsToShow < 1 {
+			itemsToShow = 1
+		}
+	}
+
+	// Keep selected item visible by adjusting offset (Pattern 1: State-Only Update)
+	if d.selected < d.offset {
+		d.offset = d.selected
+	} else if d.selected >= d.offset+itemsToShow {
+		d.offset = d.selected - itemsToShow + 1
+		if d.offset < 0 {
+			d.offset = 0
+		}
+	}
+
+	// Render only visible items
+	endIdx := d.offset + itemsToShow
+	if endIdx > len(d.entries) {
+		endIdx = len(d.entries)
+	}
+
+	lines := make([]string, 0, itemsToShow+1)
+	for i := d.offset; i < endIdx; i++ {
+		entry := d.entries[i]
 		line := entryLabel(entry)
 		style := lipgloss.NewStyle().Foreground(d.Style.TextColor)
+
 		if entry.IsDir {
 			style = style.Foreground(d.Style.SuccessColor)
 		}
+
 		if i == d.selected {
 			style = style.Foreground(d.Style.FocusedBorderColor).Bold(true)
 			line = "> " + line
 		} else {
 			line = "  " + line
 		}
-		lines[i] = style.Width(width).Render(line)
+
+		lines = append(lines, style.Width(width).Render(line))
+	}
+
+	// Add scroll indicator on new line if needed
+	if needsScrolling {
+		scrollInfo := ""
+		if d.offset > 0 {
+			scrollInfo += "↑ "
+		}
+		scrollInfo += fmt.Sprintf("(%d-%d of %d)", d.offset+1, endIdx, len(d.entries))
+		if endIdx < len(d.entries) {
+			scrollInfo += " ↓"
+		}
+
+		scrollStyle := lipgloss.NewStyle().
+			Width(width).
+			Align(lipgloss.Center).
+			Foreground(lipgloss.Color("241")). // Dim gray
+			Italic(true)
+
+		lines = append(lines, scrollStyle.Render(scrollInfo))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)

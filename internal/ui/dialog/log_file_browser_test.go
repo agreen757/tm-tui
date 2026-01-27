@@ -13,6 +13,27 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// newFileEntry is a helper function to create FileEntry with auto-extracted filename and extension
+func newFileEntry(name string, isDir bool) FileEntry {
+	filename := name
+	extension := ""
+	if !isDir {
+		ext := filepath.Ext(name)
+		if ext != "" {
+			filename = strings.TrimSuffix(name, ext)
+			extension = ext
+		}
+	}
+	return FileEntry{
+		Name:        name,
+		DisplayName: name,
+		IsDir:       isDir,
+		ModTime:     time.Now(),
+		Filename:    filename,
+		Extension:   extension,
+	}
+}
+
 // TestExtractTaskID tests the task ID extraction from filenames
 func TestExtractTaskID(t *testing.T) {
 	tests := []struct {
@@ -162,7 +183,7 @@ func TestSortFileEntries(t *testing.T) {
 		{Name: "2.1.md", IsDir: false, ModTime: time.Now()},
 	}
 
-	sortFileEntries(entries)
+	sortFileEntries(entries, FileSortByTaskID)
 
 	// Expected order:
 	// 1. Directories first (archive, logs)
@@ -245,7 +266,7 @@ func TestDiscoverFiles(t *testing.T) {
 	}
 
 	// Discover files
-	entries, err := discoverFiles(tempDir)
+	entries, err := discoverFiles(tempDir, FileSortByTaskID)
 	if err != nil {
 		t.Fatalf("discoverFiles failed: %v", err)
 	}
@@ -292,7 +313,7 @@ func TestDiscoverFiles(t *testing.T) {
 func TestDiscoverFilesEmptyDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 
-	entries, err := discoverFiles(tempDir)
+	entries, err := discoverFiles(tempDir, FileSortByTaskID)
 	if err != nil {
 		t.Fatalf("discoverFiles failed: %v", err)
 	}
@@ -304,7 +325,7 @@ func TestDiscoverFilesEmptyDirectory(t *testing.T) {
 
 // TestDiscoverFilesNonexistentDirectory tests error handling
 func TestDiscoverFilesNonexistentDirectory(t *testing.T) {
-	_, err := discoverFiles("/nonexistent/path/that/does/not/exist")
+	_, err := discoverFiles("/nonexistent/path/that/does/not/exist", FileSortByTaskID)
 	if err == nil {
 		t.Error("Expected error for nonexistent directory, got nil")
 	}
@@ -319,11 +340,14 @@ func TestFileEntryImplementsListItem(t *testing.T) {
 		Size:        1024,
 		ModTime:     time.Now(),
 		DisplayName: "test.log",
+		Filename:    "test",
+		Extension:   ".log",
 	}
 
-	// Test FilterValue
-	if entry.FilterValue() != "test.log" {
-		t.Errorf("FilterValue() = %q, want %q", entry.FilterValue(), "test.log")
+	// Test FilterValue - should contain filename, displayname, and extension
+	filterValue := entry.FilterValue()
+	if filterValue != "test test.log .log" {
+		t.Errorf("FilterValue() = %q, want %q", filterValue, "test test.log .log")
 	}
 
 	// Test Title
@@ -396,7 +420,7 @@ func TestSortFileEntriesEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sortFileEntries(tt.entries)
+			sortFileEntries(tt.entries, FileSortByTaskID)
 
 			if len(tt.entries) != len(tt.expected) {
 				t.Fatalf("Expected %d entries, got %d", len(tt.expected), len(tt.entries))
@@ -589,6 +613,7 @@ func TestLogFileBrowserModelUpdateSelection(t *testing.T) {
 	}
 
 	browser.files = []FileEntry{fileEntry}
+	browser.visibleFiles = browser.files  // Sync visibleFiles
 	items := []list.Item{fileEntry}
 	browser.list.SetItems(items)
 
@@ -651,6 +676,7 @@ func TestLogFileBrowserModelGetSelectedFile(t *testing.T) {
 	}
 
 	browser.files = []FileEntry{fileEntry}
+	browser.visibleFiles = browser.files  // Sync visibleFiles
 	items := []list.Item{fileEntry}
 	browser.list.SetItems(items)
 
@@ -877,14 +903,264 @@ func TestFormatFileSizeVariety(t *testing.T) {
 
 // TestFileEntryFilterValue tests filter value for search
 func TestFileEntryFilterValue(t *testing.T) {
-	entry := FileEntry{
-		Name:        "test.log",
-		DisplayName: "test.log",
+	tests := []struct {
+		name        string
+		entry       FileEntry
+		expected    string
+		description string
+	}{
+		{
+			name: "log file",
+			entry: FileEntry{
+				Name:        "test.log",
+				DisplayName: "test.log",
+				Filename:    "test",
+				Extension:   ".log",
+			},
+			expected:    "test test.log .log",
+			description: "should concatenate filename, displayname, and extension",
+		},
+		{
+			name: "markdown file",
+			entry: FileEntry{
+				Name:        "readme.md",
+				DisplayName: "readme.md",
+				Filename:    "readme",
+				Extension:   ".md",
+			},
+			expected:    "readme readme.md .md",
+			description: "should work with markdown files",
+		},
+		{
+			name: "text file",
+			entry: FileEntry{
+				Name:        "notes.txt",
+				DisplayName: "notes.txt",
+				Filename:    "notes",
+				Extension:   ".txt",
+			},
+			expected:    "notes notes.txt .txt",
+			description: "should work with text files",
+		},
+		{
+			name: "file without extension",
+			entry: FileEntry{
+				Name:        "README",
+				DisplayName: "README",
+				Filename:    "README",
+				Extension:   "",
+			},
+			expected:    "README README ",
+			description: "should handle files without extension",
+		},
 	}
 
-	result := entry.FilterValue()
-	if result != "test.log" {
-		t.Errorf("FilterValue() = %q, want %q", result, "test.log")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.entry.FilterValue()
+			if result != tt.expected {
+				t.Errorf("%s: FilterValue() = %q, want %q", tt.description, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFileEntryFilterValueEdgeCases tests edge cases in FilterValue
+func TestFileEntryFilterValueEdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		entry       FileEntry
+		expected    string
+		description string
+	}{
+		{
+			name: "empty filename",
+			entry: FileEntry{
+				Name:        ".log",
+				DisplayName: ".log",
+				Filename:    "",
+				Extension:   ".log",
+			},
+			expected:    " .log .log",
+			description: "should handle empty filename with extension",
+		},
+		{
+			name: "empty displayname",
+			entry: FileEntry{
+				Name:        "test.log",
+				DisplayName: "",
+				Filename:    "test",
+				Extension:   ".log",
+			},
+			expected:    "test  .log",
+			description: "should handle empty displayname",
+		},
+		{
+			name: "all empty",
+			entry: FileEntry{
+				Name:        "",
+				DisplayName: "",
+				Filename:    "",
+				Extension:   "",
+			},
+			expected:    "  ",
+			description: "should handle all empty fields",
+		},
+		{
+			name: "unicode filename",
+			entry: FileEntry{
+				Name:        "文件.log",
+				DisplayName: "文件.log",
+				Filename:    "文件",
+				Extension:   ".log",
+			},
+			expected:    "文件 文件.log .log",
+			description: "should handle unicode characters",
+		},
+		{
+			name: "special characters",
+			entry: FileEntry{
+				Name:        "test-file_v1.2.log",
+				DisplayName: "test-file_v1.2.log",
+				Filename:    "test-file_v1.2",
+				Extension:   ".log",
+			},
+			expected:    "test-file_v1.2 test-file_v1.2.log .log",
+			description: "should handle special characters and dots",
+		},
+		{
+			name: "very long filename",
+			entry: FileEntry{
+				Name:        strings.Repeat("a", 1000) + ".log",
+				DisplayName: strings.Repeat("a", 1000) + ".log",
+				Filename:    strings.Repeat("a", 1000),
+				Extension:   ".log",
+			},
+			expected:    strings.Repeat("a", 1000) + " " + strings.Repeat("a", 1000) + ".log" + " .log",
+			description: "should handle very long filenames",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.entry.FilterValue()
+			if result != tt.expected {
+				t.Errorf("%s: FilterValue() = %q, want %q", tt.description, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFileEntryFilterValueCaseInsensitiveMatching tests case-insensitive filtering
+func TestFileEntryFilterValueCaseInsensitiveMatching(t *testing.T) {
+	tests := []struct {
+		name     string
+		entry    FileEntry
+		filter   string
+		expected bool // true if filter matches
+		description string
+	}{
+		{
+			name: "match filename case-insensitive",
+			entry: FileEntry{
+				Name:        "MyFile.log",
+				DisplayName: "MyFile.log",
+				Filename:    "MyFile",
+				Extension:   ".log",
+			},
+			filter:      "myfile",
+			expected:    true,
+			description: "lowercase filter should match mixed-case filename",
+		},
+		{
+			name: "match extension case-insensitive",
+			entry: FileEntry{
+				Name:        "test.LOG",
+				DisplayName: "test.LOG",
+				Filename:    "test",
+				Extension:   ".LOG",
+			},
+			filter:      ".log",
+			expected:    true,
+			description: "lowercase extension filter should match uppercase extension",
+		},
+		{
+			name: "match displayname case-insensitive",
+			entry: FileEntry{
+				Name:        "test.log",
+				DisplayName: "Test File.log",
+				Filename:    "test",
+				Extension:   ".log",
+			},
+			filter:      "test file",
+			expected:    true,
+			description: "filter should match displayname case-insensitively",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filterValue := tt.entry.FilterValue()
+			// Simulate case-insensitive matching like the list.Item interface uses
+			matches := strings.Contains(strings.ToLower(filterValue), strings.ToLower(tt.filter))
+			if matches != tt.expected {
+				if tt.expected {
+					t.Errorf("%s: expected filter %q to match %q, but it didn't", tt.description, tt.filter, filterValue)
+				} else {
+					t.Errorf("%s: expected filter %q to NOT match %q, but it did", tt.description, tt.filter, filterValue)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkFileEntryFilterValue benchmarks the FilterValue method
+func BenchmarkFileEntryFilterValue(b *testing.B) {
+	entry := FileEntry{
+		Name:        "task-1.2.log",
+		DisplayName: "task-1.2.log",
+		Filename:    "task-1.2",
+		Extension:   ".log",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = entry.FilterValue()
+	}
+}
+
+// BenchmarkFileEntryFilterValueLargeString benchmarks with large strings
+func BenchmarkFileEntryFilterValueLargeString(b *testing.B) {
+	entry := FileEntry{
+		Name:        strings.Repeat("a", 100) + ".log",
+		DisplayName: strings.Repeat("a", 100) + ".log",
+		Filename:    strings.Repeat("a", 100),
+		Extension:   ".log",
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = entry.FilterValue()
+	}
+}
+
+// BenchmarkFileEntryFilterValue1000Items benchmarks filtering 1000 items
+func BenchmarkFileEntryFilterValue1000Items(b *testing.B) {
+	entries := make([]FileEntry, 1000)
+	for i := 0; i < 1000; i++ {
+		entries[i] = FileEntry{
+			Name:        fmt.Sprintf("file-%d.log", i),
+			DisplayName: fmt.Sprintf("file-%d.log", i),
+			Filename:    fmt.Sprintf("file-%d", i),
+			Extension:   ".log",
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < len(entries); j++ {
+			_ = entries[j].FilterValue()
+		}
 	}
 }
 
@@ -1348,6 +1624,7 @@ func TestKeyboardShortcutsPageUpDown(t *testing.T) {
 		browser.files = append(browser.files, entry)
 	}
 
+	browser.visibleFiles = browser.files  // Sync visibleFiles
 	items := make([]list.Item, len(browser.files))
 	for i, file := range browser.files {
 		items[i] = file
@@ -1436,6 +1713,7 @@ func TestLogFileBrowserSendsFileSelectedMsg(t *testing.T) {
 			DisplayName: "test.log",
 		},
 	}
+	browser.visibleFiles = browser.files  // Sync visibleFiles when manually setting files
 	browser.updateList()
 
 	// Select the file with Enter key
@@ -1487,6 +1765,7 @@ func TestLogFileBrowserDirectoryNavigationDoesNotSendFileSelectedMsg(t *testing.
 			DisplayName: "subdir",
 		},
 	}
+	browser.visibleFiles = browser.files  // Sync visibleFiles when manually setting files
 	browser.updateList()
 	browser.currentPath = tmpDir
 
@@ -1500,5 +1779,160 @@ func TestLogFileBrowserDirectoryNavigationDoesNotSendFileSelectedMsg(t *testing.
 		if _, ok := msg.(FileSelectedMsg); ok {
 			t.Error("Expected no FileSelectedMsg for directory navigation, but got one")
 		}
+	}
+}
+
+// TestKeyboardShortcutsSlashForFiltering tests that / key is passed to list for filtering
+func TestKeyboardShortcutsSlashForFiltering(t *testing.T) {
+	// Create browser with filterable files
+	browser := &LogFileBrowserModel{
+		list:   list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
+		width:  80,
+		height: 24,
+		files: []FileEntry{
+			{Name: "apple.log", Path: "/path/to/apple.log", IsDir: false, ModTime: time.Now()},
+			{Name: "banana.log", Path: "/path/to/banana.log", IsDir: false, ModTime: time.Now()},
+			{Name: "cherry.log", Path: "/path/to/cherry.log", IsDir: false, ModTime: time.Now()},
+		},
+	}
+
+	// Enable filtering on the list
+	browser.list.SetFilteringEnabled(true)
+
+	items := make([]list.Item, len(browser.files))
+	for i, file := range browser.files {
+		items[i] = file
+	}
+	browser.list.SetItems(items)
+
+	// Test / key (activate filter)
+	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	model, _ := browser.Update(slashMsg)
+	browser = model.(*LogFileBrowserModel)
+
+	// After pressing /, the list should now be in filter mode
+	// The SettingFilter() method should return true
+	if !browser.list.SettingFilter() {
+		t.Error("Expected list to be in filter mode after / key, but SettingFilter() returned false")
+	}
+}
+
+// TestKeyboardShortcutsFilterModeKeyForwarding tests that keys are forwarded when list is in filter mode
+func TestKeyboardShortcutsFilterModeKeyForwarding(t *testing.T) {
+	// Create browser with filterable files
+	browser := &LogFileBrowserModel{
+		list:   list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
+		width:  80,
+		height: 24,
+		files: []FileEntry{
+			{Name: "apple.log", Path: "/path/to/apple.log", IsDir: false, ModTime: time.Now()},
+			{Name: "banana.log", Path: "/path/to/banana.log", IsDir: false, ModTime: time.Now()},
+			{Name: "cherry.log", Path: "/path/to/cherry.log", IsDir: false, ModTime: time.Now()},
+		},
+	}
+
+	// Enable filtering on the list
+	browser.list.SetFilteringEnabled(true)
+
+	items := make([]list.Item, len(browser.files))
+	for i, file := range browser.files {
+		items[i] = file
+	}
+	browser.list.SetItems(items)
+
+	// First enter filter mode with /
+	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	model, _ := browser.Update(slashMsg)
+	browser = model.(*LogFileBrowserModel)
+
+	// Verify we're in filter mode
+	if !browser.list.SettingFilter() {
+		t.Fatal("Expected list to be in filter mode")
+	}
+
+	// Now type a character while in filter mode
+	// This should be forwarded to the list's filter input
+	aMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	model, _ = browser.Update(aMsg)
+	browser = model.(*LogFileBrowserModel)
+
+	// Should still be in filter mode
+	if !browser.list.SettingFilter() {
+		t.Error("Expected list to still be in filter mode after typing character")
+	}
+}
+
+// TestKeyboardShortcutsSlashNotIntercepeted tests that / key is not intercepted for other operations
+func TestKeyboardShortcutsSlashNotIntercepted(t *testing.T) {
+	// Create browser with files
+	browser := &LogFileBrowserModel{
+		list:   list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 24),
+		width:  80,
+		height: 24,
+		files: []FileEntry{
+			{Name: "file1.log", Path: "/path/to/file1.log", IsDir: false, ModTime: time.Now()},
+		},
+	}
+
+	items := []list.Item{browser.files[0]}
+	browser.list.SetItems(items)
+
+	// Verify filtering is enabled
+	browser.list.SetFilteringEnabled(true)
+
+	// Send / key and verify Update returns without error
+	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	model, _ := browser.Update(slashMsg)
+
+	// Should return the model and potentially a command
+	if model == nil {
+		t.Error("Expected Update to return non-nil model")
+	}
+
+	// The update should have been forwarded to the list
+	// which will handle filter mode activation
+	browser = model.(*LogFileBrowserModel)
+	if !browser.list.SettingFilter() {
+		t.Error("Expected list to be in filter mode after / key")
+	}
+}
+
+// TestHandleKeyFilterModeEntry tests entering filter mode with "/" key (Subtask 5.1)
+
+// TestFilteringWorks verifies that pressing "/" activates search mode
+func TestFilteringWorks(t *testing.T) {
+	browser := NewLogFileBrowserModel(80, 24, nil, "test-tag")
+	browser.filteringEnabled = true
+
+	// Initially not in search mode
+	if browser.searchMode {
+		t.Error("Expected not in search mode initially")
+	}
+
+	// Press "/" to enter search mode
+	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	browser.Update(slashMsg)
+
+	// Should now be in search mode
+	if !browser.searchMode {
+		t.Error("Expected to be in search mode after pressing /")
+	}
+
+	// Type a character
+	charMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	browser.Update(charMsg)
+
+	// Should still be in search mode
+	if !browser.searchMode {
+		t.Error("Expected still in search mode after typing")
+	}
+
+	// Press Esc to exit search mode
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	browser.Update(escMsg)
+
+	// Should not be in search mode anymore
+	if browser.searchMode {
+		t.Error("Expected search mode to stop after pressing Esc")
 	}
 }
