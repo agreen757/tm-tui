@@ -99,6 +99,8 @@ func ApplyStyleToDialog(d Dialog, style *DialogStyle) {
 		dialog.BaseFocusableDialog.BaseDialog.Style = style
 	case *ProgressDialog:
 		dialog.BaseDialog.Style = style
+	case *ParsePRDDialog:
+		dialog.BaseFocusableDialog.BaseDialog.Style = style
 	}
 }
 

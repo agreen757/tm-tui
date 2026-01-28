@@ -165,7 +165,7 @@ func (s *mockService) GetLatestComplexityReport() *taskmaster.ComplexityReport {
 	return s.latestReport
 }
 
-func (s *mockService) ParsePRDWithProgress(ctx context.Context, inputPath string, mode taskmaster.ParsePrdMode, onProgress func(taskmaster.ParsePrdProgressState)) error {
+func (s *mockService) ParsePRDWithProgress(ctx context.Context, inputPath string, mode taskmaster.ParsePrdMode, tags string, onProgress func(taskmaster.ParsePrdProgressState)) error {
 	if onProgress != nil {
 		onProgress(taskmaster.ParsePrdProgressState{Progress: 1.0, Label: "Parsed"})
 	}

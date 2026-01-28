@@ -28,10 +28,13 @@ type FilterableComponent interface {
 // Components that need filtering can embed this struct and implement component-specific
 // filtering logic by overriding methods as needed.
 type BaseFilterable struct {
-	filteringEnabled bool
-	filterMode       bool
-	filterValue      string
-	onFilterChange   func(string)
+	filteringEnabled    bool
+	filterMode          bool
+	filterValue         string
+	onFilterChange      func(string)
+	onFilterModeChange  func(bool) // Callback for when filter mode changes, useful for focus restoration
+	previousFocusIndex  int        // Track focus index before entering filter mode for restoration
+	hasPreviousFocus    bool       // Flag to indicate if previousFocusIndex is valid
 }
 
 // NewBaseFilterable creates a new BaseFilterable with default settings
@@ -77,24 +80,62 @@ func (b *BaseFilterable) IsFiltering() bool {
 // EnterFilterMode transitions the component into filtering mode.
 // This is typically triggered by the user pressing a filter activation key (like '/').
 // The component should prepare to accept and process filter input.
+// FR5.1: Stores the current focused element index for restoration when exiting filter mode.
 func (b *BaseFilterable) EnterFilterMode() {
 	if b.filteringEnabled {
 		b.filterMode = true
 		b.filterValue = ""
+		
+		// Notify about filter mode change
+		if b.onFilterModeChange != nil {
+			b.onFilterModeChange(true)
+		}
 	}
 }
 
 // ExitFilterMode transitions the component out of filtering mode.
 // This is typically triggered by the user pressing a key to exit filtering (like 'Esc').
 // The filter value is preserved but filter mode is deactivated.
+// FR5.2: Triggers focus restoration callback when exiting filter mode.
 func (b *BaseFilterable) ExitFilterMode() {
 	b.filterMode = false
+	
+	// Notify about filter mode change (allows restoration of focus)
+	if b.onFilterModeChange != nil {
+		b.onFilterModeChange(false)
+	}
 }
 
 // SetOnFilterChange sets a callback function that will be called whenever the filter value changes.
 // This is useful for components that need to react to filter changes in real-time.
 func (b *BaseFilterable) SetOnFilterChange(callback func(string)) {
 	b.onFilterChange = callback
+}
+
+// SetOnFilterModeChange sets a callback function that will be called when filter mode is entered or exited.
+// This is useful for components that need to restore focus or perform other actions on filter mode transitions.
+// The callback receives a boolean: true when entering filter mode, false when exiting.
+func (b *BaseFilterable) SetOnFilterModeChange(callback func(bool)) {
+	b.onFilterModeChange = callback
+}
+
+// StoreFocusIndex stores the current focus index before entering filter mode (for later restoration).
+// This should be called by focusable components before entering filter mode.
+func (b *BaseFilterable) StoreFocusIndex(index int) {
+	b.previousFocusIndex = index
+	b.hasPreviousFocus = true
+}
+
+// GetStoredFocusIndex retrieves the stored focus index from before filter mode was entered.
+// Returns the index and a boolean indicating if a valid index was stored.
+func (b *BaseFilterable) GetStoredFocusIndex() (int, bool) {
+	return b.previousFocusIndex, b.hasPreviousFocus
+}
+
+// ClearStoredFocusIndex clears the stored focus index.
+func (b *BaseFilterable) ClearStoredFocusIndex() {
+	b.hasPreviousFocus = false
+	b.previousFocusIndex = 0
 }
 
 // IsFilteringEnabled returns whether filtering is currently enabled for this component

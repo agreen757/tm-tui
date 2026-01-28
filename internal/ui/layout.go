@@ -454,14 +454,42 @@ func (m Model) renderStatusBar() string {
 		helpText = fmt.Sprintf("%s | %s", helpText, active)
 	}
 
+	// Get filter status if filtering is active
+	var statusParts []string
+	
+	// Add filter status if active
+	if m.filterableComponent != nil && m.filterableComponent.IsFiltering() {
+		filterValue := m.filterableComponent.GetFilterValue()
+		// Calculate filtered and total counts
+		filteredCount := len(m.visibleTasks)
+		totalCount := len(m.tasks)
+		
+		filterStatus := FilterStatusView(filterValue, filteredCount, totalCount)
+		if filterStatus != "" {
+			statusParts = append(statusParts, filterStatus)
+		}
+	}
+	
 	// Integrate git info into status bar
 	gitInfo := m.formatGitInfo()
 	if gitInfo != "" {
-		statusContent := lipgloss.JoinHorizontal(lipgloss.Left, gitInfo, " ", helpText)
-		return m.styles.StatusBar.Width(m.width).Render(statusContent)
+		statusParts = append(statusParts, gitInfo)
 	}
-
-	return m.styles.StatusBar.Width(m.width).Render(helpText)
+	
+	// Add help text last
+	statusParts = append(statusParts, helpText)
+	
+	// Join all parts with spacing
+	var statusContent string
+	if len(statusParts) > 1 {
+		statusContent = lipgloss.JoinHorizontal(lipgloss.Left, statusParts...)
+	} else if len(statusParts) == 1 {
+		statusContent = statusParts[0]
+	} else {
+		statusContent = helpText
+	}
+	
+	return m.styles.StatusBar.Width(m.width).Render(statusContent)
 }
 
 // updateViewportSizes updates the viewport sizes based on current layout

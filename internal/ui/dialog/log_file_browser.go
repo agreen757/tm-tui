@@ -127,6 +127,10 @@ type LogFileBrowserModel struct {
 
 	// Filtering state (FR4.1-4.4, Phase 2)
 	filteringEnabled bool // Whether filtering is enabled for this browser
+
+	// Configuration options for reusability (Task 3.1)
+	rootPath       string   // Optional: if set, use this instead of tag-based discovery
+	fileExtensions []string // Optional: if set, only show files with these extensions
 }
 
 // NewLogFileBrowserModel creates a new file browser model
@@ -165,6 +169,8 @@ func NewLogFileBrowserModel(width, height int, taskService *taskmaster.Service, 
 		searchResults:    []FileEntry{},        // No results initially
 		visibleFiles:     []FileEntry{},        // No files initially
 		filteringEnabled: true,                 // Filtering enabled by default
+		rootPath:         "",                   // No override initially
+		fileExtensions:   []string{},           // Use default extensions
 	}
 
 	// Load files from the current tag directory
@@ -513,54 +519,60 @@ func (m *LogFileBrowserModel) getBreadcrumbString() string {
 func (m *LogFileBrowserModel) loadFiles() {
 	m.files = []FileEntry{}
 
-	// Get the base taskmaster directory
-	taskmasterDir := ".taskmaster"
-
-	// Define search paths in priority order
-	searchPaths := []string{
-		filepath.Join(taskmasterDir, m.currentTag),
-		filepath.Join(taskmasterDir, m.currentTag, "logs"),
-		filepath.Join(taskmasterDir, "logs", m.currentTag),
-		filepath.Join(taskmasterDir, "logs"),
-	}
-
-	// Try each path and use the first one that exists and is readable
 	var targetPath string
 
-	for _, path := range searchPaths {
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
+	// Check if rootPath is configured (Task 3.1 - generalization)
+	if m.rootPath != "" {
+		// Use the configured root path directly
+		targetPath = m.rootPath
+	} else {
+		// Original tag-based path discovery logic
+		taskmasterDir := ".taskmaster"
+
+		// Define search paths in priority order
+		searchPaths := []string{
+			filepath.Join(taskmasterDir, m.currentTag),
+			filepath.Join(taskmasterDir, m.currentTag, "logs"),
+			filepath.Join(taskmasterDir, "logs", m.currentTag),
+			filepath.Join(taskmasterDir, "logs"),
 		}
 
-		if !info.IsDir() {
-			continue
-		}
-
-		// Check if we have read permission
-		if err := canReadDir(path); err != nil {
-			continue
-		}
-
-		targetPath = path
-		break
-	}
-
-	if targetPath == "" {
-		// No valid directory found - try fallback to .taskmaster itself
-		if info, err := os.Stat(taskmasterDir); err == nil && info.IsDir() {
-			if canReadDir(taskmasterDir) == nil {
-				targetPath = taskmasterDir
+		// Try each path and use the first one that exists and is readable
+		for _, path := range searchPaths {
+			info, err := os.Stat(path)
+			if err != nil {
+				continue
 			}
+
+			if !info.IsDir() {
+				continue
+			}
+
+			// Check if we have read permission
+			if err := canReadDir(path); err != nil {
+				continue
+			}
+
+			targetPath = path
+			break
 		}
 
-		// Still no path - show empty state
 		if targetPath == "" {
-			m.currentPath = ""
-			m.files = []FileEntry{}
-			m.visibleFiles = []FileEntry{}  // Sync visibleFiles
-			m.updateList()
-			return
+			// No valid directory found - try fallback to .taskmaster itself
+			if info, err := os.Stat(taskmasterDir); err == nil && info.IsDir() {
+				if canReadDir(taskmasterDir) == nil {
+					targetPath = taskmasterDir
+				}
+			}
+
+			// Still no path - show empty state
+			if targetPath == "" {
+				m.currentPath = ""
+				m.files = []FileEntry{}
+				m.visibleFiles = []FileEntry{}  // Sync visibleFiles
+				m.updateList()
+				return
+			}
 		}
 	}
 
@@ -577,7 +589,7 @@ func (m *LogFileBrowserModel) loadFiles() {
 	}
 
 	// Discover files in the target directory
-	entries, err := discoverFiles(targetPath, m.sortMode)
+	entries, err := m.discoverFilesWithConfig(targetPath, m.sortMode)
 	if err != nil {
 		// Handle error gracefully - just show empty list
 		// In a real implementation, we could store error state for the UI
@@ -648,6 +660,90 @@ func canReadDir(path string) error {
 	// Successfully read directory, can read it
 	_ = entries
 	return nil
+}
+
+// discoverFilesWithConfig discovers files using this model's configuration
+// Task 3.1: Supports custom file extensions from m.fileExtensions
+func (m *LogFileBrowserModel) discoverFilesWithConfig(rootPath string, sortMode FileSortMode) ([]FileEntry, error) {
+	var entries []FileEntry
+
+	// Read directory entries
+	dirEntries, err := os.ReadDir(rootPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range dirEntries {
+		name := entry.Name()
+
+		// Filter out hidden files and unwanted directories
+		if shouldSkipEntry(name) {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue // Skip entries we can't read
+		}
+
+		fullPath := filepath.Join(rootPath, name)
+		filename, extension := extractFilenameAndExtension(name)
+
+		if entry.IsDir() {
+			// Include directory
+			entries = append(entries, FileEntry{
+				Name:        name,
+				Path:        fullPath,
+				IsDir:       true,
+				Size:        0,
+				ModTime:     info.ModTime(),
+				DisplayName: name,
+				Filename:    filename,
+				Extension:   extension,
+			})
+		} else {
+			// Check if file matches configured extensions or default supported files
+			if m.isSupportedFileWithConfig(name) {
+				entries = append(entries, FileEntry{
+					Name:        name,
+					Path:        fullPath,
+					IsDir:       false,
+					Size:        info.Size(),
+					ModTime:     info.ModTime(),
+					DisplayName: name,
+					Filename:    filename,
+					Extension:   extension,
+				})
+			}
+		}
+	}
+
+	// Sort entries using the specified sort mode
+	sortFileEntries(entries, sortMode)
+
+	return entries, nil
+}
+
+// isSupportedFileWithConfig checks if a file is supported using this model's configuration
+// Task 3.1: If fileExtensions is configured, uses those; otherwise uses defaults
+func (m *LogFileBrowserModel) isSupportedFileWithConfig(name string) bool {
+	// If fileExtensions is configured, use it exclusively
+	if len(m.fileExtensions) > 0 {
+		ext := strings.ToLower(filepath.Ext(name))
+		for _, supported := range m.fileExtensions {
+			// Normalize the extension (ensure it has a dot)
+			supportedExt := supported
+			if !strings.HasPrefix(supportedExt, ".") {
+				supportedExt = "." + supportedExt
+			}
+			if ext == supportedExt {
+				return true
+			}
+		}
+		return false
+	}
+	// Fall back to default supported files
+	return isSupportedFile(name)
 }
 
 // discoverFiles recursively discovers files in a directory with filtering
@@ -1064,3 +1160,36 @@ func (m *LogFileBrowserModel) ExitFilterMode() {
 		m.list, _ = m.list.Update(escMsg)
 	}
 }
+
+// SetRootPath configures a custom root directory for file browsing (Task 3.2)
+// This overrides the default tag-based path discovery
+// The path is used directly without tag-based fallback logic
+func (m *LogFileBrowserModel) SetRootPath(path string) {
+	m.rootPath = path
+	// Clear cache to ensure fresh data from new root path
+	m.dirCache.Clear()
+	// Reload files from the new root path
+	m.loadFiles()
+}
+
+// SetFileExtensions configures which file extensions to display (Task 3.2)
+// If extensions is empty, default file extensions are used (log, md, txt, none)
+// Extension strings should include or exclude the leading dot (both ".txt" and "txt" are supported)
+func (m *LogFileBrowserModel) SetFileExtensions(extensions []string) {
+	m.fileExtensions = extensions
+	// Clear cache to ensure fresh data with new filtering
+	m.dirCache.Clear()
+	// Reload files with new extension filtering
+	m.loadFiles()
+}
+
+// GetRootPath returns the currently configured root path
+func (m *LogFileBrowserModel) GetRootPath() string {
+	return m.rootPath
+}
+
+// GetFileExtensions returns the currently configured file extensions
+func (m *LogFileBrowserModel) GetFileExtensions() []string {
+	return m.fileExtensions
+}
+

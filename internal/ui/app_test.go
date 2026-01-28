@@ -8,6 +8,7 @@ import (
 	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
 	"github.com/agreen757/tm-tui/internal/ui/dialog"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -43,6 +44,13 @@ func createTestModel() *Model {
 		},
 	}
 
+	// Initialize search input
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search tasks (ID, title, description)..."
+	searchInput.CharLimit = 100
+	searchInput.Width = 40
+	searchInput.Prompt = ""
+
 	// Create a minimal model without full services
 	keyMap := DefaultKeyMap()
 	m := &Model{
@@ -61,6 +69,7 @@ func createTestModel() *Model {
 		showHelp:         false,
 		commandMode:      false,
 		commandInput:     "",
+		searchInput:      searchInput,
 		styles:           NewStyles(),
 		logLines:         []string{},
 		appState:         NewAppState(nil, &keyMap),
@@ -69,7 +78,12 @@ func createTestModel() *Model {
 		activeTaskModelDialog:  nil,
 		showTaskModelDialog:    false,
 		taskModelSelectionDone: make(map[string]bool),
+		// Initialize filterableComponent for standardized filtering
+		filterableComponent: dialog.NewBaseFilterable(),
 	}
+
+	// Enable filtering capability
+	m.filterableComponent.EnableFiltering(true)
 
 	m.buildTaskIndex()
 	m.rebuildVisibleTasks()
@@ -1753,4 +1767,258 @@ func TestExecuteMultipleTasks_ModelSelectionsMapProperty(t *testing.T) {
 
 	// This test passes if the function accepts the new signature without compilation errors
 	t.Log("executeMultipleTasks signature correctly accepts modelSelections map")
+}
+
+// TestFilterKeyMappings_SlashEntersFilterMode tests that "/" key enters filter mode
+func TestFilterKeyMappings_SlashEntersFilterMode(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+
+	// Verify initial state
+	if m.filterableComponent == nil {
+		t.Fatal("filterableComponent should be initialized")
+	}
+	if m.filterableComponent.IsFiltering() {
+		t.Fatal("Should not be in filter mode initially")
+	}
+
+	// Simulate "/" key press
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newModel.(*Model)
+
+	// Verify filter mode is entered
+	if !m.filterableComponent.IsFiltering() {
+		t.Error("Should be in filter mode after '/' key press")
+	}
+
+	// Verify backward compatibility
+	if !m.searchMode {
+		t.Error("searchMode should be true for backward compatibility")
+	}
+
+	// Verify searchInput is focused
+	if !m.searchInput.Focused() {
+		t.Error("searchInput should be focused after '/' key press")
+	}
+}
+
+// TestFilterKeyMappings_FKeyInFilterMode tests that "F" key doesn't cycle filters while filtering
+func TestFilterKeyMappings_FKeyInFilterMode(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+
+	// Enter filter mode
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newModel.(*Model)
+
+	// Verify we're in filter mode
+	if !m.filterableComponent.IsFiltering() {
+		t.Fatal("Should be in filter mode after '/' key")
+	}
+
+	// Verify initial statusFilter is empty (all tasks)
+	initialFilter := m.statusFilter
+	if initialFilter != "" {
+		t.Logf("Initial status filter: %q", initialFilter)
+	}
+
+	// Try to press "F" while in filter mode
+	// This should be intercepted by the filter mode handler and not cycle status filters
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'F'}})
+	m = newModel.(*Model)
+
+	// The "F" should be treated as input text, not as a filter cycling command
+	// So we're still in filter mode
+	if !m.filterableComponent.IsFiltering() {
+		t.Error("Should still be in filter mode after 'F' key (should not cycle status filter)")
+	}
+
+	// Status filter should not have changed
+	if m.statusFilter != initialFilter {
+		t.Errorf("Status filter should not change while in filter mode, expected %q but got %q", initialFilter, m.statusFilter)
+	}
+}
+
+// TestFilterKeyMappings_FKeyCyclesOutsideFilterMode tests that "F" key cycles filters normally
+func TestFilterKeyMappings_FKeyCyclesOutsideFilterMode(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+
+	// Verify not in filter mode
+	if m.filterableComponent.IsFiltering() {
+		t.Fatal("Should not be in filter mode initially")
+	}
+
+	// Verify initial statusFilter is empty (all tasks)
+	if m.statusFilter != "" {
+		t.Fatal("Initial status filter should be empty")
+	}
+
+	// Press "F" key outside filter mode
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'F'}})
+	m = newModel.(*Model)
+
+	// Should cycle to first non-empty status
+	if m.statusFilter == "" {
+		t.Error("Status filter should have changed after 'F' key press outside filter mode")
+	}
+
+	// Should still not be in filter mode
+	if m.filterableComponent.IsFiltering() {
+		t.Error("Should not enter filter mode with 'F' key")
+	}
+}
+
+// TestFilterKeyMappings_EscClearsFilterMode tests that Esc clears all filters
+func TestFilterKeyMappings_EscClearsFilterMode(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+
+	// Set up filter state: enter filter mode
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newModel.(*Model)
+
+	// Type some search text
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t', 'e', 's', 't'}})
+	m = newModel.(*Model)
+
+	// Verify we have search state
+	if m.searchQuery != "test" {
+		t.Errorf("Expected search query 'test', got %q", m.searchQuery)
+	}
+
+	// Now press Esc to clear
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newModel.(*Model)
+
+	// Verify filter mode is exited
+	if m.filterableComponent.IsFiltering() {
+		t.Error("Should exit filter mode after Esc")
+	}
+
+	// Verify searchMode is false
+	if m.searchMode {
+		t.Error("searchMode should be false after Esc")
+	}
+
+	// Verify search query is cleared
+	if m.searchQuery != "" {
+		t.Errorf("Search query should be cleared after Esc, got %q", m.searchQuery)
+	}
+
+	// Verify search input is cleared
+	if m.searchInput.Value() != "" {
+		t.Errorf("Search input should be cleared after Esc, got %q", m.searchInput.Value())
+	}
+}
+
+// TestFilterKeyMappings_EscClearsStatusFilter tests that Esc clears status filter too
+func TestFilterKeyMappings_EscClearsStatusFilter(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+
+	// Set status filter by pressing "F" multiple times
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'F'}})
+	m = newModel.(*Model)
+
+	// Verify status filter changed
+	if m.statusFilter == "" {
+		t.Fatal("Status filter should have changed after 'F' key")
+	}
+
+	// Press Esc to clear all filters
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newModel.(*Model)
+
+	// Verify status filter is cleared
+	if m.statusFilter != "" {
+		t.Errorf("Status filter should be cleared after Esc, expected empty but got %q", m.statusFilter)
+	}
+}
+
+// TestFilterMode_DoesNotInterfereWithNavigation tests that filter mode doesn't interfere with normal navigation
+func TestFilterMode_DoesNotInterfereWithNavigation(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+	initialSelectedIndex := m.selectedIndex
+
+	// Enter filter mode
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newModel.(*Model)
+
+	// Type some search text
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = newModel.(*Model)
+
+	// Try navigation keys while in filter mode - these should be handled by searchInput
+	// not by the main navigation handler
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(*Model)
+
+	// selectedIndex should not have changed (navigation disabled in filter mode)
+	if m.selectedIndex != initialSelectedIndex {
+		t.Errorf("Navigation keys should not work while in filter mode, selectedIndex changed from %d to %d",
+			initialSelectedIndex, m.selectedIndex)
+	}
+
+	// Exit filter mode
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newModel.(*Model)
+
+	// Now navigation should work
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(*Model)
+
+	// selectedIndex might change (depends on filter results), but we're out of filter mode
+	if m.filterableComponent.IsFiltering() {
+		t.Error("Should be out of filter mode after Esc")
+	}
+}
+
+// TestFilterMode_EnterAndExitSequence tests the complete enter-type-exit sequence
+func TestFilterMode_EnterAndExitSequence(t *testing.T) {
+	m := createTestModel()
+	m.ready = true
+
+	// Initial state
+	if m.filterableComponent.IsFiltering() {
+		t.Fatal("Should not be in filter mode initially")
+	}
+
+	// Step 1: Enter filter mode with "/"
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newModel.(*Model)
+	if !m.filterableComponent.IsFiltering() {
+		t.Error("Step 1: Should be in filter mode after '/'")
+	}
+
+	// Step 2: Type search query
+	for _, ch := range []rune{'t', 'a', 's', 'k'} {
+		newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = newModel.(*Model)
+	}
+	if m.searchQuery == "" {
+		t.Error("Step 2: Should have typed characters into search")
+	}
+
+	// Step 3: Confirm search with Enter
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newModel.(*Model)
+	if m.filterableComponent.IsFiltering() {
+		t.Error("Step 3: Should exit filter mode after Enter confirmation")
+	}
+
+	// Step 4: Re-enter filter mode
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = newModel.(*Model)
+	if !m.filterableComponent.IsFiltering() {
+		t.Error("Step 4: Should be in filter mode again after '/'")
+	}
+
+	// Step 5: Exit without confirming using Esc
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newModel.(*Model)
+	if m.filterableComponent.IsFiltering() {
+		t.Error("Step 5: Should exit filter mode after Esc")
+	}
 }

@@ -39,12 +39,28 @@ type BaseFocusableDialog struct {
 
 // NewBaseFocusableDialog creates a new base focusable dialog
 func NewBaseFocusableDialog(title string, width, height int, kind DialogKind, numElements int) BaseFocusableDialog {
-	return BaseFocusableDialog{
+	dialog := BaseFocusableDialog{
 		BaseDialog:     NewBaseDialog(title, width, height, kind),
 		BaseFilterable: NewBaseFilterable(),
 		focusedIndex:   0,
 		numElements:    numElements,
 	}
+	
+	// Set up filter mode change callback for focus restoration (FR5.1-5.2)
+	dialog.SetOnFilterModeChange(func(entering bool) {
+		if entering {
+			// Store current focus when entering filter mode
+			dialog.StoreFocusIndex(dialog.focusedIndex)
+		} else {
+			// Restore focus when exiting filter mode
+			if storedIndex, hasStored := dialog.GetStoredFocusIndex(); hasStored {
+				dialog.SetFocusedIndex(storedIndex)
+				dialog.ClearStoredFocusIndex()
+			}
+		}
+	})
+	
+	return dialog
 }
 
 // FocusedIndex returns the index of the currently focused element

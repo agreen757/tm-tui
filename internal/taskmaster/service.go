@@ -684,13 +684,18 @@ func (s *Service) ExportComplexityReport(ctx context.Context, format string, out
 }
 
 // ParsePRDWithProgress parses a PRD file and generates tasks with progress reporting
-func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mode ParsePrdMode, onProgress func(ParsePrdProgressState)) error {
+func (s *Service) ParsePRDWithProgress(ctx context.Context, inputPath string, mode ParsePrdMode, tags string, onProgress func(ParsePrdProgressState)) error {
 	if !s.available {
 		return fmt.Errorf("taskmaster not available")
 	}
 
 	// Build CLI command args
 	args := []string{"parse-prd", inputPath}
+
+	// Add tags flag if provided
+	if tags != "" {
+		args = append(args, "--tag", tags)
+	}
 
 	// Add mode flag
 	if mode == ParsePrdModeAppend {

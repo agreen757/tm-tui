@@ -1395,6 +1395,855 @@ func TestDialogResultValueNoSelection(t *testing.T) {
 	}
 }
 
+// TestTagSelectorImplementsFilterableComponent verifies TagSelector implements FilterableComponent interface
+func TestTagSelectorImplementsFilterableComponent(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Check that TagSelector has all FilterableComponent methods
+	// These will compile-fail if interface not implemented
+	var _ FilterableComponent = selector
+}
+
+// TestTagSelectorFilteringEnabled tests that filtering is enabled by default
+func TestTagSelectorFilteringEnabled(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{Tags: []taskmaster.TagContext{{Name: "tag1"}}},
+	})
+
+	if !selector.IsFilteringEnabled() {
+		t.Error("Expected filtering to be enabled by default")
+	}
+}
+
+// TestTagSelectorEnableFiltering tests EnableFiltering method
+func TestTagSelectorEnableFiltering(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Initially enabled
+	if !selector.IsFilteringEnabled() {
+		t.Error("Expected filtering to be enabled")
+	}
+
+	// Disable it
+	selector.EnableFiltering(false)
+	if selector.IsFilteringEnabled() {
+		t.Error("Expected filtering to be disabled")
+	}
+
+	// Re-enable it
+	selector.EnableFiltering(true)
+	if !selector.IsFilteringEnabled() {
+		t.Error("Expected filtering to be enabled again")
+	}
+}
+
+// TestTagSelectorSetGetFilterValue tests filter value getter and setter
+func TestTagSelectorSetGetFilterValue(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Initial filter value should be empty
+	if selector.GetFilterValue() != "" {
+		t.Errorf("Expected empty initial filter value, got %s", selector.GetFilterValue())
+	}
+
+	// Set a filter value
+	selector.SetFilterValue("test")
+	if selector.GetFilterValue() != "test" {
+		t.Errorf("Expected filter value 'test', got %s", selector.GetFilterValue())
+	}
+
+	// Update filter value
+	selector.SetFilterValue("updated")
+	if selector.GetFilterValue() != "updated" {
+		t.Errorf("Expected filter value 'updated', got %s", selector.GetFilterValue())
+	}
+}
+
+// TestTagSelectorIsFilteringMode tests IsFiltering method
+func TestTagSelectorIsFilteringMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Should not be filtering initially
+	if selector.IsFiltering() {
+		t.Error("Expected not to be filtering initially")
+	}
+
+	// Enter filter mode
+	selector.EnterFilterMode()
+	if !selector.IsFiltering() {
+		t.Error("Expected to be filtering after EnterFilterMode")
+	}
+
+	// Exit filter mode
+	selector.ExitFilterMode()
+	if selector.IsFiltering() {
+		t.Error("Expected not to be filtering after ExitFilterMode")
+	}
+}
+
+// TestTagSelectorEnterExitFilterMode tests filter mode transitions
+func TestTagSelectorEnterExitFilterMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+			},
+		},
+	})
+
+	// Set initial selection index
+	selector.selectedIndex = 1
+
+	// Enter filter mode (should store focus index)
+	selector.EnterFilterMode()
+	if !selector.IsFiltering() {
+		t.Error("Expected to be filtering after enter")
+	}
+
+	// Move selection (simulating navigation in filter mode)
+	selector.selectedIndex = 0
+
+	// Exit filter mode (should restore focus index)
+	selector.ExitFilterMode()
+	if selector.IsFiltering() {
+		t.Error("Expected not to be filtering after exit")
+	}
+
+	// Focus should be restored to 1
+	if selector.selectedIndex != 1 {
+		t.Errorf("Expected focus index 1 after exit, got %d", selector.selectedIndex)
+	}
+}
+
+// TestTagSelectorSlashKeyEntersFilterMode tests that '/' key enters filter mode
+func TestTagSelectorSlashKeyEntersFilterMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{Tags: []taskmaster.TagContext{{Name: "tag1"}}},
+	})
+
+	if selector.IsFiltering() {
+		t.Fatal("Expected not to be filtering initially")
+	}
+
+	// Press '/'
+	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone, got %v", result)
+	}
+
+	if !selector.IsFiltering() {
+		t.Error("Expected to be filtering after '/' key")
+	}
+}
+
+// TestTagSelectorTypingInFilterMode tests that characters are added to filter during filter mode
+func TestTagSelectorTypingInFilterMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{Tags: []taskmaster.TagContext{{Name: "test"}}},
+	})
+
+	// Enter filter mode
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	// Type characters
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	if selector.GetFilterValue() != "f" {
+		t.Errorf("Expected filter 'f', got %s", selector.GetFilterValue())
+	}
+
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
+	if selector.GetFilterValue() != "fo" {
+		t.Errorf("Expected filter 'fo', got %s", selector.GetFilterValue())
+	}
+
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
+	if selector.GetFilterValue() != "foo" {
+		t.Errorf("Expected filter 'foo', got %s", selector.GetFilterValue())
+	}
+}
+
+// TestTagSelectorBackspaceInFilterMode tests backspace in filter mode
+func TestTagSelectorBackspaceInFilterMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Enter filter mode and set filter value directly
+	selector.EnterFilterMode()
+	selector.SetFilterValue("test")
+
+	if selector.GetFilterValue() != "test" {
+		t.Fatal("Expected filter 'test'")
+	}
+
+	// Press backspace
+	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyBackspace})
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone, got %v", result)
+	}
+
+	if selector.GetFilterValue() != "tes" {
+		t.Errorf("Expected filter 'tes' after backspace, got %s", selector.GetFilterValue())
+	}
+
+	// Press backspace again
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyBackspace})
+	if selector.GetFilterValue() != "te" {
+		t.Errorf("Expected filter 'te' after second backspace, got %s", selector.GetFilterValue())
+	}
+}
+
+// TestTagSelectorEscExitsFilterMode tests that Esc exits filter mode
+func TestTagSelectorEscExitsFilterMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Enter filter mode
+	selector.EnterFilterMode()
+	selector.SetFilterValue("test")
+
+	if !selector.IsFiltering() {
+		t.Fatal("Expected to be filtering")
+	}
+
+	// Press Esc
+	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone when exiting filter mode, got %v", result)
+	}
+
+	if selector.IsFiltering() {
+		t.Error("Expected not to be filtering after Esc")
+	}
+
+	if selector.GetFilterValue() != "" {
+		t.Errorf("Expected filter cleared, got %s", selector.GetFilterValue())
+	}
+}
+
+// TestTagSelectorEnterExitsFilterMode tests that Enter exits filter mode when filtering
+func TestTagSelectorEnterExitsFilterMode(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Enter filter mode
+	selector.EnterFilterMode()
+	selector.SetFilterValue("test")
+
+	if !selector.IsFiltering() {
+		t.Fatal("Expected to be filtering")
+	}
+
+	// Press Enter
+	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone when exiting filter mode, got %v", result)
+	}
+
+	if selector.IsFiltering() {
+		t.Error("Expected not to be filtering after Enter in filter mode")
+	}
+}
+
+// TestTagSelectorEscCancelsWhenNotFiltering tests that Esc cancels dialog when not filtering
+func TestTagSelectorEscCancelsWhenNotFiltering(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	if selector.IsFiltering() {
+		t.Fatal("Expected not to be filtering initially")
+	}
+
+	// Press Esc
+	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if result != DialogResultCancel {
+		t.Errorf("Expected DialogResultCancel, got %v", result)
+	}
+}
+
+// TestTagSelectorFocusRestoration tests that focus is restored correctly after exiting filter mode
+func TestTagSelectorFocusRestoration(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+				{Name: "tag3"},
+			},
+		},
+	})
+
+	// Set focus to second tag
+	selector.selectedIndex = 2
+
+	// Enter filter mode
+	selector.EnterFilterMode()
+
+	// Move around while filtering
+	selector.selectedIndex = 0
+
+	// Exit filter mode
+	selector.ExitFilterMode()
+
+	// Should be back at index 2
+	if selector.selectedIndex != 2 {
+		t.Errorf("Expected focus index 2 after exit, got %d", selector.selectedIndex)
+	}
+}
+
+// TestTagSelectorFilterValueAccumulation tests that filter value accumulates correctly
+func TestTagSelectorFilterValueAccumulation(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title:   "Test",
+		TagList: &taskmaster.TagList{},
+	})
+
+	// Enter filter mode
+	selector.EnterFilterMode()
+
+	// Add multiple characters
+	chars := []string{"t", "e", "s", "t", "i", "n", "g"}
+	expected := ""
+
+	for _, ch := range chars {
+		selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(ch)})
+		expected += ch
+		if selector.GetFilterValue() != expected {
+			t.Errorf("Expected filter '%s', got %s", expected, selector.GetFilterValue())
+		}
+	}
+
+	if selector.GetFilterValue() != "testing" {
+		t.Errorf("Final filter should be 'testing', got %s", selector.GetFilterValue())
+	}
+}
+
+// TestTagSelectorHeaderShowsFilterStatus tests that the header shows filter status when filtering
+func TestTagSelectorHeaderShowsFilterStatus(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Select Tags",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+				{Name: "tag3"},
+			},
+		},
+	})
+
+	// Verify original title is used when not filtering
+	if selector.Title() != "Select Tags" {
+		t.Errorf("Expected original title, got %s", selector.Title())
+	}
+
+	// Enter filter mode
+	selector.EnterFilterMode()
+	selector.SetFilterValue("test")
+
+	// Render the view
+	view := selector.View()
+
+	// Should contain filter indicator and tag count
+	if !containsStr(view, "FILTER") {
+		t.Errorf("Expected 'FILTER' in view during filtering, got: %s", view)
+	}
+
+	// Exit filter mode
+	selector.ExitFilterMode()
+	selector.SetFilterValue("")
+
+	// Render again
+	view = selector.View()
+
+	// Should be back to original title or at least not show filter
+	if containsStr(view, "FILTER: ") {
+		t.Errorf("Expected no 'FILTER' in view after exiting filter mode, got: %s", view)
+	}
+}
+
+// TestTagSelectorHeaderRestoredAfterRender tests that the original title is restored after rendering
+func TestTagSelectorHeaderRestoredAfterRender(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "My Tags",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{{Name: "tag1"}},
+		},
+	})
+
+	originalTitle := selector.Title()
+
+	// Enter filter mode and render
+	selector.EnterFilterMode()
+	selector.SetFilterValue("search")
+	_ = selector.View()
+
+	// Title should be restored to original after rendering
+	if selector.Title() != originalTitle {
+		t.Errorf("Expected title to be restored to '%s', got '%s'", originalTitle, selector.Title())
+	}
+}
+
+// TestFilterStatusRenderingFunction tests the renderFilterStatus helper function
+func TestFilterStatusRenderingFunction(t *testing.T) {
+	// Test with empty filter
+	status := renderFilterStatus("", 5, 10)
+	if status != "" {
+		t.Errorf("Expected empty string for empty filter, got: %s", status)
+	}
+
+	// Test with valid filter
+	status = renderFilterStatus("test", 3, 10)
+	if !containsStr(status, "FILTER") || !containsStr(status, "test") {
+		t.Errorf("Expected filter status to contain 'FILTER' and 'test', got: %s", status)
+	}
+
+	// Test with long filter (should truncate to 20 chars)
+	longFilter := "this is a very long filter string that exceeds limit"
+	status = renderFilterStatus(longFilter, 1, 100)
+	if !containsStr(status, "this is a very long") {
+		t.Errorf("Expected truncated filter in status, got: %s", status)
+	}
+	if containsStr(status, "exceeds limit") {
+		t.Errorf("Expected filter to be truncated, but got: %s", status)
+	}
+
+	// Test with exact 20 char filter
+	exactFilter := "12345678901234567890" // exactly 20 chars
+	status = renderFilterStatus(exactFilter, 5, 10)
+	if !containsStr(status, exactFilter) {
+		t.Errorf("Expected full 20-char filter in status, got: %s", status)
+	}
+
+	// Test count display
+	status = renderFilterStatus("filter", 7, 25)
+	if !containsStr(status, "7/25") {
+		t.Errorf("Expected '7/25' count in status, got: %s", status)
+	}
+}
+
+// TestTagSelectorFilteringBasic tests basic list filtering functionality
+func TestTagSelectorFilteringBasic(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "feature", Description: "New features"},
+				{Name: "bugfix", Description: "Bug fixes"},
+				{Name: "docs", Description: "Documentation"},
+			},
+		},
+	})
+
+	// Initially all items visible (3 tags + 1 "Add New Tag")
+	if len(selector.viewItems) != 4 {
+		t.Errorf("Expected 4 items initially, got %d", len(selector.viewItems))
+	}
+
+	// Apply filter "feature"
+	selector.SetFilterValue("feature")
+	if len(selector.viewItems) != 2 { // "feature" tag + "Add New Tag"
+		t.Errorf("Expected 2 items after filtering for 'feature', got %d", len(selector.viewItems))
+	}
+
+	// Verify "feature" tag is present
+	if selector.viewItems[0].Tag.Name != "feature" {
+		t.Errorf("Expected first filtered item to be 'feature', got %s", selector.viewItems[0].Tag.Name)
+	}
+
+	// Apply different filter "bug"
+	selector.SetFilterValue("bug")
+	if len(selector.viewItems) != 2 { // "bugfix" tag + "Add New Tag"
+		t.Errorf("Expected 2 items after filtering for 'bug', got %d", len(selector.viewItems))
+	}
+	if selector.viewItems[0].Tag.Name != "bugfix" {
+		t.Errorf("Expected first filtered item to be 'bugfix', got %s", selector.viewItems[0].Tag.Name)
+	}
+}
+
+// TestTagSelectorCaseInsensitiveFiltering tests case-insensitive filtering
+func TestTagSelectorCaseInsensitiveFiltering(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "Feature", Description: "NEW FEATURES"},
+				{Name: "bugfix", Description: "bug fixes"},
+			},
+		},
+	})
+
+	// Test uppercase filter
+	selector.SetFilterValue("FEATURE")
+	if len(selector.viewItems) != 2 { // "Feature" tag + "Add New Tag"
+		t.Errorf("Expected case-insensitive match with uppercase filter, got %d items", len(selector.viewItems))
+	}
+
+	// Test lowercase filter on mixed case
+	selector.SetFilterValue("features")
+	if len(selector.viewItems) != 2 {
+		t.Errorf("Expected case-insensitive match with lowercase filter, got %d items", len(selector.viewItems))
+	}
+
+	// Test mixed case filter "fix" should match bugfix
+	selector.SetFilterValue("FiX")
+	if len(selector.viewItems) != 2 { // "bugfix" contains "fix", plus "Add New Tag"
+		t.Errorf("Expected case-insensitive match with 'FiX' filter to match 'bugfix', got %d items", len(selector.viewItems))
+	}
+	if !containsStr(selector.viewItems[0].Tag.Name, "bugfix") {
+		t.Errorf("Expected 'bugfix' tag to match 'FiX' filter")
+	}
+}
+
+// TestTagSelectorFilteringByDescription tests filtering by description as well
+func TestTagSelectorFilteringByDescription(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "feature", Description: "Add new capabilities"},
+				{Name: "bugfix", Description: "Fix broken functionality"},
+				{Name: "docs", Description: "Update documentation"},
+			},
+		},
+	})
+
+	// Filter by description text that's not in name
+	selector.SetFilterValue("documentation")
+	if len(selector.viewItems) != 2 { // "docs" + "Add New Tag"
+		t.Errorf("Expected 2 items filtering by description, got %d", len(selector.viewItems))
+	}
+	if selector.viewItems[0].Tag.Name != "docs" {
+		t.Errorf("Expected 'docs' in filtered results, got %s", selector.viewItems[0].Tag.Name)
+	}
+
+	// Filter by word in description
+	selector.SetFilterValue("functionality")
+	if len(selector.viewItems) != 2 { // "bugfix" + "Add New Tag"
+		t.Errorf("Expected 2 items filtering for 'functionality', got %d", len(selector.viewItems))
+	}
+	if selector.viewItems[0].Tag.Name != "bugfix" {
+		t.Errorf("Expected 'bugfix' in filtered results, got %s", selector.viewItems[0].Tag.Name)
+	}
+}
+
+// TestTagSelectorEmptyFilterResults tests behavior when filter matches nothing
+func TestTagSelectorEmptyFilterResults(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1", Description: "description1"},
+				{Name: "tag2", Description: "description2"},
+			},
+		},
+	})
+
+	// Apply filter that matches nothing
+	selector.SetFilterValue("nonexistent")
+	if len(selector.viewItems) != 1 { // Only "Add New Tag" remains
+		t.Errorf("Expected 1 item (Add New Tag) for non-matching filter, got %d", len(selector.viewItems))
+	}
+	if !selector.viewItems[0].IsNew {
+		t.Error("Expected only 'Add New Tag' item when filter matches nothing")
+	}
+
+	// selectedIndex should be reset
+	if selector.selectedIndex != 0 {
+		t.Errorf("Expected selectedIndex 0 for empty results, got %d", selector.selectedIndex)
+	}
+}
+
+// TestTagSelectorClearFilter tests clearing the filter
+func TestTagSelectorClearFilter(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+				{Name: "tag3"},
+			},
+		},
+	})
+
+	// Apply filter
+	selector.SetFilterValue("tag1")
+	if len(selector.viewItems) != 2 { // "tag1" + "Add New Tag"
+		t.Fatal("Expected filtering to work")
+	}
+
+	// Clear filter (empty string)
+	selector.SetFilterValue("")
+	if len(selector.viewItems) != 4 { // All 3 tags + "Add New Tag"
+		t.Errorf("Expected all items after clearing filter, got %d", len(selector.viewItems))
+	}
+}
+
+// TestTagSelectorFilteringPreservesSelection tests that selection is preserved during filtering
+func TestTagSelectorFilteringPreservesSelection(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+				{Name: "tag3"},
+			},
+		},
+	})
+
+	// Select a tag before filtering
+	selector.selectedItems[0] = true // Select "tag1"
+
+	// Apply filter that includes the selected tag
+	selector.SetFilterValue("tag1")
+
+	// Selection should still be set
+	if !selector.selectedItems[0] {
+		t.Error("Expected selection to be preserved after filtering")
+	}
+
+	// Apply filter that excludes selected item
+	selector.SetFilterValue("tag2")
+
+	// Selection map should still have the entry (even though item not visible)
+	if !selector.selectedItems[0] {
+		t.Error("Expected selection map to preserve entry even when filtered out")
+	}
+}
+
+// TestTagSelectorPartialMatches tests partial substring matching
+func TestTagSelectorPartialMatches(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "feature-auth", Description: "Authentication"},
+				{Name: "feature-api", Description: "API endpoints"},
+				{Name: "bugfix-typo", Description: "Fix typo"},
+			},
+		},
+	})
+
+	// Filter by partial text "feature" should match both feature tags
+	selector.SetFilterValue("feature")
+	if len(selector.viewItems) != 3 { // 2 feature tags + "Add New Tag"
+		t.Errorf("Expected 3 items matching 'feature', got %d", len(selector.viewItems))
+	}
+
+	// Filter by "auth" should match the authentication tag
+	selector.SetFilterValue("auth")
+	if len(selector.viewItems) != 2 { // "feature-auth" + "Add New Tag"
+		t.Errorf("Expected 2 items matching 'auth', got %d", len(selector.viewItems))
+	}
+	if !containsStr(selector.viewItems[0].Tag.Name, "auth") {
+		t.Errorf("Expected auth-related tag in results")
+	}
+}
+
+// TestTagSelectorNavigationAfterFiltering tests that navigation works with filtered list
+func TestTagSelectorNavigationAfterFiltering(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "alpha"},
+				{Name: "beta"},
+				{Name: "gamma"},
+				{Name: "delta"},
+			},
+		},
+	})
+
+	// Filter to get 2 matches + "Add New Tag"
+	selector.SetFilterValue("alpha")
+	originalViewItems := len(selector.viewItems)
+
+	// Test down navigation
+	initialIndex := selector.selectedIndex
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	if selector.selectedIndex != initialIndex+1 {
+		t.Errorf("Expected down navigation to work with filtered list")
+	}
+
+	// Test up navigation
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyUp})
+	if selector.selectedIndex != initialIndex {
+		t.Errorf("Expected up navigation to work with filtered list")
+	}
+
+	// View items should not change after navigation
+	if len(selector.viewItems) != originalViewItems {
+		t.Errorf("Expected view items to remain consistent after navigation")
+	}
+}
+
+// TestTagSelectorDialogManagerIntegration tests that TagSelector is FilterableComponent compatible
+func TestTagSelectorDialogManagerIntegration(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+			},
+		},
+	})
+
+	// Verify TagSelector implements FilterableComponent interface
+	var _ FilterableComponent = selector
+
+	// Verify filtering is enabled by default
+	if !selector.IsFilteringEnabled() {
+		t.Error("Expected filtering to be enabled")
+	}
+
+	// Verify TagSelector can be used as a Dialog
+	var _ Dialog = selector
+}
+
+// TestTagSelectorFocusEntryAndExit tests focus transitions during filter mode
+func TestTagSelectorFocusEntryAndExit(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+				{Name: "tag2"},
+				{Name: "tag3"},
+			},
+		},
+	})
+
+	// Set initial selection
+	selector.selectedIndex = 2
+
+	// Enter filter mode - should store focus index
+	selector.EnterFilterMode()
+	if !selector.IsFiltering() {
+		t.Error("Expected IsFiltering() to be true after EnterFilterMode()")
+	}
+
+	// Simulate navigation while filtering
+	selector.selectedIndex = 0
+	if selector.selectedIndex != 0 {
+		t.Error("Expected to navigate while filtering")
+	}
+
+	// Exit filter mode - should restore focus
+	selector.ExitFilterMode()
+	if selector.IsFiltering() {
+		t.Error("Expected IsFiltering() to be false after ExitFilterMode()")
+	}
+
+	// Focus should be restored to 2
+	if selector.selectedIndex != 2 {
+		t.Errorf("Expected focus index 2 after exit, got %d", selector.selectedIndex)
+	}
+}
+
+// TestTagSelectorKeyInputRoutingDuringFilter tests that keys are processed during filter mode
+func TestTagSelectorKeyInputRoutingDuringFilter(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "tag1"},
+			},
+		},
+	})
+
+	// Not filtering initially
+	if selector.IsFiltering() {
+		t.Fatal("Expected not to be filtering initially")
+	}
+
+	// Press '/' to enter filter mode
+	result, _ := selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone after '/', got %v", result)
+	}
+
+	// Now in filter mode
+	if !selector.IsFiltering() {
+		t.Error("Expected to be filtering after '/'")
+	}
+
+	// Type characters - should be processed as filter input
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	if selector.GetFilterValue() != "t" {
+		t.Errorf("Expected filter 't' after typing, got '%s'", selector.GetFilterValue())
+	}
+
+	// Regular navigation should be skipped during filter mode (we're not testing that here,
+	// just verify filter continues to accumulate)
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	selector.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	if selector.GetFilterValue() != "tag" {
+		t.Errorf("Expected filter 'tag', got '%s'", selector.GetFilterValue())
+	}
+
+	// Esc should exit filter mode
+	result, _ = selector.HandleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if result != DialogResultNone {
+		t.Errorf("Expected DialogResultNone when exiting filter, got %v", result)
+	}
+
+	if selector.IsFiltering() {
+		t.Error("Expected not to be filtering after Esc")
+	}
+}
+
+// TestTagSelectorMultipleFilterCycles tests filtering through multiple enter/exit cycles
+func TestTagSelectorMultipleFilterCycles(t *testing.T) {
+	selector := NewTagSelector(TagSelectorConfig{
+		Title: "Test",
+		TagList: &taskmaster.TagList{
+			Tags: []taskmaster.TagContext{
+				{Name: "alpha"},
+				{Name: "beta"},
+				{Name: "gamma"},
+			},
+		},
+	})
+
+	// First cycle
+	selector.selectedIndex = 1
+	selector.EnterFilterMode()
+	selector.SetFilterValue("alpha")
+	selector.selectedIndex = 0 // Simulate moving selection during filter
+	selector.ExitFilterMode()
+	// Focus should restore to 1 (the index before entering filter)
+	if selector.selectedIndex != 1 {
+		t.Errorf("First cycle: Expected focus 1 after exit, got %d", selector.selectedIndex)
+	}
+}
+
 // Helper function to check if a string contains a substring (case-insensitive)
 func containsStr(haystack, needle string) bool {
 	return len(haystack) > 0 && len(needle) > 0 && strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))

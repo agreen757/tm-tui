@@ -258,7 +258,8 @@ type Model struct {
 	searchResults []*taskmaster.Task
 
 	// Filter state
-	statusFilter string // empty = all, or specific status like "pending", "in-progress", etc.
+	statusFilter        string                   // empty = all, or specific status like "pending", "in-progress", etc.
+	filterableComponent *dialog.BaseFilterable // Standardized filtering interface
 
 	// Confirmation mode state
 	confirmingClearState bool
@@ -385,7 +386,11 @@ func NewModel(cfg *config.Config, configManager *config.ConfigManager, taskServi
 		activeTaskModelDialog:  nil,
 		showTaskModelDialog:    false,
 		taskModelSelectionDone: make(map[string]bool),
+		filterableComponent:    dialog.NewBaseFilterable(),
 	}
+
+	// Enable filtering capability
+	m.filterableComponent.EnableFiltering(true)
 
 	m.commands = defaultCommandSpecs()
 	m.registerDefaultCommandShortcuts()
@@ -2591,6 +2596,16 @@ func (m *Model) cycleStatusFilter() {
 	m.updateFilteredTasks()
 }
 
+// EnterFilterMode enters task filtering mode using standardized FilterableComponent interface
+func (m *Model) EnterFilterMode() {
+	if m.filterableComponent != nil {
+		m.filterableComponent.EnterFilterMode()
+		m.searchMode = true // Keep for backward compatibility with other parts of the code
+		m.searchInput.Focus()
+		m.addLogLine("Search: (type query and press Enter, Esc to cancel)")
+	}
+}
+
 // updateFilteredTasks applies both search and status filters
 func (m *Model) updateFilteredTasks() {
 	// Start with all tasks
@@ -3407,14 +3422,15 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			// If minimized, fall through to main app key handling
 		}
 
-		// Handle search mode separately
-		if m.searchMode {
+		// Handle search mode separately (using standardized FilterableComponent interface)
+		if m.filterableComponent != nil && m.filterableComponent.IsFiltering() {
 			var cmd tea.Cmd
 			m.searchInput, cmd = m.searchInput.Update(msg)
 
 			switch msg.String() {
 			case "esc":
-				// Exit search mode
+				// Exit search mode using standardized interface
+				m.filterableComponent.ExitFilterMode()
 				m.searchMode = false
 				m.searchQuery = ""
 				m.searchInput.SetValue("")
@@ -3428,6 +3444,7 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Only exit search mode if there's actual input
 				if m.searchQuery != "" {
+					m.filterableComponent.ExitFilterMode()
 					m.searchMode = false
 					m.updateSearchResults()
 					if len(m.searchResults) == 0 {
@@ -3596,9 +3613,8 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				m.addLogLine("Jump to task ID: (type ID and press Enter)")
 
 			case key.Matches(msg, m.keyMap.Search):
-				// Enter search mode
-				m.searchMode = true
-				m.searchInput.Focus()
+				// Enter search mode using standardized FilterableComponent interface
+				m.EnterFilterMode()
 
 				// Update input with previous query if it exists
 				if m.searchQuery != "" {
@@ -3611,7 +3627,6 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 					m.searchInput.SetValue("")
 				}
 
-				m.addLogLine("Search: (type query and press Enter, Esc to cancel)")
 				return m, textinput.Blink
 
 			case key.Matches(msg, m.keyMap.Filter):
@@ -3765,6 +3780,12 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if m.statusFilter != "" {
 					m.statusFilter = ""
+					cleared = true
+				}
+				// Clear standardized filter state
+				if m.filterableComponent != nil && m.filterableComponent.IsFiltering() {
+					m.filterableComponent.ExitFilterMode()
+					m.searchMode = false
 					cleared = true
 				}
 				if cleared {

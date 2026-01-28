@@ -965,3 +965,334 @@ func TestHandleMsg_NilCommands(t *testing.T) {
 		t.Error("Expected nil command when both Update and HandleKey return nil")
 	}
 }
+
+// MockFilterableDialog is a test dialog that implements both Dialog and FilterableComponent
+type MockFilterableDialog struct {
+	BaseFocusableDialog
+	handleKeyCallCount int
+	updateCallCount    int
+}
+
+func NewMockFilterableDialog() *MockFilterableDialog {
+	return &MockFilterableDialog{
+		BaseFocusableDialog: NewBaseFocusableDialog("Test Dialog", 50, 20, DialogTypeList, 1),
+		handleKeyCallCount:  0,
+		updateCallCount:     0,
+	}
+}
+
+func (m *MockFilterableDialog) Init() tea.Cmd {
+	return nil
+}
+
+func (m *MockFilterableDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
+	m.updateCallCount++
+	return m, nil
+}
+
+func (m *MockFilterableDialog) View() string {
+	return "Mock Dialog"
+}
+
+func (m *MockFilterableDialog) HandleKey(msg tea.KeyMsg) (DialogResult, tea.Cmd) {
+	m.handleKeyCallCount++
+	return DialogResultNone, nil
+}
+
+// TestDialogManagerFilterAwareKeyHandling verifies that DialogManager respects filter mode
+func TestDialogManagerFilterAwareKeyHandling(t *testing.T) {
+	tests := []struct {
+		name                string
+		isFiltering         bool
+		expectedHandleCount int
+		expectedUpdateCount int
+		description         string
+	}{
+		{
+			name:                "key_forwarded_when_filtering",
+			isFiltering:         true,
+			expectedHandleCount: 1,
+			expectedUpdateCount: 0,
+			description:         "When filtering, key should go directly to HandleKey, skipping Update",
+		},
+		{
+			name:                "normal_flow_when_not_filtering",
+			isFiltering:         false,
+			expectedHandleCount: 1,
+			expectedUpdateCount: 1,
+			description:         "When not filtering, key should go through normal Update then HandleKey flow",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager := NewDialogManager(100, 50)
+			dialog := NewMockFilterableDialog()
+
+			// Set filtering state - must enable filtering before entering filter mode
+			if tt.isFiltering {
+				dialog.EnableFiltering(true)
+				dialog.EnterFilterMode()
+			}
+
+			manager.AddDialog(dialog, nil)
+
+			// Create a key message
+			keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+
+			// Handle the message
+			manager.HandleMsg(keyMsg)
+
+			// Verify the call counts based on filtering state
+			if tt.expectedHandleCount != dialog.handleKeyCallCount {
+				t.Errorf("Expected HandleKey call count %d, got %d", tt.expectedHandleCount, dialog.handleKeyCallCount)
+			}
+			if tt.expectedUpdateCount != dialog.updateCallCount {
+				t.Errorf("Expected Update call count %d, got %d", tt.expectedUpdateCount, dialog.updateCallCount)
+			}
+		})
+	}
+}
+
+// TestDialogManagerFilterModeTypeAssertion verifies type assertion works correctly
+func TestDialogManagerFilterModeTypeAssertion(t *testing.T) {
+	manager := NewDialogManager(100, 50)
+	dialog := NewMockFilterableDialog()
+	manager.AddDialog(dialog, nil)
+
+	// Verify dialog implements FilterableComponent
+	fc, ok := manager.GetActiveDialog().(FilterableComponent)
+	if !ok {
+		t.Error("Dialog should implement FilterableComponent")
+	}
+	if fc == nil {
+		t.Error("FilterableComponent should not be nil")
+	}
+
+	// Verify IsFiltering method exists and works
+	if fc.IsFiltering() {
+		t.Error("Initially should not be filtering")
+	}
+	
+	// Must enable filtering before entering filter mode
+	fc.EnableFiltering(true)
+	fc.EnterFilterMode()
+	
+	if !fc.IsFiltering() {
+		t.Error("After EnterFilterMode, should be filtering")
+	}
+	fc.ExitFilterMode()
+	if fc.IsFiltering() {
+		t.Error("After ExitFilterMode, should not be filtering")
+	}
+}
+
+// TestDialogManagerFocusRestorationDuringFiltering verifies focus is maintained during filter mode
+func TestDialogManagerFocusRestorationDuringFiltering(t *testing.T) {
+	manager := NewDialogManager(100, 50)
+	dialog := NewMockFilterableDialog()
+	
+	// Set initial focus index
+	dialog.SetFocusedIndex(0)
+	manager.AddDialog(dialog, nil)
+
+	// Enter filter mode - must enable first
+	dialog.EnableFiltering(true)
+	dialog.EnterFilterMode()
+	
+	if !dialog.IsFiltering() {
+		t.Error("Should be in filtering mode")
+	}
+
+	// Focus should still be available even during filtering
+	focusedIdx := dialog.FocusedIndex()
+	if focusedIdx != 0 {
+		t.Errorf("Focus index should be 0, got %d", focusedIdx)
+	}
+
+	// Exit filter mode and verify focus is restored
+	dialog.ExitFilterMode()
+	if dialog.IsFiltering() {
+		t.Error("Should not be in filtering mode")
+	}
+	if dialog.FocusedIndex() != 0 {
+		t.Errorf("Focus should be 0, got %d", dialog.FocusedIndex())
+	}
+}
+
+// TestDialogManagerKeyConflictPrevention verifies no key conflicts between dialog and app-level filtering
+func TestDialogManagerKeyConflictPrevention(t *testing.T) {
+	manager := NewDialogManager(100, 50)
+	dialog := NewMockFilterableDialog()
+	manager.AddDialog(dialog, nil)
+
+	// Enable filtering on the dialog
+	dialog.EnableFiltering(true)
+	dialog.EnterFilterMode()
+
+	// Send a filter key (e.g., "/")
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	manager.HandleMsg(keyMsg)
+
+	// The dialog should have received the key via HandleKey, not via app-level filtering
+	if dialog.handleKeyCallCount != 1 {
+		t.Errorf("Dialog should receive the key through HandleKey during filter mode, got %d calls", dialog.handleKeyCallCount)
+	}
+}
+
+// TestFocusRestorationOnFilterModeExit verifies focus is restored when exiting filter mode
+func TestFocusRestorationOnFilterModeExit(t *testing.T) {
+	dialog := NewMockFilterableDialog()
+	dialog.EnableFiltering(true)
+	
+	// Set initial focus
+	dialog.SetFocusedIndex(0)
+	if dialog.FocusedIndex() != 0 {
+		t.Fatalf("Initial focus should be 0, got %d", dialog.FocusedIndex())
+	}
+	
+	// Enter filter mode - should store focus
+	dialog.EnterFilterMode()
+	if !dialog.IsFiltering() {
+		t.Fatal("Should be filtering after EnterFilterMode")
+	}
+	
+	// Verify focus is stored
+	if storedIdx, hasStored := dialog.GetStoredFocusIndex(); !hasStored {
+		t.Error("Focus index should be stored when entering filter mode")
+	} else if storedIdx != 0 {
+		t.Errorf("Stored focus index should be 0, got %d", storedIdx)
+	}
+	
+	// Exit filter mode - should restore focus
+	dialog.ExitFilterMode()
+	if dialog.IsFiltering() {
+		t.Fatal("Should not be filtering after ExitFilterMode")
+	}
+	
+	// Verify focus can be restored (though actual restoration happens in callback)
+	if storedIdx, hasStored := dialog.GetStoredFocusIndex(); hasStored {
+		t.Error("Stored focus index should be cleared after exiting filter mode")
+	} else if storedIdx != 0 {
+		t.Logf("Stored index was cleared as expected")
+	}
+}
+
+// TestFocusStorageAndRetrieval verifies focus index storage mechanism
+func TestFocusStorageAndRetrieval(t *testing.T) {
+	dialog := NewMockFilterableDialog()
+	
+	// Initially no stored focus
+	if _, hasStored := dialog.GetStoredFocusIndex(); hasStored {
+		t.Error("Should not have stored focus initially")
+	}
+	
+	// Store a focus index
+	dialog.StoreFocusIndex(5)
+	idx, hasStored := dialog.GetStoredFocusIndex()
+	if !hasStored {
+		t.Error("Should have stored focus after StoreFocusIndex")
+	}
+	if idx != 5 {
+		t.Errorf("Stored index should be 5, got %d", idx)
+	}
+	
+	// Clear the stored focus
+	dialog.ClearStoredFocusIndex()
+	if _, hasStored := dialog.GetStoredFocusIndex(); hasStored {
+		t.Error("Should not have stored focus after ClearStoredFocusIndex")
+	}
+}
+
+// TestFilterModeCallbackInvocation verifies filter mode change callbacks are invoked
+func TestFilterModeCallbackInvocation(t *testing.T) {
+	dialog := NewMockFilterableDialog()
+	dialog.EnableFiltering(true)
+	
+	callCount := 0
+	var enteringFilterMode bool
+	
+	// Set callback to track filter mode changes
+	dialog.SetOnFilterModeChange(func(entering bool) {
+		callCount++
+		enteringFilterMode = entering
+	})
+	
+	// Enter filter mode
+	dialog.EnterFilterMode()
+	if callCount != 1 {
+		t.Errorf("Expected callback to be called once for EnterFilterMode, got %d calls", callCount)
+	}
+	if !enteringFilterMode {
+		t.Error("Callback should receive true when entering filter mode")
+	}
+	
+	// Exit filter mode
+	dialog.ExitFilterMode()
+	if callCount != 2 {
+		t.Errorf("Expected callback to be called twice (enter and exit), got %d calls", callCount)
+	}
+	if enteringFilterMode {
+		t.Error("Callback should receive false when exiting filter mode")
+	}
+}
+
+// TestBaseFocusableDialogFocusRestorationCallback verifies focus restoration integration
+func TestBaseFocusableDialogFocusRestorationCallback(t *testing.T) {
+	dialog := NewMockFilterableDialog()
+	dialog.EnableFiltering(true)
+	
+	// Set initial focus to index 0
+	dialog.SetFocusedIndex(0)
+	
+	// Enter filter mode - callback should store focus
+	dialog.EnterFilterMode()
+	storedIdx, hasStored := dialog.GetStoredFocusIndex()
+	if !hasStored || storedIdx != 0 {
+		t.Error("Focus should be stored before entering filter mode")
+	}
+	
+	// Exit filter mode - callback should restore focus
+	dialog.ExitFilterMode()
+	
+	// In NewBaseFocusableDialog, the callback is set up to restore focus
+	// Let's verify the focus is properly restored by checking the implementation
+	currentFocus := dialog.FocusedIndex()
+	if currentFocus != 0 {
+		t.Errorf("Focus should be restored to 0, but is at %d", currentFocus)
+	}
+}
+
+// TestFocusRestorationMultipleCycles verifies focus restoration works across multiple enter/exit cycles
+func TestFocusRestorationMultipleCycles(t *testing.T) {
+	dialog := NewMockFilterableDialog()
+	dialog.EnableFiltering(true)
+	
+	tests := []int{0, 1}
+	for _, expectedFocus := range tests {
+		// Skip if we can't set focus to this index
+		if expectedFocus >= dialog.NumFocusableElements() {
+			continue
+		}
+		
+		// Set focus
+		dialog.SetFocusedIndex(expectedFocus)
+		
+		// Enter filter mode
+		dialog.EnterFilterMode()
+		storedIdx, hasStored := dialog.GetStoredFocusIndex()
+		if !hasStored || storedIdx != expectedFocus {
+			t.Errorf("Cycle %d: Focus %d should be stored, got stored=%v, idx=%d", 
+				expectedFocus, expectedFocus, hasStored, storedIdx)
+		}
+		
+		// Exit filter mode
+		dialog.ExitFilterMode()
+		
+		// Verify focus is at the expected position
+		if dialog.FocusedIndex() != expectedFocus {
+			t.Errorf("Cycle %d: Focus should be restored to %d, got %d", 
+				expectedFocus, expectedFocus, dialog.FocusedIndex())
+		}
+	}
+}

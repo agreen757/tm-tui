@@ -591,6 +591,40 @@ func (m *DialogManager) HandleMsg(msg tea.Msg) tea.Cmd {
 			log.Printf("[DialogManager.HandleMsg] KeyMsg received: %s, Active dialog type: %T",
 				keyMsg.String(), activeDialog)
 
+			// FR5.1-5.2: Check if dialog is FilterableComponent and is filtering
+			// If filtering is active, forward all keys directly to the dialog
+			if dialog, ok := activeDialog.(FilterableComponent); ok && dialog.IsFiltering() {
+				log.Printf("[DialogManager.HandleMsg] Dialog is filtering, forwarding key directly to HandleKey()")
+				result, specialCmd := activeDialog.HandleKey(keyMsg)
+				log.Printf("[DialogManager.HandleMsg] HandleKey() returned result: %v during filtering", result)
+				if specialCmd != nil {
+					cmds = append(cmds, specialCmd)
+				}
+
+				// Handle dialog result
+				switch result {
+				case DialogResultClose, DialogResultCancel, DialogResultConfirm:
+					log.Printf("[DialogManager.HandleMsg] Dialog result is %v, closing dialog", result)
+					popped := m.popEntry()
+					if popped.callback != nil {
+						var value interface{}
+						var err error
+						if result == DialogResultConfirm || result == DialogResultClose {
+							if provider, ok := popped.dialog.(DialogResultProvider); ok {
+								value, err = provider.DialogResultValue()
+							}
+						}
+						cbCmd := popped.callback(value, err)
+						if cbCmd != nil {
+							cmds = append(cmds, cbCmd)
+						}
+					}
+					return tea.Batch(cmds...)
+				}
+				// Return without further processing when in filter mode
+				return tea.Batch(cmds...)
+			}
+
 			// First call Update() to allow normal text input processing
 			log.Printf("[DialogManager.HandleMsg] Calling Update() on dialog...")
 			updatedDialog, cmd := activeDialog.Update(msg)

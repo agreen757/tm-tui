@@ -25,6 +25,7 @@ const (
 
 type parsePrdOptions struct {
 	Mode parsePrdMode
+	Tags string
 }
 
 type parsePrdResultMsg struct {
@@ -104,6 +105,13 @@ func (m *Model) showParsePrdOptions(path string) tea.Cmd {
 			},
 			Value: string(parsePrdModeAppend),
 		},
+		{
+			ID:          "tags",
+			Label:       "Tags (optional)",
+			Type:        dialog.FormFieldTypeText,
+			Value:       "",
+			Placeholder: "comma-separated tags",
+		},
 	}
 
 	title := fmt.Sprintf("File: %s", filepath.Base(path))
@@ -121,7 +129,8 @@ func (m *Model) showParsePrdOptions(path string) tea.Cmd {
 			if mode != parsePrdModeReplace {
 				mode = parsePrdModeAppend
 			}
-			return parsePrdOptions{Mode: mode}, nil
+			tags := stringValue(values, "tags")
+			return parsePrdOptions{Mode: mode, Tags: tags}, nil
 		},
 	)
 
@@ -141,13 +150,13 @@ func (m *Model) showParsePrdOptions(path string) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		return m.startParsePrdJob(path, opts.Mode)
+		return m.startParsePrdJob(path, opts.Mode, opts.Tags)
 	})
 
 	return nil
 }
 
-func (m *Model) startParsePrdJob(path string, mode parsePrdMode) tea.Cmd {
+func (m *Model) startParsePrdJob(path string, mode parsePrdMode, tags string) tea.Cmd {
 	if m.config == nil || m.config.TaskMasterPath == "" {
 		errMsg := "Task Master project not detected. Configure taskmasterPath in config or run inside a Task Master workspace."
 		appErr := NewDependencyError("Parse PRD", errMsg, nil).
@@ -209,7 +218,13 @@ func (m *Model) startParsePrdJob(path string, mode parsePrdMode) tea.Cmd {
 			}
 		}
 
-		err := m.taskService.ParsePRDWithProgress(ctx, absPath, mode, func(state taskmaster.ParsePrdProgressState) {
+		// Convert dialog mode to service mode
+		serviceMode := taskmaster.ParsePrdModeReplace
+		if mode == parsePrdModeAppend {
+			serviceMode = taskmaster.ParsePrdModeAppend
+		}
+
+		err := m.taskService.ParsePRDWithProgress(ctx, absPath, serviceMode, tags, func(state taskmaster.ParsePrdProgressState) {
 			progress := state.Progress
 			if progress < 0 {
 				progress = 0

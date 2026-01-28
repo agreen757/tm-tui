@@ -16,7 +16,7 @@ type TaskService interface {
 	ReloadEvents() <-chan struct{}
 	AnalyzeComplexity(ctx context.Context, scope string, taskID string, tags []string) (*taskmaster.ComplexityReport, error)
 	AnalyzeComplexityWithProgress(ctx context.Context, scope string, taskID string, tags []string, onProgress func(taskmaster.ComplexityProgressState)) (*taskmaster.ComplexityReport, error)
-	ParsePRDWithProgress(ctx context.Context, inputPath string, mode taskmaster.ParsePrdMode, onProgress func(taskmaster.ParsePrdProgressState)) error
+	ParsePRDWithProgress(ctx context.Context, inputPath string, mode taskmaster.ParsePrdMode, tags string, onProgress func(taskmaster.ParsePrdProgressState)) error
 	ExpandTaskWithProgress(ctx context.Context, taskID string, opts taskmaster.ExpandTaskOptions, prompt string, onProgress func(taskmaster.ExpandProgressState)) error
 	ExecuteExpandWithProgress(ctx context.Context, scope string, taskID string, fromID string, toID string, tags []string, opts taskmaster.ExpandTaskOptions, onProgress func(taskmaster.ExpandProgressState)) error
 	GetLatestComplexityReport() *taskmaster.ComplexityReport
