@@ -258,47 +258,35 @@ make check-gemini        # Verify Gemini CLI
 
 For detailed information about all releases, new features, bug fixes, and improvements, see the [CHANGELOG.md](CHANGELOG.md).
 
-### Latest Release: v0.1.25
+### Latest Release: v0.1.28
 
-**Installation Improvements, Concurrent Task Execution, and Enterprise Features** - Comprehensive enhancements including streamlined installation, multi-task execution, advanced task management, and persistent memory system.
+**Filter Status Indication** - Added FilterStatusView component to display active filters and improve user awareness of filtering state.
 
 #### Key Features
 
-- **Concurrent Task Execution**: Run up to 9 tasks in parallel with independent control
-  - Separate tabs for each running task with real-time streaming output
-  - Navigate between tabs with `Tab`/`Shift+Tab` or jump with `1-9`
-  - Cancel individual tasks independently without affecting others
-  - Automatic logging to `.taskmaster/<tag-name>/<task-id>.log`
+- **Active Filter Display**: New FilterStatusView shows currently active filters in task list
+  - Visual indicator displays applied filters at a glance
+  - Shows filter count and active filter names/values
+  - Automatically updates when filters are applied or cleared
+  - Integrated into main task list view for consistent placement
 
-- **Enhanced Installation**: Streamlined workflow with new Makefile targets
-  - `make install-all`: Install all binaries in one command
-  - `make install-task-master`: Install Task Master AI CLI separately
-  - `make check-task-master`: Verify installation status
-  - Comprehensive troubleshooting guide (2000+ lines) with platform-specific solutions
+- **Enhanced User Awareness**: Users can now easily see what filters are currently active
+  - Prevents confusion about why certain tasks are hidden
+  - Clear indication of filtering state in the UI
+  - Supports multiple simultaneous filters
 
-- **Ready Tasks Pre-fetching**: Loads upcoming tasks in background for faster selection
+- **Improved Workflow**: Better visibility into filtered task lists
+  - Easier to understand task visibility changes
+  - Clear feedback when applying or removing filters
+  - Integration with existing filter system
 
-- **Execution Queue Management**: Handles concurrent task execution with proper resource management
+### Previous Release: v0.1.27
 
-- **Persistent Memory System**: BadgerDB-backed storage for cross-session context and learning
+**Enhanced UI Components and Performance** - Previous release with improvements to file dialog and tag selector dimensions, plus filtering functionality enhancements.
 
-- **Comprehensive Docker Testing**: Installation verification across Ubuntu, Alpine, and Windows environments
+### Release v0.1.25 and Earlier
 
-### Previous Release: v0.1.24
-
-**Task Score Highlighting** - Enhanced visual representation of task complexity with consistent color-coding and improved accessibility.
-
-- Color-coded complexity indicators (Low: Blue, Medium: Turquoise, High: Orange, Very High: Crimson)
-- Accessible text labels for all complexity levels
-- Consistent styling across all complexity representations
-- Combined visual and textual indicators for better readability
-- Enhanced test coverage with 200+ new test lines
-- Improved color contrast for better visibility
-- Support for both numeric complexity scores and level enums
-
-### Release Before: v0.1.23
-
-**Log Browser & Performance Optimization** - Browse and search log files directly within the TUI, plus enhanced caching for improved performance.
+For details about v0.1.25, v0.1.24, v0.1.23, and earlier releases, see the [CHANGELOG.md](CHANGELOG.md).
 
 - Press `Ctrl+F` to open the Log Browser dialog
 - Navigate and view all log files in `.taskmaster/logs/`

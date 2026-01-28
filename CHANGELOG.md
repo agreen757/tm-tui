@@ -30,6 +30,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Medium Priority Issues**: Channel cleanup, WaitGroup timeouts, timer allocation optimization
 - **Low Priority Issues**: Unbounded command history, lastCheckTime map cleanup, task cache eviction
 
+## [v0.1.28] - 2026-01-28
+
+### Filter Status Indication
+
+**Enhanced UI Visibility for Active Filters** - Added FilterStatusView component to display currently active filters and improve user awareness of filtering state.
+
+#### Added
+
+- **FilterStatusView Component**: New UI component displays active filter state
+  - Visual indicator at the top of task list showing applied filters
+  - Clear display of filter count and names/values
+  - Automatic updates when filters are applied or cleared
+  - Integrated seamlessly into main task list view
+
+- **Filter Status Display**: Enhanced user awareness of filtering
+  - Shows exactly which filters are currently active
+  - Prevents confusion about hidden tasks
+  - Makes it obvious when results are filtered vs. showing all tasks
+  - Multiple filter indicators for complex filter combinations
+
+#### Changed
+
+- **Task List View**: Enhanced with filter status indicator
+  - FilterStatusView renders above task list when filters active
+  - Automatic hide/show based on filter state
+  - Consistent styling with existing UI components
+
+#### User Experience
+
+- Better visibility into filtered task lists
+- Reduced confusion about task visibility changes
+- Clear feedback when applying or removing filters
+- Improved understanding of task set size
+
+## [v0.1.27] - 2026-01-20
+
+### File Dialog and Tag Selector Improvements
+
+**Enhanced UI Component Dimensions and Filtering** - Refactored file dialog and tag selector for better dimensions and improved filtering functionality.
+
+#### Added
+
+- Improved file dialog sizing and layout
+- Enhanced tag selector functionality
+- Better filtering implementation
+
+#### Changed
+
+- File dialog component dimensions optimized
+- Tag selector visual improvements
+
+## [v0.1.26] - 2026-01-19
+
+### Test Enhancement and Caching Improvements
+
+**Ready Tasks Dialog Testing and Cache Optimization** - Added comprehensive installation tests and enhanced caching mechanism for improved performance on slow file systems.
+
+#### Added
+
+- Comprehensive tests for slow file reads
+- Enhanced caching mechanism in ReadyTasksDialog
+- Support for slow storage systems
+
 ## [v0.1.25] - 2026-01-19
 
 ### Installation & Dependencies, Concurrent Task Execution, and Enterprise Features
