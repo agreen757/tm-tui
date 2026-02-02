@@ -6,6 +6,24 @@ import (
 	"time"
 )
 
+// FileChange represents a changed file associated with a task
+type FileChange struct {
+	Path        string    `json:"path"`        // File path relative to repository root
+	ChangeType  string    `json:"changeType"`  // "added", "modified", "deleted"
+	Description string    `json:"description"` // Optional description of the change
+	LastChanged time.Time `json:"lastChanged"` // When the file was last changed
+	CommitID    string    `json:"commitId"`    // Git commit ID (if committed)
+	IsPending   bool      `json:"isPending"`   // True for uncommitted changes
+}
+
+// FileChangeMapping is the top-level structure for storage of file changes
+type FileChangeMapping struct {
+	Version           string                `json:"version"`           // Schema version
+	LastUpdated       time.Time             `json:"lastUpdated"`       // When mapping was last updated
+	Tasks             map[string][]FileChange `json:"tasks"`           // Task ID -> array of file changes
+	UnassignedChanges []FileChange          `json:"unassignedChanges"` // Changes not assigned to any task
+}
+
 // Task represents a task from the Task Master system
 type Task struct {
 	ID             string            `json:"id"`
@@ -28,6 +46,7 @@ type Task struct {
 	Tags           []string          `json:"tags,omitempty"`
 	IsCategory     bool              `json:"isCategory,omitempty"`
 	IsRoot         bool              `json:"isRoot,omitempty"`
+	FileChanges    []FileChange      `json:"fileChanges,omitempty"` // Associated file changes
 
 	// Navigation helpers (not serialized)
 	Parent   *Task   `json:"-"`
@@ -163,4 +182,136 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// ValidChangeTypes represents the valid values for FileChange.ChangeType
+var ValidChangeTypes = map[string]bool{
+	"added":    true,
+	"modified": true,
+	"deleted":  true,
+}
+
+// Validate checks if FileChange has valid data
+func (fc *FileChange) Validate() error {
+	if fc.Path == "" {
+		return fmt.Errorf("file change path cannot be empty")
+	}
+	if fc.ChangeType == "" {
+		return fmt.Errorf("file change type cannot be empty")
+	}
+	if !ValidChangeTypes[fc.ChangeType] {
+		return fmt.Errorf("invalid change type: %q (must be 'added', 'modified', or 'deleted')", fc.ChangeType)
+	}
+	return nil
+}
+
+// NewFileChange creates a new FileChange with the given parameters and sets LastChanged to now
+func NewFileChange(path string, changeType string, description string) (*FileChange, error) {
+	fc := &FileChange{
+		Path:        path,
+		ChangeType:  changeType,
+		Description: description,
+		LastChanged: time.Now(),
+		IsPending:   true,
+	}
+	if err := fc.Validate(); err != nil {
+		return nil, err
+	}
+	return fc, nil
+}
+
+// Validate checks if FileChangeMapping has valid data
+func (fcm *FileChangeMapping) Validate() error {
+	if fcm.Version == "" {
+		return fmt.Errorf("file change mapping version cannot be empty")
+	}
+	if fcm.Tasks == nil {
+		fcm.Tasks = make(map[string][]FileChange)
+	}
+	if fcm.UnassignedChanges == nil {
+		fcm.UnassignedChanges = make([]FileChange, 0)
+	}
+	// Validate all file changes in all tasks
+	for taskID, changes := range fcm.Tasks {
+		for i, change := range changes {
+			if err := change.Validate(); err != nil {
+				return fmt.Errorf("invalid change in task %q at index %d: %w", taskID, i, err)
+			}
+		}
+	}
+	// Validate unassigned changes
+	for i, change := range fcm.UnassignedChanges {
+		if err := change.Validate(); err != nil {
+			return fmt.Errorf("invalid unassigned change at index %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// NewFileChangeMapping creates a new FileChangeMapping with the given version
+func NewFileChangeMapping(version string) *FileChangeMapping {
+	return &FileChangeMapping{
+		Version:           version,
+		LastUpdated:       time.Now(),
+		Tasks:             make(map[string][]FileChange),
+		UnassignedChanges: make([]FileChange, 0),
+	}
+}
+
+// AddFileChange adds a FileChange to a specific task
+func (fcm *FileChangeMapping) AddFileChange(taskID string, fc FileChange) error {
+	if err := fc.Validate(); err != nil {
+		return fmt.Errorf("cannot add invalid file change: %w", err)
+	}
+	if taskID == "" {
+		return fmt.Errorf("task ID cannot be empty")
+	}
+	fcm.Tasks[taskID] = append(fcm.Tasks[taskID], fc)
+	fcm.LastUpdated = time.Now()
+	return nil
+}
+
+// AddUnassignedChange adds a FileChange to the unassigned list
+func (fcm *FileChangeMapping) AddUnassignedChange(fc FileChange) error {
+	if err := fc.Validate(); err != nil {
+		return fmt.Errorf("cannot add invalid file change: %w", err)
+	}
+	fcm.UnassignedChanges = append(fcm.UnassignedChanges, fc)
+	fcm.LastUpdated = time.Now()
+	return nil
+}
+
+// GetChangesForTask returns all file changes associated with a task
+func (fcm *FileChangeMapping) GetChangesForTask(taskID string) []FileChange {
+	if changes, ok := fcm.Tasks[taskID]; ok {
+		return changes
+	}
+	return []FileChange{}
+}
+
+// GetPendingChanges returns all pending (uncommitted) file changes
+func (fcm *FileChangeMapping) GetPendingChanges() []FileChange {
+	var pending []FileChange
+	for _, changes := range fcm.Tasks {
+		for _, change := range changes {
+			if change.IsPending {
+				pending = append(pending, change)
+			}
+		}
+	}
+	for _, change := range fcm.UnassignedChanges {
+		if change.IsPending {
+			pending = append(pending, change)
+		}
+	}
+	return pending
+}
+
+// TotalChangesCount returns the total count of all file changes
+func (fcm *FileChangeMapping) TotalChangesCount() int {
+	count := len(fcm.UnassignedChanges)
+	for _, changes := range fcm.Tasks {
+		count += len(changes)
+	}
+	return count
 }

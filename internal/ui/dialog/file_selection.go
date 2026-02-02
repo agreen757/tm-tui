@@ -12,6 +12,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// LogFunc is a callback for logging debug messages
+type LogFunc func(msg string)
+
 // FileSelectionDialog presents a navigable filesystem picker filtered by extension.
 type FileSelectionDialog struct {
 	BaseFocusableDialog
@@ -25,6 +28,7 @@ type FileSelectionDialog struct {
 	resultPath  string
 	visibleItems int // Number of entries that fit in dialog height
 	offset      int  // Scroll position offset
+	logFunc     LogFunc
 }
 
 type fileEntry struct {
@@ -34,11 +38,11 @@ type fileEntry struct {
 	IsParent bool
 }
 
-type fileSelectionEntriesMsg struct {
-	requestID int
-	path      string
-	entries   []fileEntry
-	err       error
+type FileSelectionEntriesMsg struct {
+	RequestID int
+	Path      string
+	Entries   []fileEntry
+	Err       error
 }
 
 // NewFileSelectionDialog constructs a dialog rooted at the provided path.
@@ -71,7 +75,7 @@ func NewFileSelectionDialog(title, startPath string, width, height int, extensio
 		BaseFocusableDialog: NewBaseFocusableDialog(title, width, height, DialogKindCustom, 1),
 		currentPath:         abs,
 		filters:             filters,
-		visibleItems:        5, // Conservative default, will be updated by SetRect
+		visibleItems:        15, // Conservative default, will be updated by SetRect
 		offset:              0,
 	}
 	d.SetCancellable(true)
@@ -87,6 +91,18 @@ func NewFileSelectionDialog(title, startPath string, width, height int, extensio
 // Init begins loading the initial directory listing.
 func (d *FileSelectionDialog) Init() tea.Cmd {
 	return d.loadDirectory(d.currentPath)
+}
+
+// SetLogFunc sets the logging callback function.
+func (d *FileSelectionDialog) SetLogFunc(logFunc LogFunc) {
+	d.logFunc = logFunc
+}
+
+// log writes a debug message via the logging callback.
+func (d *FileSelectionDialog) log(msg string) {
+	if d.logFunc != nil {
+		d.logFunc(msg)
+	}
 }
 
 // logFilters returns a string representation of the filter extensions
@@ -122,26 +138,27 @@ func (d *FileSelectionDialog) Update(msg tea.Msg) (Dialog, tea.Cmd) {
 			d.selected = len(d.entries) - 1
 		}
 
-	case fileSelectionEntriesMsg:
-		if msg.requestID != d.requestID {
+	case FileSelectionEntriesMsg:
+		if msg.RequestID != d.requestID {
 			return d, nil
 		}
 
 		// Always clear the loading state
 		d.loading = false
-		d.err = msg.err
+		d.err = msg.Err
 
-		if msg.err != nil {
+		if msg.Err != nil {
 			d.entries = nil
 			return d, nil
 		}
 
-		d.currentPath = msg.path
-		d.entries = msg.entries
-		d.offset = 0  // Reset scroll position when navigating to new directory
+		d.currentPath = msg.Path
+		d.entries = msg.Entries
+		d.selected = 0  // Reset selection to first item in new directory
+		d.offset = 0   // Reset scroll position when navigating to new directory
 
 		// Critical fix: Force-check for PRD files in the .taskmaster/docs directory
-		if strings.Contains(msg.path, ".taskmaster/docs") && len(d.entries) <= 1 {
+		if strings.Contains(msg.Path, ".taskmaster/docs") && len(d.entries) <= 1 {
 			// If we're in the .taskmaster/docs directory but don't see files,
 			// manually add the PRD files we know exist
 			manualDocsPath := filepath.Join(d.currentPath)
@@ -263,6 +280,7 @@ func (d *FileSelectionDialog) activateSelection() (DialogResult, tea.Cmd) {
 		return DialogResultNone, nil
 	}
 	entry := d.entries[d.selected]
+	
 	if entry.IsDir {
 		return DialogResultNone, d.loadDirectory(entry.Path)
 	}
@@ -461,7 +479,6 @@ func (d *FileSelectionDialog) loadDirectory(path string) tea.Cmd {
 	}
 
 	d.loading = true
-	d.selected = 0
 	d.err = nil
 	d.entries = nil
 	d.requestID++
@@ -469,11 +486,14 @@ func (d *FileSelectionDialog) loadDirectory(path string) tea.Cmd {
 
 	return func() tea.Msg {
 		entries, err := readDirectoryEntries(abs, d.filters)
-		return fileSelectionEntriesMsg{
-			requestID: requestID,
-			path:      abs,
-			entries:   entries,
-			err:       err,
+		if err != nil {
+		} else {
+		}
+		return FileSelectionEntriesMsg{
+			RequestID: requestID,
+			Path:      abs,
+			Entries:   entries,
+			Err:       err,
 		}
 	}
 }

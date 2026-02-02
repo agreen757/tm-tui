@@ -215,6 +215,18 @@ func (m *Model) performDelete() tea.Cmd {
 	for _, warning := range result.Warnings {
 		m.addLogLine("Warning: " + warning)
 	}
+
+	// Clear active task if any of the deleted tasks is the active task
+	if m.fileChangeTracker != nil {
+		activeTask := m.fileChangeTracker.GetActiveTask()
+		for _, deletedID := range m.deleteWorkflow.TaskIDs {
+			if activeTask == deletedID {
+				m.fileChangeTracker.SetActiveTask("")
+				break
+			}
+		}
+	}
+
 	m.deleteWorkflow = nil
 	if result.Undo != nil {
 		return m.showUndoDialog(result.Undo)

@@ -24,23 +24,23 @@ func TestFileSelectionDialog_Init_LoadsDirectory(t *testing.T) {
 
 	// Simulate command execution
 	msg := cmd()
-	filesMsg, ok := msg.(fileSelectionEntriesMsg)
+	filesMsg, ok := msg.(FileSelectionEntriesMsg)
 	if !ok {
-		t.Fatalf("Expected fileSelectionEntriesMsg, got %T", msg)
+		t.Fatalf("Expected FileSelectionEntriesMsg, got %T", msg)
 	}
 
-	if filesMsg.err != nil {
-		t.Fatalf("Expected no error, got %v", filesMsg.err)
+	if filesMsg.Err != nil {
+		t.Fatalf("Expected no error, got %v", filesMsg.Err)
 	}
 
-	if len(filesMsg.entries) == 0 {
+	if len(filesMsg.Entries) == 0 {
 		t.Fatalf("Expected entries, got empty list")
 	}
 
 	// Check if we have .md and .txt files
 	hasMarkdown := false
 	hasText := false
-	for _, entry := range filesMsg.entries {
+	for _, entry := range filesMsg.Entries {
 		if entry.Name == "feature-additions-prd.md" {
 			hasMarkdown = true
 		}
@@ -271,4 +271,115 @@ func TestFileExtensionMatching(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFileSelectionDialog_DirectoryNavigation verifies that directory navigation
+// doesn't cause visual jumps (selection stays stable until new entries load)
+func TestFileSelectionDialog_DirectoryNavigation(t *testing.T) {
+	// Skip if running in CI environment without file system access
+	if testing.Short() {
+		t.Skip("Skipping test in short mode")
+	}
+
+	// Create test directory structure
+	tempDir := t.TempDir()
+	subDir := filepath.Join(tempDir, "subdir")
+	if err := os.Mkdir(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirectory: %v", err)
+	}
+
+	// Create test files in root
+	if err := os.WriteFile(filepath.Join(tempDir, "root.txt"), []byte("root"), 0644); err != nil {
+		t.Fatalf("Failed to create root file: %v", err)
+	}
+
+	// Create test files in subdirectory
+	if err := os.WriteFile(filepath.Join(subDir, "sub.txt"), []byte("sub"), 0644); err != nil {
+		t.Fatalf("Failed to create sub file: %v", err)
+	}
+
+	// Create dialog starting in root
+	dialog := NewFileSelectionDialog("Test", tempDir, 78, 20, []string{".txt"})
+	dialog.Style = DefaultDialogStyle()
+
+	// Load initial entries
+	cmd := dialog.Init()
+	if cmd == nil {
+		t.Fatalf("Init() returned nil command")
+	}
+	msg := cmd()
+	updatedDialog, _ := dialog.Update(msg)
+	d := updatedDialog.(*FileSelectionDialog)
+
+	// Verify we have entries (should have subdir and root.txt, possibly parent dir)
+	if len(d.entries) < 2 {
+		t.Fatalf("Expected at least 2 entries (subdir + root.txt), got %d", len(d.entries))
+	}
+
+	// Find the subdirectory entry
+	subdirIndex := -1
+	for i, entry := range d.entries {
+		if entry.IsDir && !entry.IsParent && entry.Name == "subdir" {
+			subdirIndex = i
+			break
+		}
+	}
+	if subdirIndex == -1 {
+		t.Fatalf("Could not find 'subdir' entry in list")
+	}
+
+	// Move selection to subdirectory
+	d.selected = subdirIndex
+	initialSelected := d.selected
+	initialPath := d.currentPath
+
+	// Simulate pressing Enter on the subdirectory
+	// This should NOT immediately change d.selected before entries load
+	result, cmd := d.HandleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if result != DialogResultNone {
+		t.Errorf("Enter on directory should return DialogResultNone, got %v", result)
+	}
+
+	// CRITICAL: At this point, selected should STILL be at subdirIndex
+	// because the async load hasn't completed yet
+	if d.selected != initialSelected {
+		t.Errorf("Selection changed before directory loaded: was %d, now %d", initialSelected, d.selected)
+	}
+
+	// CRITICAL: Path should also not change yet
+	if d.currentPath != initialPath {
+		t.Errorf("Path changed before directory loaded: was %s, now %s", initialPath, d.currentPath)
+	}
+
+	// Now execute the async command to load the directory
+	if cmd == nil {
+		t.Fatalf("HandleKey(Enter) on directory should return a command")
+	}
+	msg = cmd()
+	updatedDialog, _ = d.Update(msg)
+	d = updatedDialog.(*FileSelectionDialog)
+
+	// NOW selection should be reset to 0 (first item in new directory)
+	if d.selected != 0 {
+		t.Errorf("After loading directory, selection should be 0, got %d", d.selected)
+	}
+
+	// Path should now be updated to subdirectory
+	if !contains(d.currentPath, "subdir") {
+		t.Errorf("After loading, path should contain 'subdir', got %s", d.currentPath)
+	}
+
+	// Verify we have entries from the subdirectory
+	foundSubFile := false
+	for _, entry := range d.entries {
+		if entry.Name == "sub.txt" {
+			foundSubFile = true
+			break
+		}
+	}
+	if !foundSubFile {
+		t.Errorf("Expected to find 'sub.txt' in subdirectory entries")
+	}
+
+	t.Logf("✓ Directory navigation works correctly - no visual jump")
 }

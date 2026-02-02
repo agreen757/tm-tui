@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/agreen757/tm-tui/internal/config"
 	"github.com/agreen757/tm-tui/internal/executor"
+	"github.com/agreen757/tm-tui/internal/filechanges"
 	"github.com/agreen757/tm-tui/internal/git"
 	"github.com/agreen757/tm-tui/internal/projects"
 	"github.com/agreen757/tm-tui/internal/taskmaster"
@@ -180,6 +182,12 @@ type Model struct {
 	gitRepoInfo  git.RepoInfo
 	gitRefresher *git.StatusRefresher
 
+	// File change tracking
+	fileChangeTracker *filechanges.FileChangeTracker
+	contentLoader     *filechanges.ContentLoader
+	diffGenerator     *filechanges.DiffGenerator
+	gitService        *git.GitService
+
 	// Task data
 	tasks        []taskmaster.Task
 	taskIndex    map[string]*taskmaster.Task // Quick lookup by ID
@@ -246,6 +254,10 @@ type Model struct {
 	showLogPanel     bool
 	showHelp         bool
 	helpViewport     viewport.Model
+
+	// File changes section state
+	fileChangesSection        *FileChangesSection
+	fileChangesSectionFocused bool
 
 	// Command mode state
 	commandMode  bool
@@ -495,6 +507,60 @@ func (m *Model) CleanupGit() {
 	}
 }
 
+// InitFileChangeTracking initializes file change tracking components
+func (m *Model) InitFileChangeTracking() error {
+	// File change tracking requires Git availability
+	if !m.gitAvailable || !m.gitRepoInfo.IsRepo {
+		return nil // Not an error - just not available
+	}
+
+	// Create Git service for file change tracking
+	m.gitService = git.NewGitService(m.gitRepoInfo.RootPath)
+
+	// Get storage path from task service
+	dataDir := ""
+	if tmService, ok := m.taskService.(*taskmaster.Service); ok {
+		dataDir = filepath.Join(tmService.RootDir, ".taskmaster")
+	} else {
+		// Fallback to .taskmaster directory
+		dataDir = ".taskmaster"
+	}
+
+	// Create storage for file change mapping
+	storage := taskmaster.NewJSONStorage(filepath.Join(dataDir, "file-changes.json"))
+
+	// Create file change tracker
+	m.fileChangeTracker = filechanges.NewFileChangeTracker(m.gitService, storage, m.gitRepoInfo.RootPath)
+
+	// Initialize tracker (loads existing data and processes historical commits)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := m.fileChangeTracker.Initialize(ctx); err != nil {
+		// Log warning but don't fail application initialization
+		fmt.Printf("Warning: failed to initialize file change tracker: %v\n", err)
+		return nil // Don't propagate error
+	}
+
+	// Start periodic refresh (every 30 seconds)
+	m.fileChangeTracker.StartPeriodicRefresh(30 * time.Second)
+
+	// Create content loader for loading file contents
+	m.contentLoader = filechanges.NewContentLoader(m.gitService, m.gitRepoInfo.RootPath)
+
+	// Create diff generator for generating file diffs
+	m.diffGenerator = filechanges.NewDiffGenerator(m.gitService)
+
+	return nil
+}
+
+// CleanupFileChangeTracking cleans up file change tracking resources
+func (m *Model) CleanupFileChangeTracking() {
+	if m.fileChangeTracker != nil {
+		m.fileChangeTracker.Stop()
+	}
+}
+
 // GitStatus returns the current Git status
 func (m *Model) GitStatus() git.GitStatus {
 	if m.gitRefresher == nil {
@@ -699,6 +765,33 @@ func (m *Model) openLogBrowserDialog() tea.Cmd {
 		m.appState.PushDialog(logBrowserDialog)
 		return logBrowserDialog.Init()
 	}
+}
+
+// openFileChangesDialog opens a dialog showing file changes for the selected task
+func (m *Model) openFileChangesDialog() {
+	m.addLogLine("Opening file changes dialog...")
+	
+	dm := m.dialogManager()
+	if dm == nil {
+		m.addLogLine("Dialog manager unavailable")
+		return
+	}
+
+	if m.fileChangeTracker == nil {
+		m.addLogLine("File change tracker unavailable")
+		return
+	}
+	
+	if m.gitService == nil {
+		m.addLogLine("Git service unavailable")
+		return
+	}
+
+	// Create and open the file changes dialog
+	fileChangesDialog := dialog.NewFileChangesDialog(m.fileChangeTracker, m.gitService)
+	m.addLogLine("File changes dialog created, adding to dialog manager...")
+	m.appState.AddDialog(fileChangesDialog, nil)
+	m.addLogLine("File changes dialog added successfully")
 }
 
 func (m *Model) handleListSelection(msg dialog.ListSelectionMsg) tea.Cmd {
@@ -2111,36 +2204,6 @@ func (m Model) filterTaskTreeBySearch(tasks []taskmaster.Task, query string) []t
 	return filtered
 }
 
-// wrapText wraps text to a specified width
-func wrapText(text string, width int) string {
-	if width <= 0 || text == "" {
-		return text
-	}
-
-	var lines []string
-	words := strings.Fields(strings.TrimSpace(text))
-	if len(words) == 0 {
-		return text
-	}
-
-	currentLine := words[0]
-	for _, word := range words[1:] {
-		// Check if adding the next word exceeds the width
-		if len(currentLine)+1+len(word) <= width {
-			currentLine += " " + word
-		} else {
-			// Line is full, start a new one
-			lines = append(lines, currentLine)
-			currentLine = word
-		}
-	}
-
-	// Don't forget the last line
-	lines = append(lines, currentLine)
-
-	return strings.Join(lines, "\n")
-}
-
 // renderTaskDetails renders the details of the selected task
 func (m Model) renderTaskDetails() string {
 	if m.selectedTask == nil {
@@ -2248,6 +2311,22 @@ func (m Model) renderTaskDetails() string {
 		wrappedStrategy := wrapText(task.TestStrategy, wrapWidth)
 		b.WriteString(wrappedStrategy)
 		b.WriteString("\n\n")
+	}
+
+	// File Changes Section
+	if len(task.FileChanges) > 0 {
+		// Create or update file changes section
+		if m.fileChangesSection == nil || m.fileChangesSection.task.ID != task.ID {
+			m.fileChangesSection = NewFileChangesSection(task, m.styles)
+			m.fileChangesSection.SetFocused(m.fileChangesSectionFocused)
+		}
+		fileChangesContent := m.fileChangesSection.Render(wrapWidth)
+		b.WriteString(fileChangesContent)
+		b.WriteString("\n")
+	} else {
+		// Clear file changes section if no file changes
+		m.fileChangesSection = nil
+		m.fileChangesSectionFocused = false
 	}
 
 	// Subtasks count
@@ -2523,16 +2602,62 @@ func (m *Model) setTaskStatus(status string) {
 			m.addLogLine(fmt.Sprintf("Error: %v", err))
 			return
 		}
+
+		// Update active task tracking if file change tracker is available
+		if m.fileChangeTracker != nil {
+			if status == "in-progress" {
+				m.fileChangeTracker.SetActiveTask(taskID)
+			} else if m.fileChangeTracker.GetActiveTask() == taskID {
+				m.fileChangeTracker.SetActiveTask("")
+			}
+		}
 	}
 
 	// Clear selection after status change
 	m.clearSelection()
 }
 
+// populateTaskFileChanges hydrates all tasks with their file changes from the tracker
+func (m *Model) populateTaskFileChanges() {
+	if m.fileChangeTracker == nil {
+		return
+	}
+
+	// Iterate through all tasks and populate their FileChanges
+	for i := range m.tasks {
+		taskID := m.tasks[i].ID
+		m.tasks[i].FileChanges = m.fileChangeTracker.GetFileChangesForTask(taskID)
+		
+		// Also update subtasks recursively
+		m.populateSubtaskFileChanges(&m.tasks[i])
+	}
+}
+
+// populateSubtaskFileChanges recursively populates file changes for subtasks
+func (m *Model) populateSubtaskFileChanges(task *taskmaster.Task) {
+	if m.fileChangeTracker == nil || task == nil {
+		return
+	}
+
+	for i := range task.Subtasks {
+		subtaskID := task.Subtasks[i].ID
+		task.Subtasks[i].FileChanges = m.fileChangeTracker.GetFileChangesForTask(subtaskID)
+		
+		// Recurse for nested subtasks
+		m.populateSubtaskFileChanges(&task.Subtasks[i])
+	}
+}
+
 // Init initializes the model and starts watching for file changes
 func (m *Model) Init() tea.Cmd {
 	// Initialize Git components
 	m.InitGit()
+
+	// Initialize file change tracking components
+	if err := m.InitFileChangeTracking(); err != nil {
+		// Log error but don't fail - file tracking is optional
+		m.addLogLine(fmt.Sprintf("Warning: Failed to initialize file change tracking: %v", err))
+	}
 
 	// Return a batch of startup commands:
 	// 1. Load tasks from disk initially
@@ -2700,10 +2825,26 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
+	case dialog.FileSelectionEntriesMsg:
+		// Handle FileSelectionEntriesMsg immediately so dialog can update
+		if activeDialog := m.appState.ActiveDialog(); activeDialog != nil {
+			updatedDialog, cmd := activeDialog.Update(msg)
+			if updatedDialog != nil {
+				m.appState.ReplaceDialog(updatedDialog, nil)
+			}
+			if cmd != nil {
+				return m, cmd
+			}
+		}
+		return m, nil
+
 	case TasksLoadedMsg:
 		// Initial tasks loaded successfully
 		m.tasks = msg.Tasks
 		m.buildTaskIndex()
+
+		// Populate file changes for all tasks from tracker
+		m.populateTaskFileChanges()
 
 		// Select first task if available
 		if len(m.tasks) > 0 {
@@ -2718,6 +2859,9 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		// Tasks were reloaded from disk, refresh the view
 		m.tasks, _ = m.taskService.GetTasks()
 		m.buildTaskIndex()
+
+		// Populate file changes for all tasks from tracker
+		m.populateTaskFileChanges()
 
 		// Try to maintain selection after reload
 		if m.selectedTask != nil {
@@ -3310,6 +3454,38 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case fileOperationMsg:
+		// Handle file operation results from file changes section
+		if msg.success {
+			m.addLogLine(msg.message)
+		} else {
+			m.addLogLine(fmt.Sprintf("Error: %s", msg.message))
+		}
+		return m, nil
+
+	case diffViewMsg:
+		// Handle diff view results from file changes section
+		if msg.success {
+			m.addLogLine(msg.message)
+			// Log diff content to log panel
+			if msg.content != "" {
+				lines := strings.Split(msg.content, "\n")
+				maxLines := 20
+				if len(lines) > maxLines {
+					lines = lines[:maxLines]
+				}
+				for _, line := range lines {
+					m.addLogLine(line)
+				}
+				if len(strings.Split(msg.content, "\n")) > maxLines {
+					m.addLogLine(fmt.Sprintf("... (%d more lines)", len(strings.Split(msg.content, "\n"))-maxLines))
+				}
+			}
+		} else {
+			m.addLogLine(fmt.Sprintf("Error: %s", msg.message))
+		}
+		return m, nil
+
 	case TickMsg:
 		// Handle periodic UI updates (for elapsed time, countdown timers, etc.)
 		// Continue ticking if there are running tasks OR if auto-close timer is active
@@ -3489,18 +3665,30 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			case dialog.ConfirmationMsg:
 				// Handle confirmation result
 				if msgTyped.Result == dialog.ConfirmationResultYes {
-					m.addLogLine("Confirmed: Yes")
 				} else {
-					m.addLogLine("Confirmed: No")
 				}
 			case dialog.ProgressUpdateMsg:
 				// Update progress bar
-				m.addLogLine(fmt.Sprintf("Progress: %.0f%%", msgTyped.Progress*100))
 				if m.parsePrdChan != nil {
 					if wait := m.waitForParsePrdMessages(); wait != nil {
 						cmds = append(cmds, wait)
 					}
 				}
+			case dialog.FileSelectionEntriesMsg:
+				// Route FileSelectionEntriesMsg back to the active dialog's Update method
+				// This happens because HandleKey returns a command that produces this message
+				// The message needs to be fed back to the dialog that created it
+				if activeDialog := m.appState.ActiveDialog(); activeDialog != nil {
+					updatedDialog, cmd := activeDialog.Update(msgTyped)
+					if updatedDialog != nil {
+						// Dialog was updated, replace it in the manager
+						m.appState.ReplaceDialog(updatedDialog, nil)
+					}
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+			default:
 			}
 
 			// Check if dialog was just closed - restore app state if we had saved it
@@ -3549,11 +3737,23 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case key.Matches(msg, m.keyMap.Up):
+				// Delegate to file changes section if focused
+				if m.fileChangesSectionFocused && m.fileChangesSection != nil {
+					cmd := m.fileChangesSection.HandleKeyEvent(msg)
+					m.updateDetailsViewport()
+					return m, cmd
+				}
 				m.selectPrevious()
 				m.updateTaskListViewport()
 				m.updateDetailsViewport()
 
 			case key.Matches(msg, m.keyMap.Down):
+				// Delegate to file changes section if focused
+				if m.fileChangesSectionFocused && m.fileChangesSection != nil {
+					cmd := m.fileChangesSection.HandleKeyEvent(msg)
+					m.updateDetailsViewport()
+					return m, cmd
+				}
 				m.selectNext()
 				m.updateTaskListViewport()
 				m.updateDetailsViewport()
@@ -3681,6 +3881,25 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 				m.addLogLine("Analyzing task complexity...")
 				m.showComplexityScopeDialog()
 
+			case key.Matches(msg, m.keyMap.FocusFileChanges):
+				// Focus file changes section if available
+				if m.fileChangesSection != nil && m.fileChangesSection.GetFileCount() > 0 {
+					m.fileChangesSectionFocused = !m.fileChangesSectionFocused
+					m.fileChangesSection.SetFocused(m.fileChangesSectionFocused)
+					if m.fileChangesSectionFocused {
+						m.addLogLine("File changes section focused (use ↑/↓ to navigate, Enter to open, Alt+D for diff)")
+					} else {
+						m.addLogLine("File changes section unfocused")
+					}
+					m.updateDetailsViewport()
+				} else {
+					m.addLogLine("No file changes to display")
+				}
+
+			case key.Matches(msg, m.keyMap.OpenFileChangesDialog):
+				// Open file changes dialog
+				m.openFileChangesDialog()
+
 			case key.Matches(msg, m.keyMap.ToggleDetails):
 				// Toggle details panel
 				m.showDetailsPanel = !m.showDetailsPanel
@@ -3797,6 +4016,19 @@ func (m *Model) Update(incomingMsg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(keyMsg, m.keyMap.ClearState):
 				// Show confirmation dialog for clearing state
 				m.ShowConfirmationDialog("Clear UI State", "Are you sure you want to reset all UI state to defaults?", true)
+
+			default:
+				// Delegate to file changes section if focused
+				if m.fileChangesSectionFocused && m.fileChangesSection != nil {
+					// Check for Enter or Alt+D keys
+					switch msg.String() {
+					case "enter", "alt+d":
+						cmd := m.fileChangesSection.HandleKeyEvent(msg)
+						if cmd != nil {
+							return m, cmd
+						}
+					}
+				}
 			}
 		}
 	}
@@ -4149,6 +4381,13 @@ func (m Model) buildHelpContent() string {
 	}
 	tagSection := createSection(" TAG MANAGEMENT", tagBindings)
 
+	// File changes section
+	fileChangesBindings := [][]string{
+		{m.renderBinding(m.keyMap.FocusFileChanges) + "  Focus file changes in task details"},
+		{m.renderBinding(m.keyMap.OpenFileChangesDialog) + "  Open file changes dialog"},
+	}
+	fileChangesSection := createSection(" FILE CHANGES", fileChangesBindings)
+
 	// General section
 	generalBindings := [][]string{
 		{m.renderBinding(m.keyMap.Help) + "  Toggle this help"},
@@ -4180,6 +4419,8 @@ func (m Model) buildHelpContent() string {
 			panelSection,
 			"",
 			tagSection,
+			"",
+			fileChangesSection,
 			"",
 			generalSection,
 			"",

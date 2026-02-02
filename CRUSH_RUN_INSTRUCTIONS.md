@@ -14,6 +14,26 @@
 2. **Check Dependencies**: Verify all dependencies are completed before starting
 3. **Update Status**: Mark task as in-progress: `task-master set-status --id={{.TaskID}} --status=in-progress`
 
+## Dependency Integration Requirements
+
+**When a task depends on previous tasks, you MUST:**
+
+1. **Identify Deliverables from Dependencies**
+   - For each dependency, run: `task-master show <dependency-id>`
+   - Document what components/functions/interfaces were created
+   - Example: If dependency is "Task 5: Build Dialog Component", identify the component name and constructor
+
+2. **Use Existing Components (Do Not Reimplement)**
+   - Search the codebase for components created in dependency tasks
+   - **REQUIRED**: Import and instantiate existing components rather than reimplementing
+   - Example: If a dialog was built in Task 5, you MUST use `NewXXXDialog()` to instantiate it
+   - **NEVER** take shortcuts by implementing simpler alternatives that bypass existing work
+
+3. **Verify Integration**
+   - After implementation, verify that dependency components are actually being used
+   - Check that function calls match the interface defined in dependency tasks
+   - Confirm no duplicate/alternative implementations were created
+
 ## Task Details
 
 **Task ID**: {{.TaskID}}
@@ -62,14 +82,70 @@
      - [Integration points with other tasks]"
      ```
 
-4. **Complete Subtask**
-   - Verify all requirements met
-   - Ensure tests pass according to test strategy
-   - Update task-master with completion notes:
+4. **Implementation Verification Requirements**
+
+   **Before marking any task complete, you MUST verify:**
+
+   a. **User-Facing Functionality (if applicable)**
+      - If the task adds UI features, document the keyboard shortcut or menu path
+      - Describe what the user should see when they trigger the feature
+      - **REQUIRED**: Explain how to manually test the feature in the application
+      - Example: "Press Ctrl+Shift+F to open the File Changes Dialog. The dialog should display a three-panel layout showing file tree, preview, and filter options."
+
+   b. **Integration Points Checklist**
+      - [ ] All components from dependency tasks are imported and used
+      - [ ] No simplified/alternative implementations created to bypass existing work
+      - [ ] Feature is accessible through documented keyboard shortcuts or UI paths
+      - [ ] Feature behavior matches the specification in task details
+
+   c. **Not Just Build Success**
+      - ✅ Tests passing is necessary but NOT sufficient
+      - ✅ You must also verify the feature works as described in the PRD
+      - ❌ Do not consider implementation complete if you created a "stub" or simplified version
+
+5. **Testing Requirements (Enhanced)**
+
+   **Three levels of verification required:**
+
+   a. **Unit Tests**
+      - All new functions have passing unit tests
+      - Code builds without errors
+
+   b. **Integration Tests**
+      - Verify components from dependency tasks are properly integrated
+      - Confirm no mocks or stubs are masking missing functionality
+
+   c. **User Acceptance Criteria**
+      - **CRITICAL**: Verify the feature works from a user's perspective
+      - Document how to manually test the feature
+      - If you cannot describe how a user would access and use the feature, the task is NOT complete
+      - Example test plan: "User opens TUI → Selects a task → Presses Ctrl+Shift+F → Dialog appears with file tree"
+
+6. **Completion Checklist (MANDATORY)**
+
+   **Before marking task as done, confirm ALL of these:**
+
+   - [ ] Reviewed task details and description thoroughly
+   - [ ] Checked all dependency tasks and documented their deliverables
+   - [ ] Used existing components from dependencies (no reimplementation)
+   - [ ] Implemented complete functionality (no simplified shortcuts)
+   - [ ] Verified user-facing behavior matches specification
+   - [ ] Can explain to a human how to test the feature
+   - [ ] Wrote comprehensive log documenting integration points
+   - [ ] All tests pass (unit + integration)
+
+   **If ANY checkbox is unchecked, the task is NOT complete.**
+
+7. **Complete Subtask**
+   - Verify all requirements met from steps 4-6 above
+   - Update task-master with completion notes including verification results:
      ```bash
      task-master update-subtask --id={{.TaskID}} --prompt="Subtask completion summary:
      - [What was implemented]
-     - [Test results]
+     - [Test results - all three levels]
+     - [Manual testing procedure and results]
+     - [Verification checklist confirmation]
+     - [Integration with dependency components confirmed]
      - [Any notes for future reference]"
      ```
    - Mark as done: `task-master set-status --id={{.TaskID}} --status=done`
@@ -120,23 +196,79 @@
      - [Integration points with other subtasks]"
      ```
 
-5. **Complete Subtask**
+5. **Implementation Verification Requirements**
 
-   - Verify all subtask requirements met
-   - Ensure tests pass according to test strategy
-   - Update task-master subtask details with completion notes:
+   **Before marking any subtask complete, you MUST verify:**
+
+   a. **User-Facing Functionality (if applicable)**
+      - If the subtask adds UI features, document the keyboard shortcut or menu path
+      - Describe what the user should see when they trigger the feature
+      - **REQUIRED**: Explain how to manually test the feature in the application
+      - Example: "Press Ctrl+Shift+F to open the File Changes Dialog. The dialog should display a three-panel layout showing file tree, preview, and filter options."
+
+   b. **Integration Points Checklist**
+      - [ ] All components from dependency tasks are imported and used
+      - [ ] No simplified/alternative implementations created to bypass existing work
+      - [ ] Feature is accessible through documented keyboard shortcuts or UI paths
+      - [ ] Feature behavior matches the specification in task details
+
+   c. **Not Just Build Success**
+      - ✅ Tests passing is necessary but NOT sufficient
+      - ✅ You must also verify the feature works as described in the PRD
+      - ❌ Do not consider implementation complete if you created a "stub" or simplified version
+
+6. **Testing Requirements (Enhanced)**
+
+   **Three levels of verification required:**
+
+   a. **Unit Tests**
+      - All new functions have passing unit tests
+      - Code builds without errors
+
+   b. **Integration Tests**
+      - Verify components from dependency tasks are properly integrated
+      - Confirm no mocks or stubs are masking missing functionality
+
+   c. **User Acceptance Criteria**
+      - **CRITICAL**: Verify the feature works from a user's perspective
+      - Document how to manually test the feature
+      - If you cannot describe how a user would access and use the feature, the task is NOT complete
+      - Example test plan: "User opens TUI → Selects a task → Presses Ctrl+Shift+F → Dialog appears with file tree"
+
+7. **Completion Checklist (MANDATORY)**
+
+   **Before marking subtask as done, confirm ALL of these:**
+
+   - [ ] Reviewed subtask details and description thoroughly
+   - [ ] Checked all dependency tasks and documented their deliverables
+   - [ ] Used existing components from dependencies (no reimplementation)
+   - [ ] Implemented complete functionality (no simplified shortcuts)
+   - [ ] Verified user-facing behavior matches specification
+   - [ ] Can explain to a human how to test the feature
+   - [ ] Wrote comprehensive log documenting integration points
+   - [ ] All tests pass (unit + integration)
+
+   **If ANY checkbox is unchecked, the subtask is NOT complete.**
+
+8. **Complete Subtask**
+
+   - Verify all subtask requirements met from steps 5-7 above
+   - Update task-master subtask details with completion notes including verification results:
      ```bash
      task-master update-subtask --id={{.TaskID}}.X --prompt="Subtask completion summary:
      - [What was implemented]
-     - [Test results]
+     - [Test results - all three levels]
+     - [Manual testing procedure and results]
+     - [Verification checklist confirmation]
+     - [Integration with dependency components confirmed]
      - [Any notes for future reference]"
      ```
    - Mark as done: `task-master set-status --id={{.TaskID}}.X --status=done`
    - Finalize log file with summary
 
-6. **Move to Next Subtask**
+9. **Move to Next Subtask**
    - **Retrieve next subtask details**: `task-master show {{.TaskID}}.Y` (where Y = X + 1)
-   - Repeat steps 1-5 for the next subtask
+   - Repeat steps 1-8 for the next subtask
    - **Do NOT skip subtasks or work on them out of order**
    - **Always retrieve fresh details for each subtask before starting**
 

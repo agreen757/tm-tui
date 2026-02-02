@@ -86,6 +86,10 @@ type KeyMap struct {
 
 	// Log Browser
 	LogBrowser key.Binding
+
+	// File changes section
+	FocusFileChanges      key.Binding
+	OpenFileChangesDialog key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings
@@ -180,6 +184,14 @@ func DefaultKeyMap() KeyMap {
 		LogBrowser: key.NewBinding(
 			key.WithKeys("ctrl+f"),
 			key.WithHelp("ctrl+f", "log browser"),
+		),
+		FocusFileChanges: key.NewBinding(
+			key.WithKeys("alt+f"),
+			key.WithHelp("alt+f", "focus file changes"),
+		),
+		OpenFileChangesDialog: key.NewBinding(
+			key.WithKeys("G"),
+			key.WithHelp("G", "open file changes dialog"),
 		),
 
 		// Status changes
